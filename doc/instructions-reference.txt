@@ -1,0 +1,57 @@
+// MOV D,S   Move register to register
+// MVI D,#   Move immediate to register
+// LXI RP,#  Load register pair immediate
+// LDA a     Load A from memory
+// STA a     Store A to memory
+// LHLD a    Load H:L from memory
+// SHLD a    Store H:L to memory
+// LDAX RP   Load A at address in BC or DE
+// STAX RP   Store A at address in BC or DE
+// XCHG      Exchange DE and HL content
+// ADD S     Add register to A
+// ADI #     Add immediate to A
+// ADC S     Add register to A with carry
+// ACI #     Add immediate to A with carry
+// SUB S     Subtract register from A
+// SUI #     Subtract immediate from A
+// SBB S     Subtract register from A with borrow
+// SBI #     Subtract immediate from A with borrow
+// INR D     Increment register
+// DCR D     Decrement register
+// INX RP    Increment register pair
+// DCX RP    Decrement register pair
+// DAD RP    Add register pair to HL (16 bit add)
+// DAA       Decimal Adjust accumulator
+// ANA S     AND register with A
+// ANI #     AND immediate with A
+// ORA S     OR  register with A
+// ORI #     OR  immediate with A
+// XRA S     ExclusiveOR register with A
+// XRI #     ExclusiveOR immediate with A
+// CMP S     Compare register with A
+// CPI #     Compare immediate with A
+// RLC       Rotate A left
+// RRC       Rotate A right
+// RAL       Rotate A left through carry
+// RAR       Rotate A right through carry
+// CMA       Compliment A
+// CMC       Compliment Carry flag
+// STC       Set Carry flag
+// JMP a     Unconditional jump
+// Jccc a    Conditional jump
+// CALL a    Unconditional subroutine call
+// Cccc a    Conditional subroutine call
+// RET       Unconditional return from subroutine
+// Rccc      Conditional return from subroutine
+// RST n     Restart (Call n*8)
+// PCHL      Jump to address in H:L
+// PUSH RP   Push register pair on the stack
+// POP RP    Pop  register pair from the stack
+// XTHL      Swap H:L with top word on stack
+// SPHL      Set SP to content of H:L
+// IN p      Read input port into A
+// OUT p     Write A to output port
+// EI        Enable interrupts
+// DI        Disable interrupts
+// HLT       Halt processor
+// NOP       No operation

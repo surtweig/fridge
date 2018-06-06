@@ -1,0 +1,141 @@
+// =============================================================================================
+// BootLoader appears automatically in the RAM at address 0x0000 on system's powerup.
+// It loads a ROM section of given index (BOOT_SECTION_INDEX_ADDRESS) then passes the control.
+// =============================================================================================
+
+include "stdapp.inc"
+
+// Telling the compiler that the program starts at this address
+offset 0x0000
+
+// Allows inconsistent use of JMP and CALL instructions
+unsafe_flow
+
+main BootLoader
+    JMP BootLoader.start
+    // BOOT_SECTION_INDEX_ADDRESS points at this address and default value is 0 (hence NOP).
+    // This zero can be modified by an executable to load another one.
+    NOP // 0x0003
+    
+    // System timer IRQ
+    RET // 0x0004
+    NOP
+    NOP
+    // Keyboard IRQ
+    RET // 0x0007
+    NOP
+    NOP
+    
+entry BootLoader.start    
+    // Enable interrupts
+    EI
+    // Stream pointer
+    LXI BC, EXECUTABLE_OFFSET
+    
+    // Sending ROM reset signal
+    MVI A, 1
+    OUT XCM2_ROM_DEVICE_RESET_ID
+       
+    // Reading TOC 
+    MVI A, XCM2_ROM_DEVICE_MODE_LOAD
+    OUT XCM2_ROM_DEVICE_ID
+    MVI A, 0
+    OUT XCM2_ROM_DEVICE_ID
+    MVI A, 0
+    OUT XCM2_ROM_DEVICE_ID
+    HLT                             // Wait for the interruption signal from ROM
+    
+    entry TOCStream
+        //OUT XCM2_ROM_DEVICE_ID    // Signalling ROM that we are ready to read
+        IN XCM2_ROM_DEVICE_ID       // Read recieved byte from the stream
+        STAX BC                     // Write to the memory
+        INX BC                      // Increase pointer
+        MOV A, B                    // Check for stream end
+        CPI 0x02                    // TODO
+        JNZ TOCStream
+
+    // We need to get segment index of the executable we are loading,
+    // and segment index of the next one
+    LXI BC, EXECUTABLE_OFFSET // TOC starts here
+    LDA BOOT_SECTION_INDEX_ADDRESS
+    RLC // Index address position in TOC == Index*2
+    // C is a lower byte of address and it is always zero by convention, so we can safely add boot section index to it
+    MOV C, A
+    // Save the loaded executable's segment index to DE
+    LDAX BC
+    MOV D, A
+    INX BC
+    LDAX BC
+    MOV E, A
+    // And the next one's to the stack
+    INX BC
+    LDAX BC
+    MOV H, A
+    INX BC
+    LDAX BC
+    MOV L, A
+    LXI SP 0xFFFF // Reset stack pointer
+    PUSH HL
+
+    // Read executable data
+    LXI BC, EXECUTABLE_OFFSET
+    entry ReadSegment
+        XTHL     // restore end segment index to stack
+        MOV H, B
+        INR H    // H now holds higher byte of stream end address
+        
+        MVI A, XCM2_ROM_DEVICE_MODE_LOAD
+        OUT XCM2_ROM_DEVICE_ID
+        MOV A, D
+        OUT XCM2_ROM_DEVICE_ID
+        MOV A, E
+        OUT XCM2_ROM_DEVICE_ID
+        HLT                             // Wait for the interruption signal from ROM
+        entry SegmentStream
+            IN XCM2_ROM_DEVICE_ID       // Read recieved byte from the stream
+            STAX BC                     // Write to the memory
+            INX BC                      // Increase pointer
+            MOV A, B                    // Check for stream end
+            CMP H
+            JNZ SegmentStream
+            JMP SegmentStreamEnd
+        entry SegmentStreamEnd
+        
+        XTHL                           // temporary swapping with end segment index saved in stack
+        INX DE                         // move to next segment
+
+        // Check for section end
+        MOV A, D
+        CMP H
+        JNZ ReadSegment
+        MOV A, E
+        CMP L
+        JNZ ReadSegment
+        
+        JMP ReadSegmentEnd
+        
+    entry ReadSegmentEnd
+    
+    // Reset @BOOT_SECTION_INDEX_ADDRESS
+    MVI A, 0
+    STA BOOT_SECTION_INDEX_ADDRESS
+    
+    // Writing JMP to BootLoader (0x0000) instruction after the loaded executable finishes
+    MVI A, #JMP
+    STAX BC
+    INX BC
+    MVI A, 0
+    STAX BC
+    INX BC
+    MVI A, 0
+    STAX BC
+    
+    // Reset stack pointer
+    LXI SP 0xFFFF
+
+    // Start executable
+    JMP EXECUTABLE_OFFSET
+
+
+
+

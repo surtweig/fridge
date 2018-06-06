@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<preferences>
+ <debug showDebugMenu="0" />
+ <systemtable filter="All Interfaces">
+  <columns>
+   <connections preferredWidth="127" />
+   <irq preferredWidth="34" />
+  </columns>
+ </systemtable>
+ <library
+   expandedCategories="Library/Memory Interfaces and Controllers/SDRAM,Library/University Program/Communications,Library/Basic Functions/Clocks; PLLs and Resets,Library/Basic Functions,Library/University Program/Clock,Project,Library,Library/Memory Interfaces and Controllers,Library/Basic Functions/Clocks; PLLs and Resets/PLL,Library/University Program" />
+ <window width="1936" height="1066" x="-8" y="-8" />
+</preferences>

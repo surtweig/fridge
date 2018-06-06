@@ -1,0 +1,291 @@
+namespace X2AL
+(
+    void __mvi_a(uint8 v);
+    void __mvi_b(uint8 v);
+    void __mvi_c(uint8 v);
+);
+
+namespace arithm imports "arithm.bin"
+( 
+    const uint16 mul_dc 0x0000;
+    
+    uint16 * (uint8 m1; uint8 m2)
+    (
+        __d m1;
+        __c m2;
+        __call mul_dc;
+        return (__hl);
+    );
+
+    uint8 * (uint8 m1; uint8 m2)
+    (
+        __d m1;
+        __c m2;
+        __call mul_dc;
+        return (uint8 (_hl));
+    );
+);
+
+namespace vtext imports "vtext.bin"
+(    
+    uint8 VTEXT_FORE_COLOR imports 0x00A1;
+    uint8 VTEXT_BACK_COLOR imports 0x00A2;
+    
+    const uint16 _putstr 0x00A3;
+
+    void putstr ( uint8 column; uint8 row; string str )
+    (
+        __mvi_b(column);
+        __mvi_c(row);
+        __lxi_hl(uint16(str));
+        __call _putstr;
+    );
+);
+
+#include "vtext.binc"
+
+#using vtext;
+
+const uint8 intArraySize 5;
+
+struct intArray
+(
+    uint8 data array intArraySize;   
+);
+
+const intArray myConstArray ( (0 1 2 3 4) );
+
+void main()
+(
+    string hwstr "Hello, World!";
+    string mystr 10;
+    intArray myArray 0;
+    = (myArray 0) 1;
+    if (== (myArray 0) 1)    
+        (putstr 0 0 hwstr);
+    
+    for (uint8 i 0; < i intArraySize; ++ i)
+    (
+        = (myArray i) i;
+    );
+);
+
+
+types: int8, uint8, int16, uint16, bool, char
+
+#include "file"
+#define key
+#define macros <source>
+#define macros(arg0,arg1...argn) <source>
+
+0:
+<string> = \" + <char> + \"
+
+1:
+<abc> = ["a".."z", "A".."Z", "_", "."]
+<123> = ["0".."9"]
+<operator> = {"+", "-", "*", "/", "&", "=", "==", ">", "<", ">=", "<=", "!", "&&", "||", "%", "++", "+=", "--", "-=", "*=", "/="}
+
+2:
+<id> = abc + |abc, 123|
+
+3 (repeat):
+<expr> = "(" + <id> + [<id>, <123>, <string>, <expr>] + ")"
+
+4:
+<call-list-item> = {<id>, <123>, <string>, <expr>, <block>}
+
+5 (repeat):
+<call-list> = [<call-list-item>, <call-list>] + ";"
+
+
+
+int16 add (int16 x; int16 y;)
+(
+    return (+ x y);
+);
+
+<id> <id> (<id> <id>; <id> <id>)
+(
+    <id> <expr>;
+);
+
+<li> <li> (<li> <li>; <li> <li>)
+(
+    <li> <li>;
+);
+
+<li> <li> (<list> <list>)
+(
+    <list>
+);
+
+
+
+
+namespace table
+    struct table
+    const table
+    static table
+    functions table
+    
+    
+semantic structure:
+    namespace
+        symbols
+            struct declarations
+                fields
+            fields (static and const)
+            functions
+                opcalls
+                
+operators:
+    stack-ctor <type> <count>
+    function-call 
+    
+    
+    
+static uint16 A 10;
+
+uint16 sum(uint16 x1; uint16 x2; uint16 x3)
+(
+    return (+ x1 x2 x3);
+);
+
+void main()
+(
+    uint16 B 20;
+    uint16 C;
+    = C (sum A B 30);
+);
+
+
+// func sum:
+lxi hl, 0
+hlsp
+ret
+
+// func main:
+lxi bc, 20
+push bc // B
+push bc // C
+
+// loading static A
+lxi hl, $A 
+mov b, m
+inx hl
+mov c, m
+push bc
+
+// loading B
+hlsp
+lxi de, 6
+dad de
+mov b, m
+inx hl
+mov c, m
+push bc
+
+// loading 30
+lxi bc, 30
+push bc
+
+call $sum
+
+
+
+
+uint16 R;
+uint16 x1 1;
+uint16 x2 2;
+uint16 x3 3;
+uint16 x4 4;
+uint16 x5 5;
+
+= R (+ x1
+       (f1 x2 x3 123)
+       (+ x4 x5 56)
+       (f2 10 20)
+    );
+
+// right side eval:
+
+    
+// set HL as R address; HLSetLocal(R)
+hlsp
+lxi de, 12
+dad de
+
+// write to R; HLWriteLocal(R)
+pop bc
+mov m, b
+inx hl
+mov m, c
+
+
+// decreasing stack pointer by n if n/2 > 6; StackAllocate(n)
+hlsp
+mov a, l
+sbi low(n/2)
+mov l, a
+mov a, h
+sbi high(n/2)
+sphl
+
+// call test
+int16 callee(int16 a; int16 b; int16 c);
+
+int16 caller()
+(
+	int16 ret;
+
+	= ret (callee 1 2 3);
+	+= ret 5;
+	return ret;
+);
+
+subroutine caller:
+    push de              // int16 ret;
+    
+    lxi de, 1
+    push de
+    lxi de, 2
+    push de
+    lxi de, 3
+    push de
+    
+    call callee
+    hlsp
+    lxi de, 2
+    dad de               // hl is pointing at ret now
+    
+    pop de               // stackcpy(hl, 2)
+    mov m, d
+    inx hl
+    mov m, e
+    
+    hlsp                 // copying ret to de
+    mov d, m
+    inx hl
+    mov e, m
+    
+    lxi hl, 5            // ret += 5
+    dad de
+    xcng
+    hlsp
+    mov m, d
+    inx hl
+    mov m, e
+
+
+
+
+if (EXPR condition1)
+    [(EXPR branch1), (BLOCK branch1)]
+else if (EXPR condition2)
+    [(EXPR branch2), (BLOCK branch2)]
+...
+else if (EXPR condition_n)
+    [(EXPR branch_n), (BLOCK branch_n)]
+else
+    [(EXPR branch_last), (BLOCK branch_last)]

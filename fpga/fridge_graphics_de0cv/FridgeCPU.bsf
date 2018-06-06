@@ -1,0 +1,192 @@
+/*
+WARNING: Do NOT edit the input and output ports in this file in a text
+editor if you plan to continue editing the block that represents it in
+the Block Editor! File corruption is VERY likely to occur.
+*/
+/*
+Copyright (C) 2017  Intel Corporation. All rights reserved.
+Your use of Intel Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Intel Program License 
+Subscription Agreement, the Intel Quartus Prime License Agreement,
+the Intel MegaCore Function License Agreement, or other 
+applicable license agreement, including, without limitation, 
+that your use is for the sole purpose of programming logic 
+devices manufactured by Intel and sold by Intel or its 
+authorized distributors.  Please refer to the applicable 
+agreement for further details.
+*/
+(header "symbol" (version "1.2"))
+(symbol
+	(rect 64 64 368 368)
+	(text "FridgeCPU" (rect 5 0 59 12)(font "Arial" ))
+	(text "inst" (rect 8 288 25 300)(font "Arial" ))
+	(port
+		(pt 0 32)
+		(input)
+		(text "CLK_MAIN" (rect 0 0 54 12)(font "Arial" ))
+		(text "CLK_MAIN" (rect 21 27 75 39)(font "Arial" ))
+		(line (pt 0 32)(pt 16 32))
+	)
+	(port
+		(pt 0 48)
+		(input)
+		(text "CLK_PHI2" (rect 0 0 51 12)(font "Arial" ))
+		(text "CLK_PHI2" (rect 21 43 72 55)(font "Arial" ))
+		(line (pt 0 48)(pt 16 48))
+	)
+	(port
+		(pt 0 64)
+		(input)
+		(text "RESET" (rect 0 0 35 12)(font "Arial" ))
+		(text "RESET" (rect 21 59 56 71)(font "Arial" ))
+		(line (pt 0 64)(pt 16 64))
+	)
+	(port
+		(pt 0 80)
+		(input)
+		(text "INT" (rect 0 0 17 12)(font "Arial" ))
+		(text "INT" (rect 21 75 38 87)(font "Arial" ))
+		(line (pt 0 80)(pt 16 80))
+	)
+	(port
+		(pt 0 96)
+		(input)
+		(text "INT_IRCode[0..7]" (rect 0 0 87 12)(font "Arial" ))
+		(text "INT_IRCode[0..7]" (rect 21 91 108 103)(font "Arial" ))
+		(line (pt 0 96)(pt 16 96)(line_width 3))
+	)
+	(port
+		(pt 0 112)
+		(input)
+		(text "INT_IRArgH[0..7]" (rect 0 0 86 12)(font "Arial" ))
+		(text "INT_IRArgH[0..7]" (rect 21 107 107 119)(font "Arial" ))
+		(line (pt 0 112)(pt 16 112)(line_width 3))
+	)
+	(port
+		(pt 0 128)
+		(input)
+		(text "INT_IRArgL[0..7]" (rect 0 0 83 12)(font "Arial" ))
+		(text "INT_IRArgL[0..7]" (rect 21 123 104 135)(font "Arial" ))
+		(line (pt 0 128)(pt 16 128)(line_width 3))
+	)
+	(port
+		(pt 304 32)
+		(output)
+		(text "HLT" (rect 0 0 20 12)(font "Arial" ))
+		(text "HLT" (rect 267 27 283 39)(font "Arial" ))
+		(line (pt 304 32)(pt 288 32))
+	)
+	(port
+		(pt 304 48)
+		(output)
+		(text "INTE" (rect 0 0 24 12)(font "Arial" ))
+		(text "INTE" (rect 263 43 283 55)(font "Arial" ))
+		(line (pt 304 48)(pt 288 48))
+	)
+	(port
+		(pt 304 64)
+		(output)
+		(text "DEVICE_SEL[0..7]" (rect 0 0 93 12)(font "Arial" ))
+		(text "DEVICE_SEL[0..7]" (rect 205 59 283 71)(font "Arial" ))
+		(line (pt 304 64)(pt 288 64)(line_width 3))
+	)
+	(port
+		(pt 304 96)
+		(output)
+		(text "GPU_MODE_SWITCH[0..1]" (rect 0 0 136 12)(font "Arial" ))
+		(text "GPU_MODE_SWITCH[0..1]" (rect 168 91 283 103)(font "Arial" ))
+		(line (pt 304 96)(pt 288 96)(line_width 3))
+	)
+	(port
+		(pt 304 112)
+		(output)
+		(text "GPU_PALETTE_SWITCH" (rect 0 0 125 12)(font "Arial" ))
+		(text "GPU_PALETTE_SWITCH" (rect 178 107 283 119)(font "Arial" ))
+		(line (pt 304 112)(pt 288 112))
+	)
+	(port
+		(pt 304 128)
+		(output)
+		(text "GPU_PRESENT_TRIGGER" (rect 0 0 135 12)(font "Arial" ))
+		(text "GPU_PRESENT_TRIGGER" (rect 169 123 283 135)(font "Arial" ))
+		(line (pt 304 128)(pt 288 128))
+	)
+	(port
+		(pt 304 144)
+		(output)
+		(text "GPU_BACK_STORE" (rect 0 0 101 12)(font "Arial" ))
+		(text "GPU_BACK_STORE" (rect 198 139 283 151)(font "Arial" ))
+		(line (pt 304 144)(pt 288 144))
+	)
+	(port
+		(pt 304 160)
+		(output)
+		(text "GPU_BACK_LOAD" (rect 0 0 94 12)(font "Arial" ))
+		(text "GPU_BACK_LOAD" (rect 204 155 283 167)(font "Arial" ))
+		(line (pt 304 160)(pt 288 160))
+	)
+	(port
+		(pt 304 176)
+		(output)
+		(text "GPU_BACK_ADDR[0..15]" (rect 0 0 128 12)(font "Arial" ))
+		(text "GPU_BACK_ADDR[0..15]" (rect 175 171 283 183)(font "Arial" ))
+		(line (pt 304 176)(pt 288 176)(line_width 3))
+	)
+	(port
+		(pt 304 208)
+		(output)
+		(text "GPU_BACK_CLR" (rect 0 0 87 12)(font "Arial" ))
+		(text "GPU_BACK_CLR" (rect 210 203 283 215)(font "Arial" ))
+		(line (pt 304 208)(pt 288 208))
+	)
+	(port
+		(pt 304 224)
+		(output)
+		(text "GPU_VMEM_STORE" (rect 0 0 102 12)(font "Arial" ))
+		(text "GPU_VMEM_STORE" (rect 197 219 283 231)(font "Arial" ))
+		(line (pt 304 224)(pt 288 224))
+	)
+	(port
+		(pt 304 240)
+		(output)
+		(text "GPU_VMEM_LOAD" (rect 0 0 95 12)(font "Arial" ))
+		(text "GPU_VMEM_LOAD" (rect 203 235 283 247)(font "Arial" ))
+		(line (pt 304 240)(pt 288 240))
+	)
+	(port
+		(pt 304 256)
+		(output)
+		(text "GPU_VMEM_ADDR[0..15]" (rect 0 0 129 12)(font "Arial" ))
+		(text "GPU_VMEM_ADDR[0..15]" (rect 174 251 283 263)(font "Arial" ))
+		(line (pt 304 256)(pt 288 256)(line_width 3))
+	)
+	(port
+		(pt 304 80)
+		(bidir)
+		(text "DEVICE_DATA[0..7]" (rect 0 0 101 12)(font "Arial" ))
+		(text "DEVICE_DATA[0..7]" (rect 189 75 290 87)(font "Arial" ))
+		(line (pt 304 80)(pt 288 80)(line_width 3))
+	)
+	(port
+		(pt 304 192)
+		(bidir)
+		(text "GPU_BACK_DATA[0..7]" (rect 0 0 119 12)(font "Arial" ))
+		(text "GPU_BACK_DATA[0..7]" (rect 174 187 293 199)(font "Arial" ))
+		(line (pt 304 192)(pt 288 192)(line_width 3))
+	)
+	(port
+		(pt 304 272)
+		(bidir)
+		(text "GPU_VMEM_DATA[0..7]" (rect 0 0 120 12)(font "Arial" ))
+		(text "GPU_VMEM_DATA[0..7]" (rect 170 267 290 279)(font "Arial" ))
+		(line (pt 304 272)(pt 288 272)(line_width 3))
+	)
+	(drawing
+		(text "CPU" (rect 40 232 95 266)(font "Intel Clear" (color 0 85 127)(font_size 18)(bold)))
+		(rectangle (rect 16 16 288 288))
+	)
+)

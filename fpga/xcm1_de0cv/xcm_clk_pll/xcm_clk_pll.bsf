@@ -1,0 +1,71 @@
+/*
+WARNING: Do NOT edit the input and output ports in this file in a text
+editor if you plan to continue editing the block that represents it in
+the Block Editor! File corruption is VERY likely to occur.
+*/
+/*
+Copyright (C) 2017  Intel Corporation. All rights reserved.
+Your use of Intel Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Intel Program License 
+Subscription Agreement, the Intel Quartus Prime License Agreement,
+the Intel MegaCore Function License Agreement, or other 
+applicable license agreement, including, without limitation, 
+that your use is for the sole purpose of programming logic 
+devices manufactured by Intel and sold by Intel or its 
+authorized distributors.  Please refer to the applicable 
+agreement for further details.
+*/
+(header "symbol" (version "1.1"))
+(symbol
+	(rect 0 0 320 144)
+	(text "xcm_clk_pll" (rect 125 -1 172 11)(font "Arial" (font_size 10)))
+	(text "inst" (rect 8 128 20 140)(font "Arial" ))
+	(port
+		(pt 0 72)
+		(input)
+		(text "xcm_clk_pll_in_clk" (rect 0 0 75 12)(font "Arial" (font_size 8)))
+		(text "xcm_clk_pll_in_clk" (rect 4 61 112 72)(font "Arial" (font_size 8)))
+		(line (pt 0 72)(pt 128 72)(line_width 1))
+	)
+	(port
+		(pt 0 112)
+		(input)
+		(text "xcm_clk_pll_reset_reset" (rect 0 0 99 12)(font "Arial" (font_size 8)))
+		(text "xcm_clk_pll_reset_reset" (rect 4 101 142 112)(font "Arial" (font_size 8)))
+		(line (pt 0 112)(pt 128 112)(line_width 1))
+	)
+	(port
+		(pt 320 72)
+		(output)
+		(text "xcm_clk_pll_out_clk" (rect 0 0 81 12)(font "Arial" (font_size 8)))
+		(text "xcm_clk_pll_out_clk" (rect 219 61 333 72)(font "Arial" (font_size 8)))
+		(line (pt 320 72)(pt 192 72)(line_width 1))
+	)
+	(drawing
+		(text "xcm_clk_pll_in" (rect 43 43 170 99)(font "Arial" (color 128 0 0)(font_size 9)))
+		(text "clk" (rect 133 67 284 144)(font "Arial" (color 0 0 0)))
+		(text "xcm_clk_pll_out" (rect 193 43 476 99)(font "Arial" (color 128 0 0)(font_size 9)))
+		(text "clk" (rect 177 67 372 144)(font "Arial" (color 0 0 0)))
+		(text "xcm_clk_pll_reset" (rect 23 83 148 179)(font "Arial" (color 128 0 0)(font_size 9)))
+		(text "reset" (rect 133 107 296 224)(font "Arial" (color 0 0 0)))
+		(text " xcm_clk_pll " (rect 266 128 610 266)(font "Arial" ))
+		(line (pt 128 32)(pt 192 32)(line_width 1))
+		(line (pt 192 32)(pt 192 128)(line_width 1))
+		(line (pt 128 128)(pt 192 128)(line_width 1))
+		(line (pt 128 32)(pt 128 128)(line_width 1))
+		(line (pt 129 52)(pt 129 76)(line_width 1))
+		(line (pt 130 52)(pt 130 76)(line_width 1))
+		(line (pt 191 52)(pt 191 76)(line_width 1))
+		(line (pt 190 52)(pt 190 76)(line_width 1))
+		(line (pt 129 92)(pt 129 116)(line_width 1))
+		(line (pt 130 92)(pt 130 116)(line_width 1))
+		(line (pt 0 0)(pt 320 0)(line_width 1))
+		(line (pt 320 0)(pt 320 144)(line_width 1))
+		(line (pt 0 144)(pt 320 144)(line_width 1))
+		(line (pt 0 0)(pt 0 144)(line_width 1))
+	)
+)

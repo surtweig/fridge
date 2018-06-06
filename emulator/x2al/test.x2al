@@ -1,0 +1,25 @@
+main Test
+
+VMODE, 1
+VFCLR
+LXI HL, 0x0000
+MVI A, 'A'
+VFSA
+
+MOV A, L
+RAL
+MOV L, A
+MOV A, H
+RAL
+MOV H, A
+
+//LXI_HL, 0, 10,
+INX HL
+INX HL
+MVI A, 1
+VFSAC
+INX HL
+MVI A, 15
+VFSAC
+
+VPRE

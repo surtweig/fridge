@@ -1,0 +1,25 @@
+include "arithm.inc"
+include "vtext.inc"
+
+static HelloWorld "Hello, World!"
+
+main test
+    VMODE, 1               // Turn on text mode
+    VFCLR                  // Clear screen
+
+    MVI A, 1               // blue background
+    STA VTEXT_BACK_COLOR
+    
+    MVI A, 15              // white letters
+    STA VTEXT_FORE_COLOR
+    
+    MVI B, 1               // text position C=row B=column
+    MVI C, 1
+
+    LXI HL, HelloWorld     // Passing the string's address through HL register pair
+    CALL vtext_putstr      // Print the string
+    
+    VPRE                   // Present video frame
+    
+    
+    

@@ -1,0 +1,37 @@
+include "vtext.inc"
+//include "arithm.inc"
+offset 0x0000
+
+static HelloWorld "Hello, World!"
+
+main hw
+    VMODE, 1               // Turn on text mode
+    VFCLR                  // Clear screen
+
+    //LXI HL, HelloWorld
+    //LDAX HL
+    //
+    //LXI HL, 0x0004
+    //VFSA    
+    //
+    //MVI C, 40
+    //MVI D, 10
+    //CALL mul_dc
+    //
+    //MVI A, 'e'
+    //VFSA
+    
+    MVI A, 15               // blue background
+    STA VTEXT_BACK_COLOR
+    
+    MVI A, 1              // white letters
+    STA VTEXT_FORE_COLOR
+    
+    MVI B, 1               // text position C=row B=column
+    MVI C, 1
+    
+    LXI HL, HelloWorld     // Passing the string's address through HL register pair
+    CALL vtext_putstr      // Print the string
+    
+    VPRE                   // Present video frame
+    HLT                    // Stop execution

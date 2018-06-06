@@ -1,0 +1,68 @@
+
+Compilation failed due to errors.
+Invalid #include directive syntax.
+Included source file name must be a string literal.
+Cannot open file:
+Invalid #using directive syntax.
+Invalid #using directive syntax.
+Failed to parse
+Undefined type '" + typeName + "'."
+Type reference '" + typeName + "' is ambiguous in this context. See the message above.
+Void type is not allowed for static or const data.
+Static symbol '" + countNode->text + "' import address must be an integer.
+Static symbol '" + nameNode->text + "' is too large.
+Static symbol '" + nameNode->text + "' is already declared in " + owner->name + " namespace.
+Invalid static or const declaration syntax.
+Type '" + stname + "' is already declared in " + owner->name + " namespace.
+Invalid struct or union declaration syntax.
+Invalid struct field declaration.
+Invalid struct field declaration.
+Invalid struct array field declaration.
+Undefined type '" + typeName + "'.
+Type reference '" + typeName + "' is ambiguous in this context. See the message above.
+Void type is not allowed for structures fields.", node->sourceFileName, node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	488	41	cpm	Unknown
+Field '" + structSymbol->name + "." + nameNode->text + "' is too large.", node->sourceFileName, node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	503	41	cpm	Unknown
+Field '" + structSymbol->name + "." + nameNode->text + "' is already declared.", node->sourceFileName, node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	510	37	cpm	Unknown
+Unexpected syntax inside struct declaration.", node->sourceFileName, node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	517	33	cpm	Unknown
+Empty structs are not allowed.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	524	29	cpm	Unknown
+Array size must be positive non-zero integer.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	540	33	cpm	Unknown
+Array size must be positive non-zero integer.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	559	45	cpm	Unknown
+Array size value must be an integer.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	566	41	cpm	Unknown
+Array size value must be constant.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	573	37	cpm	Unknown
+Array size value '" + countNode->text + "' is not declared or ambiguous in this context.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	580	33	cpm	Unknown
+Invalid array declaration: '" + countNode->text + "' cannot be evaluated as an array size.", countNode->sourceFileName, countNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	587	29	cpm	Unknown
+Circular struct declaration in '" + structSymbol->name + "." + ifield->first + "'.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber)	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	612	37	cpm	Unknown
+Field '" + structSymbol->name + "." + ifield->second.name + "' size does not match with the union size.", structSymbol->node->sourceFileName, structSymb	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	633	37	cpm	Unknown
+Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	684	37	cpm	Unknown
+Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	690	37	cpm	Unknown
+Invalid function argument declaration syntax.", argNode->sourceFileName, argNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	704	41	cpm	Unknown
+Undefined type '" + argType + "'.", argNode->sourceFileName, argNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	718	41	cpm	Unknown
+Type reference '" + argType + "' is ambiguous in this context. See the message above.", argNode->sourceFileName, argNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	724	41	cpm	Unknown
+Function '" + nameNode->text + "' with the same argument list is already declared in " + owner->name + " namespace.", node->sourceFileName, node->childr	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	741	37	cpm	Unknown
+Invalid namespace declaration syntax.", node->sourceFileName, node->children[0]->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	792	41	cpm	Unknown
+Unexpected syntax node.", node->sourceFileName, node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	802	37	cpm	Unknown
+Cannot find namespace '" + isrc->second.usingNamespaces[i] + "'.", isrc->second.name, -1);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	815	37	cpm	Unknown
+Struct '" + structSymbol->name + "' is too large.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	856	37	cpm	Unknown
+Ambiguous type reference '" + name + "'. Candidates are: ", sourceFile->name);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	916	33	cpm	Unknown
+Ambiguous static symbol reference '" + name + "'. Candidates are: ", sourceFile->name);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	983	33	cpm	Unknown
+Symbol '" + unfolded[i].syntaxNode->text + "' is not an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1045	45	cpm	Unknown
+Symbol '" + unfolded[i].syntaxNode->text + "' is not declared or ambiguous in this context.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].sy	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1052	41	cpm	Unknown
+Cannot evaluate '" + unfolded[i].syntaxNode->text + "' as an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1059	37	cpm	Unknown
+Division by zero.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1101	45	cpm	Unknown
+Bitwise NOT operator only accepts one argument.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1124	41	cpm	Unknown
+Operator '" + op + "' cannot be evaluated at compile time.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1150	37	cpm	Unknown
+Structure " + structInstance->name + " does not contain '" + fieldName->text + "' field.", fieldLine->sourceFileName, fieldLine->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1182	41	cpm	Unknown
+Unexpected syntax in literal struct declaration.", fieldLine->sourceFileName, fieldLine->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1189	37	cpm	Unknown
+Invalid literal struct syntax.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1197	29	cpm	Unknown
+Invalid literal array syntax.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1210	33	cpm	Unknown
+Declared items count does not match with the array size.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1216	33	cpm	Unknown
+Invalid array item syntax.", itemNode->sourceFileName, itemNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1242	41	cpm	Unknown
+Value is out of range.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1319	33	cpm	Unknown
+Cannot evaluate '" + valueNode->text + "' as a number.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1331	29	cpm	Unknown
+Cannot parse '" + valueNode->text + "' as a string literal.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1353	29	cpm	Unknown
+Value is out of range.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1372	33	cpm	Unknown
+Cannot parse '" + valueNode->text + "' as a char literal.", valueNode->sourceFileName, valueNode->lineNumber);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMCompiler.cpp	1384	29	cpm	Unknown
+Invalid character in the expression: ")->Add(c);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMParser.cpp	167	34	cpm	Unknown
+Invalid character in the operator line: ")->Add(cur->text[0]);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMParser.cpp	242	34	cpm	Unknown
+Invalid character in the block: ")->Add(c);	t:\svn\work\cpp\xcm2\emulator\cpm\CPMParser.cpp	302	34	cpm	Unknown
+Cannot open file: '")->Add(rootFolder + sourceFileName)->Add("'.");	t:\svn\work\cpp\xcm2\emulator\cpm\CPMParser.cpp	367	30	cpm	Unknown

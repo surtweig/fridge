@@ -1,0 +1,136 @@
+//#include "vtext.binc";
+//#include "stdapp.cinc";
+ 
+#using VTEXT;
+#using X2AL;
+
+namespace X2AL // zuzu123
+(
+    struct Zuzu
+    (
+        uint8 a;
+        uint8 b;
+        uint8 c;
+    );
+
+    void __mvi_a(uint8 v);
+    void __mvi_b(uint8 v);
+    void __mvi_c(uint8 v);
+);
+
+namespace VTEXT imports "vtext.bin"
+(    
+    struct Zuzu
+    (
+        uint16 x;
+    );
+
+    static uint8 VTEXT_FORE_COLOR imports 0x00A1;
+    static uint8 VTEXT_BACK_COLOR imports 0x00A2;
+
+    void putstr ( uint8 column; uint8 row; string str )
+    (
+        __mvi_b column;
+        __mvi_c row;
+        __lxi_hl (uint16 str);
+        __callsub 0x00A3;
+    );
+);
+
+
+
+/*
+const type name;
+const type name value;
+const type name array size;
+const type name array size value;
+const type name imports addr;
+const type name array size imports addr;
+*/
+
+struct uint8pair
+(
+    uint8 high;
+    uint8 low;
+);
+
+union uint16Union
+(
+    uint16 word;
+    uint8pair bytes;
+);
+
+static char charTest "x";
+
+static string stringTest "zuzu";
+
+static char textTest array 5 "12345";//("1"; "2"; "3");//"1234567890";
+
+const uint8 intArraySize (+ 2 3);
+
+static uint8 MyStaticArray array intArraySize (0; + 1 1; 2; 3; 4);
+
+static X2AL.Zuzu MyStaticZuzu (a 5; b 10; c 15);
+
+struct intArray
+(   
+    uint8 data array intArraySize;
+);
+
+struct complexStruct
+(
+    string name;
+    intArray arr;
+    char text array 256;
+    string text2;
+    //complexStruct zuzu;
+    //cs2 _cs2;
+);
+
+/*
+struct cs2
+(
+    cs1 _cs1;
+);
+
+struct cs1
+(
+    complexStruct _cS;
+);
+*/
+uint8 func(uint8 a ref; uint8 b)
+(
+    return (+ a b);
+);
+
+uint8 func(*uint8 b ref; uint8 x) ( ; );
+
+void main()
+(
+    //intArray myArray 0;
+    uint8 myArray array intArraySize;
+    = (myArray 0) 1;
+    = (myArray 1) (myArray.data (- (myArray.data 0) 1));
+    if (== (myArray.data 0) 1)    
+        (putstr 0 0 "Hello, World!")
+    else if (0)
+        (putstr 0 0 "No way!")
+    else
+        (putstr 0 0 "Hello, Darkness!");
+    
+    for (uint8 i 0; < i intArraySize; ++ i)
+    (
+        if (== i 2)
+        (
+            putstr 0 0 "i == 2";
+            = (myArray.data i) i;
+        );
+        = (myArray.data i) i;
+    );
+    
+    uint16 x;
+    *uint16 px;
+    = px null;
+    = px *x;
+    = >px 10;
+);

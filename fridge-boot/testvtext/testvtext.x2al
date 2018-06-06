@@ -1,0 +1,53 @@
+include "testvtext.inc"
+include "stdapp.inc"
+include "vtext.inc"
+
+static HelloWorld "Hello, World!"
+
+offset 0x0000 // temp
+unsafe_flow
+
+static timer 0
+static posx 0
+
+subroutine testvtext.SysTimerIRQ	
+	DI
+	PUSH AF
+	PUSH HL
+	LDA timer
+	INR A
+	STA timer
+
+	CPI 32
+	JNZ testvtext.SysTimerIRQ.continue
+	LXI HL, posx
+	INR M
+	MVI A, 0
+	STA timer
+	entry testvtext.SysTimerIRQ.continue	
+	POP HL
+	POP AF
+	EI
+endsub	
+
+entry testvtext.start
+	EI
+    VMODE, 1               // Turn on text mode
+    VFCLR                  // Clear screen
+
+    MVI A, 1               // blue background
+    STA VTEXT_BACK_COLOR
+    
+    MVI A, 15              // white letters
+    STA VTEXT_FORE_COLOR
+    
+    MVI B, 1               // text position C=row B=column
+	LDA posx
+	MOV B, A
+    MVI C, 1
+
+    LXI HL, HelloWorld     // Passing the string's address through HL register pair
+    CALL vtext_putstr      // Print the string
+    
+    VPRE                   // Present video frame
+	JMP testvtext.start

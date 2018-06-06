@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<preferences>
+ <debug showDebugMenu="0" />
+ <systemtable filter="All Interfaces">
+  <columns>
+   <connections preferredWidth="31" />
+   <irq preferredWidth="34" />
+  </columns>
+ </systemtable>
+ <library
+   expandedCategories="Library/Interface Protocols,Library/University Program/Communications,Library/University Program,Library/University Program/Generic IO,Library,Project" />
+ <window width="1100" height="800" x="315" y="81" />
+ <generation path="xcm_clk_pll" synthesis="VHDL" />
+</preferences>

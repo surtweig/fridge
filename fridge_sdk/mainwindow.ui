@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Fridge SDK</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>../res/snowflake.ico</normaloff>../res/snowflake.ico</iconset>
+  </property>
+  <widget class="QWidget" name="centralWidget">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <widget class="QTreeView" name="ProjectView">
+       <property name="maximumSize">
+        <size>
+         <width>200</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="headerHidden">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QTabWidget" name="TextEditorTabs">
+       <property name="minimumSize">
+        <size>
+         <width>600</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="baseSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="OutputTab">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <attribute name="title">
+         <string>[ProjectGroup]</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_7">
+         <item>
+          <widget class="QWidget" name="widget" native="true">
+           <layout class="QVBoxLayout" name="verticalLayout_2">
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>Output folder:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="widget_2" native="true">
+              <layout class="QHBoxLayout" name="horizontalLayout_2">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QLineEdit" name="BuildOutputFolderEdit"/>
+               </item>
+               <item>
+                <widget class="QPushButton" name="BuildEmulatorFolderBrowseBtn">
+                 <property name="text">
+                  <string>Browse...</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>Export project as system BootLoader:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="BuildBootLoaderProjectComboBox">
+              <item>
+               <property name="text">
+                <string>&lt;None&gt;</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QWidget" name="widget_3" native="true">
+           <layout class="QVBoxLayout" name="verticalLayout_6">
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="text">
+               <string>Output ROM sections:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="widget_4" native="true">
+              <property name="autoFillBackground">
+               <bool>false</bool>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_3">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QWidget" name="widget_6" native="true">
+                 <layout class="QVBoxLayout" name="verticalLayout_3">
+                  <item>
+                   <widget class="QLabel" name="label_4">
+                    <property name="text">
+                     <string>Available sections:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QListView" name="BuildAvailableROMSectionsList"/>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QWidget" name="widget_5" native="true">
+                 <layout class="QVBoxLayout" name="verticalLayout_4">
+                  <item>
+                   <spacer name="verticalSpacer_2">
+                    <property name="orientation">
+                     <enum>Qt::Vertical</enum>
+                    </property>
+                    <property name="sizeType">
+                     <enum>QSizePolicy::Preferred</enum>
+                    </property>
+                    <property name="sizeHint" stdset="0">
+                     <size>
+                      <width>20</width>
+                      <height>20</height>
+                     </size>
+                    </property>
+                   </spacer>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="BuildAddROMSectionBtn">
+                    <property name="text">
+                     <string>Add &gt;</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="BuildRemoveROMSectionBtn">
+                    <property name="text">
+                     <string>&lt; Remove</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <spacer name="verticalSpacer_3">
+                    <property name="orientation">
+                     <enum>Qt::Vertical</enum>
+                    </property>
+                    <property name="sizeType">
+                     <enum>QSizePolicy::Preferred</enum>
+                    </property>
+                    <property name="sizeHint" stdset="0">
+                     <size>
+                      <width>20</width>
+                      <height>20</height>
+                     </size>
+                    </property>
+                   </spacer>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="BuildMoveUpROMSectionBtn">
+                    <property name="text">
+                     <string>Move up</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="BuildMoveDownROMSectionBtn">
+                    <property name="text">
+                     <string>Move down</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <spacer name="verticalSpacer">
+                    <property name="orientation">
+                     <enum>Qt::Vertical</enum>
+                    </property>
+                    <property name="sizeHint" stdset="0">
+                     <size>
+                      <width>20</width>
+                      <height>259</height>
+                     </size>
+                    </property>
+                   </spacer>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QWidget" name="widget_7" native="true">
+                 <layout class="QVBoxLayout" name="verticalLayout_5">
+                  <item>
+                   <widget class="QLabel" name="label_5">
+                    <property name="text">
+                     <string>ROM sections:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QTableView" name="BuildROMSectionsList">
+                    <property name="editTriggers">
+                     <set>QAbstractItemView::NoEditTriggers</set>
+                    </property>
+                    <property name="showDropIndicator" stdset="0">
+                     <bool>false</bool>
+                    </property>
+                    <property name="selectionMode">
+                     <enum>QAbstractItemView::SingleSelection</enum>
+                    </property>
+                    <property name="selectionBehavior">
+                     <enum>QAbstractItemView::SelectRows</enum>
+                    </property>
+                    <property name="verticalScrollMode">
+                     <enum>QAbstractItemView::ScrollPerPixel</enum>
+                    </property>
+                    <property name="horizontalScrollMode">
+                     <enum>QAbstractItemView::ScrollPerPixel</enum>
+                    </property>
+                    <property name="showGrid">
+                     <bool>false</bool>
+                    </property>
+                    <property name="gridStyle">
+                     <enum>Qt::NoPen</enum>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>false</bool>
+                    </property>
+                    <property name="cornerButtonEnabled">
+                     <bool>false</bool>
+                    </property>
+                    <attribute name="horizontalHeaderHighlightSections">
+                     <bool>false</bool>
+                    </attribute>
+                    <attribute name="verticalHeaderVisible">
+                     <bool>false</bool>
+                    </attribute>
+                    <attribute name="verticalHeaderDefaultSectionSize">
+                     <number>20</number>
+                    </attribute>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="QTabWidget" name="ToolsTabs">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>400</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="currentIndex">
+        <number>3</number>
+       </property>
+       <widget class="QWidget" name="tab_3">
+        <attribute name="title">
+         <string>CPU</string>
+        </attribute>
+       </widget>
+       <widget class="QWidget" name="tab_4">
+        <attribute name="title">
+         <string>RAM</string>
+        </attribute>
+       </widget>
+       <widget class="QWidget" name="tab_5">
+        <attribute name="title">
+         <string>Object code</string>
+        </attribute>
+       </widget>
+       <widget class="QWidget" name="tab_6">
+        <attribute name="title">
+         <string>Console</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <widget class="QTableView" name="ConsoleTableView">
+           <property name="frameShape">
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Sunken</enum>
+           </property>
+           <property name="lineWidth">
+            <number>1</number>
+           </property>
+           <property name="midLineWidth">
+            <number>1</number>
+           </property>
+           <property name="editTriggers">
+            <set>QAbstractItemView::NoEditTriggers</set>
+           </property>
+           <property name="selectionMode">
+            <enum>QAbstractItemView::SingleSelection</enum>
+           </property>
+           <property name="selectionBehavior">
+            <enum>QAbstractItemView::SelectRows</enum>
+           </property>
+           <property name="verticalScrollMode">
+            <enum>QAbstractItemView::ScrollPerPixel</enum>
+           </property>
+           <property name="horizontalScrollMode">
+            <enum>QAbstractItemView::ScrollPerPixel</enum>
+           </property>
+           <property name="showGrid">
+            <bool>false</bool>
+           </property>
+           <property name="cornerButtonEnabled">
+            <bool>false</bool>
+           </property>
+           <attribute name="horizontalHeaderHighlightSections">
+            <bool>false</bool>
+           </attribute>
+           <attribute name="verticalHeaderVisible">
+            <bool>false</bool>
+           </attribute>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPlainTextEdit" name="SelectedLogMessageText">
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>100</height>
+            </size>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1280</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionNewProjectGroup"/>
+    <addaction name="actionNew"/>
+    <addaction name="actionOpenProjectGroup"/>
+    <addaction name="actionSave"/>
+    <addaction name="actionSave_all"/>
+    <addaction name="separator"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuBuild">
+    <property name="title">
+     <string>Build</string>
+    </property>
+    <addaction name="actionBuild_project"/>
+    <addaction name="actionBuild_and_run_emulator"/>
+    <addaction name="actionStart_debugging"/>
+    <addaction name="separator"/>
+    <addaction name="actionCompose_ROM_image"/>
+    <addaction name="actionCompile_file"/>
+    <addaction name="separator"/>
+    <addaction name="actionSettings"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuBuild"/>
+  </widget>
+  <widget class="QToolBar" name="mainToolBar">
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+  </widget>
+  <widget class="QStatusBar" name="statusBar">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <action name="actionNew">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>New file or project</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="actionOpenProjectGroup">
+   <property name="text">
+    <string>Open project group</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionSave">
+   <property name="text">
+    <string>Save file</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionBuild_project">
+   <property name="text">
+    <string>Build project group</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+B</string>
+   </property>
+  </action>
+  <action name="actionBuild_and_run_emulator">
+   <property name="text">
+    <string>Build project group and start emulator</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+R</string>
+   </property>
+  </action>
+  <action name="actionStart_debugging">
+   <property name="text">
+    <string>Start debugging</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
+   </property>
+  </action>
+  <action name="actionSettings">
+   <property name="text">
+    <string>Settings</string>
+   </property>
+  </action>
+  <action name="actionCompose_ROM_image">
+   <property name="text">
+    <string>Compose ROM image</string>
+   </property>
+  </action>
+  <action name="actionCompile_file">
+   <property name="text">
+    <string>Build project</string>
+   </property>
+  </action>
+  <action name="actionNewProjectGroup">
+   <property name="text">
+    <string>New project group</string>
+   </property>
+  </action>
+  <action name="actionSave_all">
+   <property name="text">
+    <string>Save all</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <resources/>
+ <connections/>
+</ui>

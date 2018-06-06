@@ -1,0 +1,32 @@
+m255
+K4
+z2
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+Z0 dT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/simulation/modelsim
+vxcm_clk_pll_pll_0
+!s110 1500676206
+!i10b 1
+!s100 P:moLDei52UgS<3i`9k1d2
+IZ6RaXMAbemH<Kle>W@K`c1
+VDg1SIo80bB@j0V0VzS_@n1
+R0
+w1500575548
+8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules/xcm_clk_pll_pll_0.v
+FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules/xcm_clk_pll_pll_0.v
+L0 2
+OV;L;10.5b;63
+r1
+!s85 0
+31
+!s108 1500676206.000000
+!s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules/xcm_clk_pll_pll_0.v|
+!s90 -reportprogress|300|-vlog01compat|-work|xcm_clk_pll|+incdir+T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules/xcm_clk_pll_pll_0.v|
+!i113 1
+o-vlog01compat -work xcm_clk_pll
+!s92 -vlog01compat -work xcm_clk_pll +incdir+T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/submodules
+tCvgOpt 0

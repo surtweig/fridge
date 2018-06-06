@@ -1,0 +1,34 @@
+{
+    "binBootLoader": "testvtext.bin",
+    "exportDirectory": "T:/svn/work/cpp/xcm2/emulator/x64/Release",
+    "includeFolders": {
+        "x2al_std": {
+            "relPath": "../x2al_std",
+            "sources": [
+                "arithm.inc",
+                "stdapp.inc",
+                "vtext.inc"
+            ]
+        }
+    },
+    "name": "fridge-boot",
+    "projects": {
+        "BootLoader": {
+            "sources": [
+                "BootLoader.inc",
+                "BootLoader.x2al"
+            ]
+        },
+        "testvtext": {
+            "sources": [
+                "testvtext.inc",
+                "testvtext.x2al"
+            ]
+        }
+    },
+    "romimage": {
+        "sections": [
+            "testvtext.bin"
+        ]
+    }
+}

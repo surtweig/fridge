@@ -1,0 +1,302 @@
+m255
+K4
+z2
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+Z0 dT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/simulation/modelsim
+Promimage
+Z1 DPx4 work 10 xcmircodes 0 22 :<_6K^TM[n^m`d4V]l>l:1
+Z2 DPx4 work 10 xcmglobals 0 22 3<lgT9o9<WAeC=:36FX970
+Z3 DPx4 ieee 11 numeric_std 0 22 :ASDNFgHXf_ih3J@9F3Ze1
+Z4 DPx3 std 6 textio 0 22 zE1`LPoLg^DX3Oz^4Fj1K3
+Z5 DPx4 ieee 14 std_logic_1164 0 22 eNV`TJ_GofJTzYa?f<@Oe1
+w1500243349
+R0
+8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/ROMImage.vhd
+FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/ROMImage.vhd
+l0
+L7
+V:SD]Pb4<dd?cefU=4An>i3
+!s100 h>ZHCjSF:8`3bEH@3iz>Q2
+Z6 OV;C;10.5b;63
+33
+Z7 !s110 1500676207
+!i10b 1
+Z8 !s108 1500676207.000000
+!s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/ROMImage.vhd|
+!s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/ROMImage.vhd|
+!i113 1
+Z9 o-2008 -work work
+Z10 tExplicit 1 CvgOpt 0
+Evgacontroller
+Z11 w1500587775
+R2
+Z12 DPx4 ieee 15 std_logic_arith 0 22 [G314=:2zXJ`VORJe1J@Z1
+Z13 DPx4 ieee 18 std_logic_unsigned 0 22 ;eZjO2D4ZDz<]0>8AL<ne1
+R3
+R4
+R5
+R0
+Z14 8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/VGAController.vhd
+Z15 FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/VGAController.vhd
+l0
+L7
+V4EH7=_E;<IaC?M`kb=SZ10
+!s100 gPAKCDl1meO9I9Q1bm:n>3
+R6
+33
+R7
+!i10b 1
+R8
+Z16 !s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/VGAController.vhd|
+Z17 !s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/VGAController.vhd|
+!i113 1
+R9
+R10
+Amain
+R2
+R12
+R13
+R3
+R4
+R5
+DEx4 work 13 vgacontroller 0 22 4EH7=_E;<IaC?M`kb=SZ10
+l83
+L37
+Vo80a3g@BOn1Z2Az=MNl3J2
+!s100 ;nOC2??5Me:nmfD7QSHVj1
+R6
+33
+R7
+!i10b 1
+R8
+R16
+R17
+!i113 1
+R9
+R10
+Excm_clk_pll
+Z18 w1500575547
+R3
+R4
+R5
+R0
+Z19 8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/xcm_clk_pll.vhd
+Z20 FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/xcm_clk_pll.vhd
+l0
+L9
+V:?6U<baeQiEgKV9:FGFm]1
+!s100 =Td?B;<ZijC95Ko0dHdAE1
+R6
+33
+R7
+!i10b 1
+R8
+Z21 !s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/xcm_clk_pll.vhd|
+Z22 !s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/xcm_clk_pll/synthesis/xcm_clk_pll.vhd|
+!i113 1
+R9
+R10
+Artl
+R3
+R4
+R5
+DEx4 work 11 xcm_clk_pll 0 22 :?6U<baeQiEgKV9:FGFm]1
+l27
+L17
+V_z1]8=ICYn_=XCNQodXnC2
+!s100 n^DjOb`1zUIg6hOF4gP`F3
+R6
+33
+R7
+!i10b 1
+R8
+R21
+R22
+!i113 1
+R9
+R10
+Excmcpu
+Z23 w1500676038
+R1
+R2
+R3
+R4
+R5
+R0
+Z24 8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMCPU.vhd
+Z25 FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMCPU.vhd
+l0
+L8
+V7CJNfG0ejXoj73Ma>ST2;1
+!s100 V`ThPSXA8dn:7R?UY4ge50
+R6
+33
+R7
+!i10b 1
+R8
+Z26 !s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMCPU.vhd|
+Z27 !s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMCPU.vhd|
+!i113 1
+R9
+R10
+Amain
+R1
+R2
+R3
+R4
+R5
+DEx4 work 6 xcmcpu 0 22 7CJNfG0ejXoj73Ma>ST2;1
+l24
+L21
+VD]b6cj5Nezo3eACQ=[e__0
+!s100 QATYE6B_ccNWTaWa@JW7:2
+R6
+33
+R7
+!i10b 1
+R8
+R26
+R27
+!i113 1
+R9
+R10
+Pxcmglobals
+R3
+R4
+R5
+Z28 w1500675672
+R0
+Z29 8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMMain.vhd
+Z30 FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMMain.vhd
+l0
+L5
+V3<lgT9o9<WAeC=:36FX970
+!s100 e9N69dgWVT4e]TZX[FB1P1
+R6
+33
+R7
+!i10b 1
+R8
+Z31 !s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMMain.vhd|
+Z32 !s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMMain.vhd|
+!i113 1
+R9
+R10
+Pxcmircodes
+R3
+R4
+R5
+R2
+w1500241812
+R0
+8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMIRCodes.vhd
+FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMIRCodes.vhd
+l0
+L3
+V:<_6K^TM[n^m`d4V]l>l:1
+!s100 a?PWifK=[50d=HdTeSFFB1
+R6
+33
+R7
+!i10b 1
+R8
+!s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMIRCodes.vhd|
+!s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMIRCodes.vhd|
+!i113 1
+R9
+R10
+Excmmain
+R28
+R2
+R3
+R4
+R5
+R0
+R29
+R30
+l0
+L27
+V6i8c<FD?]z3Jl5c2ajlMG3
+!s100 iRZWP_MA__K[TG<jZZzbV1
+R6
+33
+R7
+!i10b 1
+R8
+R31
+R32
+!i113 1
+R9
+R10
+Amain
+R2
+R3
+R4
+R5
+DEx4 work 7 xcmmain 0 22 6i8c<FD?]z3Jl5c2ajlMG3
+l98
+L39
+VLfS]_U4=gHDHifl:W7l@W3
+!s100 Fe2DlV^=oic6aXZoZIGO`1
+R6
+33
+R7
+!i10b 1
+R8
+R31
+R32
+!i113 1
+R9
+R10
+Excmrom
+Z33 w1500589742
+R1
+Z34 DPx4 work 8 romimage 0 22 :SD]Pb4<dd?cefU=4An>i3
+R2
+R3
+R5
+R4
+R0
+Z35 8T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMROM.vhd
+Z36 FT:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMROM.vhd
+l0
+L11
+Vc6TziV9KAF[c3<bKaX>ZP3
+!s100 GSLj@ca^Z;P`R64[D=B642
+R6
+33
+R7
+!i10b 1
+R8
+Z37 !s90 -reportprogress|300|-2008|-work|work|T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMROM.vhd|
+Z38 !s107 T:/svn/work/cpp/xcm2/fpga/xcm1_de0cv/XCMROM.vhd|
+!i113 1
+R9
+R10
+Amain
+R1
+R34
+R2
+R3
+R5
+R4
+DEx4 work 6 xcmrom 0 22 c6TziV9KAF[c3<bKaX>ZP3
+l43
+L39
+V^TC]bbRoXO>UXlm3Rhh4j0
+!s100 d4QUoe?KK90g`:9=W]FZn3
+R6
+33
+R7
+!i10b 1
+R8
+R37
+R38
+!i113 1
+R9
+R10

@@ -1,0 +1,679 @@
+// PONG v1.0
+// Copyright (c) Plus&Minus Inc. 2008
+
+// Title
+alias 30 TitleDelay
+
+alias r0 timer1
+alias r1 timer2
+set timer1 0
+set timer2 0
+entry loop1:
+    cmprc timer1 31
+    jmp DrawTitle
+    inc timer1
+    
+    entry loop2:
+        cmprc timer2 TitleDelay
+        jmp loop1
+        inc timer2
+    jmp loop2    
+jmp loop1
+
+entry DrawTitle:
+drwc 6 12
+idle
+drwc 6 13
+idle
+drwc 6 14
+idle
+drwc 6 15
+idle
+drwc 6 16
+idle
+drwc 6 17
+idle
+drwc 6 18
+idle
+drwc 7 12
+idle
+drwc 7 15
+idle
+drwc 8 12
+idle
+drwc 8 15
+idle
+drwc 9 13
+idle
+drwc 9 14
+idle
+drwc 9 15
+idle
+
+drwc 11 12
+idle
+drwc 11 13
+idle
+drwc 11 14
+idle
+drwc 11 15
+idle
+drwc 11 16
+idle
+drwc 11 17
+idle
+drwc 11 18
+idle
+drwc 12 12
+idle
+drwc 12 18
+idle
+drwc 13 12
+idle
+drwc 13 18
+idle
+drwc 14 12
+idle
+drwc 14 13
+idle
+drwc 14 14
+idle
+drwc 14 15
+idle
+drwc 14 16
+idle
+drwc 14 17
+idle
+drwc 14 18
+idle
+
+drwc 16 12
+idle
+drwc 16 13
+idle
+drwc 16 14
+idle
+drwc 16 15
+idle
+drwc 16 16
+idle
+drwc 16 17
+idle
+drwc 16 18
+idle
+drwc 17 14
+idle
+drwc 18 15
+idle
+drwc 19 16
+idle
+drwc 20 12
+idle
+drwc 20 13
+idle
+drwc 20 14
+idle
+drwc 20 15
+idle
+drwc 20 16
+idle
+drwc 20 17
+idle
+drwc 20 18
+idle
+
+drwc 22 12
+idle
+drwc 22 13
+idle
+drwc 22 14
+idle
+drwc 22 15
+idle
+drwc 22 16
+idle
+drwc 22 17
+idle
+drwc 22 18
+idle
+drwc 23 12
+idle
+drwc 23 18
+idle
+drwc 24 12
+idle
+drwc 24 15
+idle
+drwc 24 18
+idle
+drwc 25 12
+idle
+drwc 25 15
+idle
+drwc 25 16
+idle
+drwc 25 17
+idle
+drwc 25 18
+
+set timer1 0
+set timer2 0
+entry loop3:
+    cmprc timer1 31
+    jmp EraseTitle
+    inc timer1
+    
+    entry loop4:
+        cmprc timer2 TitleDelay
+        jmp loop3
+        inc timer2
+        idle
+        idle
+        idle
+        idle
+    jmp loop4    
+jmp loop3
+
+entry EraseTitle:
+ersc 6 12
+idle
+ersc 6 13
+idle
+ersc 6 14
+idle
+ersc 6 15
+idle
+ersc 6 16
+idle
+ersc 6 17
+idle
+ersc 6 18
+idle
+ersc 7 12
+idle
+ersc 7 15
+idle
+ersc 8 12
+idle
+ersc 8 15
+idle
+ersc 9 13
+idle
+ersc 9 14
+idle
+ersc 9 15
+idle
+
+ersc 11 12
+idle
+ersc 11 13
+idle
+ersc 11 14
+idle
+ersc 11 15
+idle
+ersc 11 16
+idle
+ersc 11 17
+idle
+ersc 11 18
+idle
+ersc 12 12
+idle
+ersc 12 18
+idle
+ersc 13 12
+idle
+ersc 13 18
+idle
+ersc 14 12
+idle
+ersc 14 13
+idle
+ersc 14 14
+idle
+ersc 14 15
+idle
+ersc 14 16
+idle
+ersc 14 17
+idle
+ersc 14 18
+idle
+
+ersc 16 12
+idle
+ersc 16 13
+idle
+ersc 16 14
+idle
+ersc 16 15
+idle
+ersc 16 16
+idle
+ersc 16 17
+idle
+ersc 16 18
+idle
+ersc 17 14
+idle
+ersc 18 15
+idle
+ersc 19 16
+idle
+ersc 20 12
+idle
+ersc 20 13
+idle
+ersc 20 14
+idle
+ersc 20 15
+idle
+ersc 20 16
+idle
+ersc 20 17
+idle
+ersc 20 18
+idle
+
+ersc 22 12
+idle
+ersc 22 13
+idle
+ersc 22 14
+idle
+ersc 22 15
+idle
+ersc 22 16
+idle
+ersc 22 17
+idle
+ersc 22 18
+idle
+ersc 23 12
+idle
+ersc 23 18
+idle
+ersc 24 12
+idle
+ersc 24 15
+idle
+ersc 24 18
+idle
+ersc 25 12
+idle
+ersc 25 15
+idle
+ersc 25 16
+idle
+ersc 25 17
+idle
+ersc 25 18
+idle
+
+// Game variables
+alias r0 BallPosX
+alias r1 BallPosY
+alias r2 BallPrevPosX
+alias r3 BallPrevPosY
+alias r4 BallDir
+
+alias r5 Player1Pos
+alias r6 Player2Pos
+alias r7 Player1Dir
+alias r8 Player2Dir
+alias b0 Player1Buf
+alias b1 Player2Buf
+
+alias r30 Player1Score
+alias r31 Player2Score
+
+alias r9 penX
+alias r10 penY
+alias r11 timer
+
+alias 0 dUpRight
+alias 1 dDownRight
+alias 2 dDownLeft
+alias 3 dUpLeft
+alias 4 dLeft
+alias 5 dRight
+
+jmp InitGame
+
+// Restart after player 1 won
+entry Player1Start:
+    inc Player1Score
+    drwr BallPosX BallPosY
+    ersr BallPrevPosX BallPrevPosY
+    set timer 0
+    entry delayStart11:
+        inc timer
+        neqrc timer 31
+        jmp delayStart11    
+
+    ersr BallPosX BallPosY
+    set BallPosX 1
+    cpy Player1Pos BallPosY
+    inc BallPosY
+    inc BallPosY
+    set BallDir dUpRight
+    
+    drwr BallPosX BallPosY
+    cpy BallPosX BallPrevPosX
+    cpy BallPosY BallPrevPosY
+    set timer 0
+    entry delayStart12:
+        inc timer
+        neqrc timer 31
+        jmp delayStart12
+    
+jmp BallDraw
+    
+// Restart after player 2 won
+entry Player2Start:
+    inc Player2Score
+    drwr BallPosX BallPosY
+    ersr BallPrevPosX BallPrevPosY
+    set timer 0
+    entry delayStart21:
+        inc timer
+        neqrc timer 31
+        jmp delayStart21    
+
+    ersr BallPosX BallPosY
+    set BallPosX 30
+    cpy Player2Pos BallPosY
+    inc BallPosY
+    inc BallPosY
+    set BallDir dUpLeft
+    
+    drwr BallPosX BallPosY
+    cpy BallPosX BallPrevPosX
+    cpy BallPosY BallPrevPosY
+    set timer 0
+    entry delayStart22:
+        inc timer
+        neqrc timer 31
+        jmp delayStart22
+jmp BallDraw
+
+// Initial setup
+entry InitGame:
+    set Player1Score 0
+    set Player2Score 0
+
+    set BallPosX 10
+    set BallPosY 16
+    set BallPrevPosX 10
+    set BallPrevPosY 16
+    set BallDir 0
+    set Player1Pos 14
+    set Player2Pos 14
+    
+    // Draw players
+    set penX 0
+    cpy Player1Pos penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    
+    set penX 31
+    cpy Player2Pos penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    drwr penX penY
+    inc penY
+    
+// Start the game
+entry MainLoop:
+    
+    // Player control
+    //bcpy Player1Buf Player1Dir
+    //bcpy Player2Buf Player2Dir
+    
+    cmpbc Player1Buf 2
+    jmp Player1IdlePadding
+    entry Player1Move:
+        cmpbc Player1Buf 3
+        jmp Player1Up
+        cmpbc Player1Buf 1
+        jmp Player1Down
+        jmp Player1IdlePadding
+        entry Player1Up:
+            cmprc Player1Pos 28
+            jmp Player1IdlePadding
+            set penX 0
+            cpy Player1Pos penY
+            ersr penX penY
+            inc Player1Pos
+            inc penY
+            inc penY
+            inc penY
+            inc penY
+            drwr penX penY
+            jmp Player2Move
+        entry Player1Down:
+            cmprc Player1Pos 0
+            jmp Player1IdlePadding
+            dec Player1Pos
+            set penX 0
+            cpy Player1Pos penY
+            drwr penX penY
+            inc penY
+            inc penY
+            inc penY
+            inc penY
+            ersr penX penY
+            jmp Player2Move
+        entry Player1IdlePadding:
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            jmp Player2Move            
+            
+    cmpbc Player2Buf 2
+    jmp Player2IdlePadding
+    entry Player2Move:
+        cmpbc Player2Buf 3
+        jmp Player2Up
+        cmpbc Player2Buf 1
+        jmp Player2Down
+        jmp Player2IdlePadding
+        entry Player2Up:
+            cmprc Player2Pos 28
+            jmp Player2IdlePadding
+            set penX 31
+            cpy Player2Pos penY
+            ersr penX penY
+            inc Player2Pos
+            inc penY
+            inc penY
+            inc penY
+            inc penY
+            drwr penX penY
+            jmp BallMovement
+        entry Player2Down:
+            cmprc Player2Pos 0
+            jmp Player2IdlePadding
+            dec Player2Pos
+            set penX 31
+            cpy Player2Pos penY
+            drwr penX penY
+            inc penY
+            inc penY
+            inc penY
+            inc penY
+            ersr penX penY
+            jmp BallMovement
+        entry Player2IdlePadding:
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            idle
+            jmp BallMovement
+    
+    entry BallMovement:
+
+    cmprc BallDir dUpRight // up-right
+    jmp BallDirPP
+    cmprc BallDir dDownRight // down-right
+    jmp BallDirPN
+    cmprc BallDir dDownLeft // down-left
+    jmp BallDirNN
+    cmprc BallDir dUpLeft // up-left
+    jmp BallDirNP
+    cmprc BallDir dLeft
+    jmp BallDirN0
+    cmprc BallDir dRight
+    jmp BallDirP0
+    
+    entry BallDirPP:
+        inc BallPosX
+        inc BallPosY
+        jmp BallBounceCheck
+    entry BallDirPN:
+        inc BallPosX
+        dec BallPosY
+        jmp BallBounceCheck
+    entry BallDirNP:
+        dec BallPosX
+        inc BallPosY
+        jmp BallBounceCheck
+    entry BallDirNN:
+        dec BallPosX
+        dec BallPosY
+        jmp BallBounceCheck
+    entry BallDirN0:
+        dec BallPosX
+        jmp BallBounceCheck
+    entry BallDirP0:
+        inc BallPosX
+        jmp BallBounceCheck
+        
+    entry BallBounceCheck:
+    
+        cmprc BallPosY 31
+        jmp BallBounceUp
+        cmprc BallPosY 0
+        jmp BallBounceDown
+        cmprc BallPosX 1
+        jmp BallCheckPlayer1
+        cmprc BallPosX 30
+        jmp BallCheckPlayer2
+        
+        jmp BallDraw
+        
+        entry BallCheckPlayer1:
+            cpy Player1Pos penY
+            cmprr BallPosY penY
+            jmp BallBounceLeftBottom
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceLeftBottom
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceLeftTop
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceLeftTop
+            jmp Player2Start
+            
+        entry BallCheckPlayer2:
+            cpy Player2Pos penY
+            cmprr BallPosY penY
+            jmp BallBounceRightBottom
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceRightBottom
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceRightTop
+            inc penY
+            cmprr BallPosY penY
+            jmp BallBounceRightTop
+            jmp Player1Start
+            
+        entry BallBounceUp:
+            cmprc BallDir dUpRight
+            set   BallDir dDownRight
+            cmprc BallDir dUpLeft
+            set   BallDir dDownLeft
+            jmp BallDraw
+        entry BallBounceDown:
+            cmprc BallDir dDownRight
+            set   BallDir dUpRight
+            cmprc BallDir dDownLeft
+            set   BallDir dUpLeft
+            jmp BallDraw
+            
+        entry BallBounceRightBottom:
+            cmprc BallDir dUpRight
+            set   BallDir dUpLeft
+            cmprc BallDir dDownRight
+            set   BallDir dDownLeft
+            cmprc BallDir dRight
+            set   BallDir dDownLeft
+            jmp BallDraw
+        entry BallBounceRightTop:
+            cmprc BallDir dUpRight
+            set   BallDir dUpLeft
+            cmprc BallDir dDownRight
+            set   BallDir dDownLeft
+            cmprc BallDir dRight
+            set   BallDir dUpLeft
+            jmp BallDraw
+        entry BallBounceLeftBottom:
+            cmprc BallDir dUpLeft
+            set   BallDir dUpRight
+            cmprc BallDir dDownLeft
+            set   BallDir dDownRight
+            cmprc BallDir dLeft
+            set   BallDir dDownRight
+            jmp BallDraw
+        entry BallBounceLeftTop:
+            cmprc BallDir dUpLeft
+            set   BallDir dUpRight
+            cmprc BallDir dDownLeft
+            set   BallDir dDownRight
+            cmprc BallDir dLeft
+            set   BallDir dUpRight
+            jmp BallDraw
+        entry BallBounceLeftCenter:
+            set BallDir dRight
+            jmp BallDraw
+        entry BallBounceRightCenter:
+            set BallDir dLeft
+            jmp BallDraw
+            
+    entry BallDraw:
+        drwr BallPosX BallPosY
+        ersr BallPrevPosX BallPrevPosY
+        cpy BallPosX BallPrevPosX
+        cpy BallPosY BallPrevPosY
+        
+jmp MainLoop

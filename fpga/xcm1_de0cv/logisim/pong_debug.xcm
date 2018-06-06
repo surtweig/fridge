@@ -1,0 +1,155 @@
+// Title
+alias 5 TitleDelay
+
+drwc 6 12
+drwc 6 13
+drwc 6 14
+drwc 6 15
+drwc 6 16
+drwc 6 17
+drwc 6 18
+drwc 7 12
+drwc 7 15
+drwc 8 12
+drwc 8 15
+drwc 9 13
+drwc 9 14
+drwc 9 15
+drwc 11 12
+drwc 11 13
+drwc 11 14
+drwc 11 15
+drwc 11 16
+drwc 11 17
+drwc 11 18
+drwc 12 12
+drwc 12 18
+drwc 13 12
+drwc 13 18
+drwc 14 12
+drwc 14 13
+drwc 14 14
+drwc 14 15
+drwc 14 16
+drwc 14 17
+drwc 14 18
+drwc 16 12
+drwc 16 13
+drwc 16 14
+drwc 16 15
+drwc 16 16
+drwc 16 17
+drwc 16 18
+drwc 17 14
+drwc 18 15
+drwc 19 16
+drwc 20 12
+drwc 20 13
+drwc 20 14
+drwc 20 15
+drwc 20 16
+drwc 20 17
+drwc 20 18
+drwc 22 12
+drwc 22 13
+drwc 22 14
+drwc 22 15
+drwc 22 16
+drwc 22 17
+drwc 22 18
+drwc 23 12
+drwc 23 18
+drwc 24 12
+drwc 24 15
+drwc 24 18
+drwc 25 12
+drwc 25 15
+drwc 25 16
+drwc 25 17
+drwc 25 18
+
+alias r0 timer1
+alias r1 timer2
+
+entry loop1:
+    cmprc timer1 31
+    jmp EraseTitle
+    inc timer1
+    
+    entry loop2:
+        cmprc timer2 TitleDelay
+        jmp loop1
+        inc timer2
+    jmp loop2    
+jmp loop1
+
+entry EraseTitle:
+ersc 6 12
+ersc 6 13
+ersc 6 14
+ersc 6 15
+ersc 6 16
+ersc 6 17
+ersc 6 18
+ersc 7 12
+ersc 7 15
+ersc 8 12
+ersc 8 15
+ersc 9 13
+ersc 9 14
+ersc 9 15
+ersc 11 12
+ersc 11 13
+ersc 11 14
+ersc 11 15
+ersc 11 16
+ersc 11 17
+ersc 11 18
+ersc 12 12
+ersc 12 18
+ersc 13 12
+ersc 13 18
+ersc 14 12
+ersc 14 13
+ersc 14 14
+ersc 14 15
+ersc 14 16
+ersc 14 17
+ersc 14 18
+ersc 16 12
+ersc 16 13
+ersc 16 14
+ersc 16 15
+ersc 16 16
+ersc 16 17
+ersc 16 18
+ersc 17 14
+ersc 18 15
+ersc 19 16
+ersc 20 12
+ersc 20 13
+ersc 20 14
+ersc 20 15
+ersc 20 16
+ersc 20 17
+ersc 20 18
+ersc 22 12
+ersc 22 13
+ersc 22 14
+ersc 22 15
+ersc 22 16
+ersc 22 17
+ersc 22 18
+ersc 23 12
+ersc 23 18
+ersc 24 12
+ersc 24 15
+ersc 24 18
+ersc 25 12
+ersc 25 15
+ersc 25 16
+ersc 25 17
+ersc 25 18
+
+jmp loop1
+jmp loop1

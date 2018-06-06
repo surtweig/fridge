@@ -1,0 +1,252 @@
+/*
+WARNING: Do NOT edit the input and output ports in this file in a text
+editor if you plan to continue editing the block that represents it in
+the Block Editor! File corruption is VERY likely to occur.
+*/
+/*
+Copyright (C) 2017  Intel Corporation. All rights reserved.
+Your use of Intel Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Intel Program License 
+Subscription Agreement, the Intel Quartus Prime License Agreement,
+the Intel MegaCore Function License Agreement, or other 
+applicable license agreement, including, without limitation, 
+that your use is for the sole purpose of programming logic 
+devices manufactured by Intel and sold by Intel or its 
+authorized distributors.  Please refer to the applicable 
+agreement for further details.
+*/
+(header "symbol" (version "1.2"))
+(symbol
+	(rect 64 64 352 336)
+	(text "FridgeGraphicsAdapter" (rect 5 0 117 12)(font "Arial" ))
+	(text "inst" (rect 8 256 25 268)(font "Arial" ))
+	(port
+		(pt 0 32)
+		(input)
+		(text "CLK" (rect 0 0 21 12)(font "Arial" ))
+		(text "CLK" (rect 21 27 42 39)(font "Arial" ))
+		(line (pt 0 32)(pt 16 32))
+	)
+	(port
+		(pt 0 48)
+		(input)
+		(text "COMMAND_CLK" (rect 0 0 83 12)(font "Arial" ))
+		(text "COMMAND_CLK" (rect 21 43 104 55)(font "Arial" ))
+		(line (pt 0 48)(pt 16 48))
+	)
+	(port
+		(pt 0 64)
+		(input)
+		(text "RESET" (rect 0 0 35 12)(font "Arial" ))
+		(text "RESET" (rect 21 59 56 71)(font "Arial" ))
+		(line (pt 0 64)(pt 16 64))
+	)
+	(port
+		(pt 0 80)
+		(input)
+		(text "MODE_SWITCH[0..1]" (rect 0 0 107 12)(font "Arial" ))
+		(text "MODE_SWITCH[0..1]" (rect 21 75 128 87)(font "Arial" ))
+		(line (pt 0 80)(pt 16 80)(line_width 3))
+	)
+	(port
+		(pt 0 96)
+		(input)
+		(text "PALETTE_SWITCH" (rect 0 0 95 12)(font "Arial" ))
+		(text "PALETTE_SWITCH" (rect 21 91 116 103)(font "Arial" ))
+		(line (pt 0 96)(pt 16 96))
+	)
+	(port
+		(pt 0 112)
+		(input)
+		(text "PRESENT_TRIGGER" (rect 0 0 106 12)(font "Arial" ))
+		(text "PRESENT_TRIGGER" (rect 21 107 127 119)(font "Arial" ))
+		(line (pt 0 112)(pt 16 112))
+	)
+	(port
+		(pt 0 128)
+		(input)
+		(text "BACK_STORE" (rect 0 0 71 12)(font "Arial" ))
+		(text "BACK_STORE" (rect 21 123 92 135)(font "Arial" ))
+		(line (pt 0 128)(pt 16 128))
+	)
+	(port
+		(pt 0 144)
+		(input)
+		(text "BACK_LOAD" (rect 0 0 64 12)(font "Arial" ))
+		(text "BACK_LOAD" (rect 21 139 85 151)(font "Arial" ))
+		(line (pt 0 144)(pt 16 144))
+	)
+	(port
+		(pt 0 160)
+		(input)
+		(text "BACK_ADDR[0..15]" (rect 0 0 99 12)(font "Arial" ))
+		(text "BACK_ADDR[0..15]" (rect 21 155 120 167)(font "Arial" ))
+		(line (pt 0 160)(pt 16 160)(line_width 3))
+	)
+	(port
+		(pt 0 176)
+		(input)
+		(text "BACK_CLR" (rect 0 0 57 12)(font "Arial" ))
+		(text "BACK_CLR" (rect 21 171 78 183)(font "Arial" ))
+		(line (pt 0 176)(pt 16 176))
+	)
+	(port
+		(pt 0 192)
+		(input)
+		(text "VMEM_STORE" (rect 0 0 73 12)(font "Arial" ))
+		(text "VMEM_STORE" (rect 21 187 94 199)(font "Arial" ))
+		(line (pt 0 192)(pt 16 192))
+	)
+	(port
+		(pt 0 208)
+		(input)
+		(text "VMEM_LOAD" (rect 0 0 66 12)(font "Arial" ))
+		(text "VMEM_LOAD" (rect 21 203 87 215)(font "Arial" ))
+		(line (pt 0 208)(pt 16 208))
+	)
+	(port
+		(pt 0 224)
+		(input)
+		(text "VMEM_ADDR[0..15]" (rect 0 0 100 12)(font "Arial" ))
+		(text "VMEM_ADDR[0..15]" (rect 21 219 121 231)(font "Arial" ))
+		(line (pt 0 224)(pt 16 224)(line_width 3))
+	)
+	(port
+		(pt 288 32)
+		(output)
+		(text "HSYNC" (rect 0 0 40 12)(font "Arial" ))
+		(text "HSYNC" (rect 234 27 267 39)(font "Arial" ))
+		(line (pt 288 32)(pt 272 32))
+	)
+	(port
+		(pt 288 48)
+		(output)
+		(text "VSYNC" (rect 0 0 38 12)(font "Arial" ))
+		(text "VSYNC" (rect 235 43 267 55)(font "Arial" ))
+		(line (pt 288 48)(pt 272 48))
+	)
+	(port
+		(pt 288 64)
+		(output)
+		(text "R[3..0]" (rect 0 0 34 12)(font "Arial" ))
+		(text "R[3..0]" (rect 239 59 267 71)(font "Arial" ))
+		(line (pt 288 64)(pt 272 64)(line_width 3))
+	)
+	(port
+		(pt 288 80)
+		(output)
+		(text "G[3..0]" (rect 0 0 34 12)(font "Arial" ))
+		(text "G[3..0]" (rect 239 75 267 87)(font "Arial" ))
+		(line (pt 288 80)(pt 272 80)(line_width 3))
+	)
+	(port
+		(pt 288 96)
+		(output)
+		(text "B[3..0]" (rect 0 0 33 12)(font "Arial" ))
+		(text "B[3..0]" (rect 240 91 267 103)(font "Arial" ))
+		(line (pt 288 96)(pt 272 96)(line_width 3))
+	)
+	(port
+		(pt 288 112)
+		(bidir)
+		(text "BACK_DATA[0..7]" (rect 0 0 89 12)(font "Arial" ))
+		(text "BACK_DATA[0..7]" (rect 184 107 273 119)(font "Arial" ))
+		(line (pt 288 112)(pt 272 112)(line_width 3))
+	)
+	(port
+		(pt 288 128)
+		(bidir)
+		(text "VMEM_DATA[0..7]" (rect 0 0 90 12)(font "Arial" ))
+		(text "VMEM_DATA[0..7]" (rect 180 123 270 135)(font "Arial" ))
+		(line (pt 288 128)(pt 272 128)(line_width 3))
+	)
+	(parameter
+		"HRange"
+		"1688"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VRange"
+		"1066"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"ScreenWidth"
+		"1280"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"ScreenHeight"
+		"1024"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"HStart"
+		"408"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VStart"
+		"42"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"BufferWidth"
+		"240"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"BufferHeight"
+		"160"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"ScreenHorOffset"
+		"40"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"ScreenVerOffset"
+		"112"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"PixelSize"
+		"5"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VTextModeCharWidth"
+		"6"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VTextModeCharHeight"
+		"8"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VTextModeRows"
+		"20"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"VTextModeCols"
+		"40"
+		""
+		(type "PARAMETER_SIGNED_DEC")	)
+	(parameter
+		"DefaultPalette"
+		"AA(B\"000000000000\",B\"000000001000\",B\"000010000000\",B\"000010001000\",B\"100000000000\",B\"100000001000\",B\"100001000000\",B\"100010001000\",B\"010001000100\",B\"010001001111\",B\"010011110100\",B\"010011111111\",B\"111101000100\",B\"111101001111\",B\"111111110100\",B\"111111111111\")"
+		""
+		(type "PARAMETER_UNKNOWN")	)
+	(drawing
+		(text "GPU" (rect 200 208 257 242)(font "Intel Clear" (color 0 85 127)(font_size 18)(bold)))
+		(rectangle (rect 16 16 272 256))
+	)
+	(annotation_block (parameter)(rect 304 -312 2192 16))
+)

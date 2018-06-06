@@ -1,0 +1,77 @@
+void main()
+init : (
+    alloc myArray
+    alloc x
+    alloc px
+)
+fill_mem myArray 0
+
+push_im 1:uint8
+push_ref myArray.data, 0
+dyncopy
+
+push_im 1:uint8
+push_val myArray.data, 0
+subtract 2
+
+push_val_stack_index myArray.data
+push_ref myArray.data, 1
+dyncopy
+
+push_im 1:uint8
+push_val myArray.data, 0
+compare 2
+jz $void_main_if_block0.end
+    $void_main_if_block0:
+    (
+        push_im $void_main_static0 // "Hello, World!"
+        push_im 0:uint8
+        push_im 0:uint8
+        call putstr
+        jmp $void_main_if_block2.end
+    )
+    $void_main_if_block0.end:
+push_im 0
+jz $void_main_if_block1.end
+    $void_main_if_block1:
+    (
+        push_im $void_main_static1 // "No way!"
+        push_im 0:uint8
+        push_im 0:uint8
+        call putstr
+        jmp $void_main_if_block2.end
+    )
+    $void_main_if_block1.end:
+$void_main_if_block2:
+(
+    push_im $void_main_static2 // "Hello, Darkness!"
+    push_im 0:uint8
+    push_im 0:uint8
+    call putstr
+)
+$void_main_if_block2.end:
+
+$void_main_for_block3:
+(
+    init : (
+        alloc i        
+    )
+    copy_im i, 0:uint8
+    $void_main_for_block3.loop:
+    push_val intArraySize
+    push_val i
+    compare 2
+    jp $void_main_for_block3.end
+    
+    
+    
+    inc i
+    jmp $void_main_for_block3.loop
+    finalize : ( dealloc )
+)
+$void_main_for_block3.end:
+
+finalize:
+(
+    dealloc
+)

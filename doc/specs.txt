@@ -1,0 +1,100 @@
+Display: 240x160 EGA 4bit color
+
+Video:   2x buffers 240x160x4
+         64kb sprite memory
+         102kb total
+         34x11 ASCII text mode (7x14 font)
+
+RAM:     64kb (16bit address)
+CPU:     Intel 8080 instruction set + graphical instructions
+         Big-Endian
+ROM:     
+
+	NOP,
+
+	MOV_AB, MOV_AC, MOV_AD, MOV_AE, MOV_AH, MOV_AL,
+	MOV_BA, MOV_BC, MOV_BD, MOV_BE, MOV_BH, MOV_BL,
+	MOV_CA, MOV_CB, MOV_CD, MOV_CE, MOV_CH, MOV_CL,
+	MOV_DA, MOV_DB, MOV_DC, MOV_DE, MOV_DH, MOV_DL,
+	MOV_EA, MOV_EB, MOV_EC, MOV_ED, MOV_EH, MOV_EL,
+	MOV_FA, MOV_FB, MOV_FC,	MOV_HD,	MOV_HE,	MOV_FL,
+	MOV_LA,	MOV_LB,	MOV_LC,	MOV_LD,	MOV_LE,	MOV_LF,
+
+	MVI_A, MVI_B, MVI_C, MVI_D, MVI_E, MVI_H, MVI_L,
+
+	LXI_BC, LXI_DE, LXI_HL, LXI_SP,
+
+	LDA,
+	STA,
+	LHLD,
+	SHLD,
+
+	LDAX_BC, LDAX_DE,
+	STAX_BC, STAX_DE,
+
+	XCNG,
+
+	ADD_A, ADD_B, ADD_C, ADD_D, ADD_E, ADD_H, ADD_L,
+	ADI,
+	ADC_A, ADC_B, ADC_C, ADC_D, ADC_E, ADC_H, ADC_L,
+	ACI,
+
+	SUB_A, SUB_B, SUB_C, SUB_D, SUB_E, SUB_H, SUB_L,
+	SUI,
+	SBB_A, SBB_B, SBB_C, SBB_D, SBB_E, SBB_H, SBB_L,
+	SBI,
+
+	INR_A, INR_B, INR_C, INR_D, INR_E, INR_H, INR_L,
+	DCR_A, DCR_B, DCR_C, DCR_D, DCR_E, DCR_H, DCR_L,
+
+	INX_BC, INX_DE, INX_HL, INX_SP,
+	DCX_BC, DCX_DE, DCX_HL, DCX_SP,
+
+	DAD_BC, DAD_DE, DAD_HL, DAD_SP,
+
+	DAA,
+
+	ANA_A, ANA_B, ANA_C, ANA_D, ANA_E, ANA_H, ANA_L,
+	ANI,
+	ORA_A, ORA_B, ORA_C, ORA_D, ORA_E, ORA_H, ORA_L,
+	ORI,
+	XRA_A, XRA_B, XRA_C, XRA_D, XRA_E, XRA_H, XRA_L,
+	XRI,
+	CMP_A, CMP_B, CMP_C, CMP_D, CMP_E, CMP_H, CMP_L,
+	CPI,
+
+	RLC,
+	RRC,
+	RAL,
+	RAR,
+	CMA,
+	CMC,
+	STC,
+
+	JMP, JNZ, JZ, JNC, JC, JPO, JPE, JP, JM,
+	CALL, CNZ, CZ, CNC, CC, CPO, CPE, CP, CM,
+	RET, RNZ, RZ, RNC, RC, RPO, RPE, RP, RM,
+
+	PCHL,
+
+	PUSH_AT, PUSH_BC, PUSH_DE, PUSH_HL,
+	POP_AT, POP_BC, POP_DE, POP_HL,
+
+	XTHL, SPHL,
+
+	IN, OUT, HLT,
+
+	VFSA,  
+	VFSAC, 
+	VFLA,  
+	VFLAC, 
+
+	VSSA,  
+	VSSAC, 
+	VSLA,  
+	VSLAC, 
+
+    217
+	VSWAP, 
+	VMODE, 
+	VPAL,  

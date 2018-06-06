@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>NewItemDialog</class>
+ <widget class="QDialog" name="NewItemDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>300</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Create new item</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QStackedWidget" name="NewItemPages">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="ItemTypeSelectPage">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>What do you want to add?</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="AddToProjectNoticeLabel">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="ProjectRadioButton">
+         <property name="text">
+          <string>New project</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="IncludeFolderRadioButton">
+         <property name="text">
+          <string>Source include path</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="X2ALSourceRadioButton">
+         <property name="text">
+          <string>X2AL source</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="ResourceStorageRadioButton">
+         <property name="text">
+          <string>Resource storage</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="NewProjectPage">
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+       <item>
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>Enter the name of the new project:</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="ProjectNameEdit"/>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="X2ALSourcePage">
+      <layout class="QVBoxLayout" name="verticalLayout_4">
+       <item>
+        <widget class="QLabel" name="label_3">
+         <property name="text">
+          <string>Enter the name of the new X2AL source:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="widget_3" native="true">
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLineEdit" name="X2ALSourceNameEdit"/>
+          </item>
+          <item>
+           <widget class="QComboBox" name="X2ALSourceExtComboBox">
+            <item>
+             <property name="text">
+              <string>.x2al</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>.inc</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="IncludePathPage">
+      <layout class="QVBoxLayout" name="verticalLayout_5">
+       <item>
+        <widget class="QLabel" name="label_4">
+         <property name="text">
+          <string>Select a folder that will be passed to compilers as an inclusion path:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="widget_2" native="true">
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <item>
+           <widget class="QLineEdit" name="IncludePathEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="BrowseIncludePathBtn">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>118</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="PrevBtn">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Previous</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="NextBtn">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Next</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="CancelBtn">
+        <property name="text">
+         <string>Cancel</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>ProjectRadioButton</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>NewItemDialog</receiver>
+   <slot>on_ItemTypeRadioButton_toggled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>157</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>149</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>ResourceStorageRadioButton</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>NewItemDialog</receiver>
+   <slot>on_ItemTypeRadioButton_toggled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>226</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>149</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>IncludeFolderRadioButton</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>NewItemDialog</receiver>
+   <slot>on_ItemTypeRadioButton_toggled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>203</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>149</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>X2ALSourceRadioButton</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>NewItemDialog</receiver>
+   <slot>on_ItemTypeRadioButton_toggled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>180</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>149</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>on_ItemTypeRadioButton_toggled(bool)</slot>
+ </slots>
+</ui>

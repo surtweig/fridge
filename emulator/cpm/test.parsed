@@ -1,0 +1,391 @@
+<LINE 4: '  #using VTEXT;'>
+   <ID 4: '#using'>
+   <ID 4: 'VTEXT'>
+<LINE 5: ' #using X2AL;'>
+   <ID 5: '#using'>
+   <ID 5: 'X2AL'>
+<LINE 19: '  namespace X2AL (     struct Zuzu     (         uint8 a;         uint8 b;         uint8 c;     );      void __mvi_a(uint8 v);     void __mvi_b(uint8 v);     void __mvi_c(uint8 v); );'>
+   <ID 7: 'namespace'>
+   <ID 7: 'X2AL'>
+   <BLOCK 19: '(     struct Zuzu     (         uint8 a;         uint8 b;         uint8 c;     );      void __mvi_a(uint8 v);     void __mvi_b(uint8 v);     void __mvi_c(uint8 v); )'>
+      <CHAR 8: '('>
+      <LINE 14: '     struct Zuzu     (         uint8 a;         uint8 b;         uint8 c;     );'>
+         <ID 9: 'struct'>
+         <ID 9: 'Zuzu'>
+         <BLOCK 14: '(         uint8 a;         uint8 b;         uint8 c;     )'>
+            <CHAR 10: '('>
+            <LINE 11: '         uint8 a;'>
+               <ID 11: 'uint8'>
+               <ID 11: 'a'>
+            <LINE 12: '         uint8 b;'>
+               <ID 12: 'uint8'>
+               <ID 12: 'b'>
+            <LINE 13: '         uint8 c;'>
+               <ID 13: 'uint8'>
+               <ID 13: 'c'>
+            <LINE 14: '     '>
+            <CHAR 14: ')'>
+      <LINE 16: '      void __mvi_a(uint8 v);'>
+         <ID 16: 'void'>
+         <ID 16: '__mvi_a'>
+         <EXPR 16: '(uint8 v)'>
+            <ID 16: 'uint8'>
+            <ID 16: 'v'>
+      <LINE 17: '     void __mvi_b(uint8 v);'>
+         <ID 17: 'void'>
+         <ID 17: '__mvi_b'>
+         <EXPR 17: '(uint8 v)'>
+            <ID 17: 'uint8'>
+            <ID 17: 'v'>
+      <LINE 18: '     void __mvi_c(uint8 v);'>
+         <ID 18: 'void'>
+         <ID 18: '__mvi_c'>
+         <EXPR 18: '(uint8 v)'>
+            <ID 18: 'uint8'>
+            <ID 18: 'v'>
+      <LINE 18: ' '>
+      <CHAR 19: ')'>
+<LINE 38: '  namespace VTEXT imports "vtext.bin" (         struct Zuzu     (         uint16 x;     );      static uint8 VTEXT_FORE_COLOR imports 0x00A1;     static uint8 VTEXT_BACK_COLOR imports 0x00A2;      void putstr ( uint8 column; uint8 row; string str )     (         __mvi_b column;         __mvi_c row;         __lxi_hl (uint16 str);         __callsub 0x00A3;     ); );'>
+   <ID 21: 'namespace'>
+   <ID 21: 'VTEXT'>
+   <ID 21: 'imports'>
+   <STR 21: '"vtext.bin"'>
+   <BLOCK 38: '(         struct Zuzu     (         uint16 x;     );      static uint8 VTEXT_FORE_COLOR imports 0x00A1;     static uint8 VTEXT_BACK_COLOR imports 0x00A2;      void putstr ( uint8 column; uint8 row; string str )     (         __mvi_b column;         __mvi_c row;         __lxi_hl (uint16 str);         __callsub 0x00A3;     ); )'>
+      <CHAR 22: '('>
+      <LINE 26: '         struct Zuzu     (         uint16 x;     );'>
+         <ID 23: 'struct'>
+         <ID 23: 'Zuzu'>
+         <BLOCK 26: '(         uint16 x;     )'>
+            <CHAR 24: '('>
+            <LINE 25: '         uint16 x;'>
+               <ID 25: 'uint16'>
+               <ID 25: 'x'>
+            <LINE 26: '     '>
+            <CHAR 26: ')'>
+      <LINE 28: '      static uint8 VTEXT_FORE_COLOR imports 0x00A1;'>
+         <ID 28: 'static'>
+         <ID 28: 'uint8'>
+         <ID 28: 'VTEXT_FORE_COLOR'>
+         <ID 28: 'imports'>
+         <NUM 28: '0x00A1'>
+      <LINE 29: '     static uint8 VTEXT_BACK_COLOR imports 0x00A2;'>
+         <ID 29: 'static'>
+         <ID 29: 'uint8'>
+         <ID 29: 'VTEXT_BACK_COLOR'>
+         <ID 29: 'imports'>
+         <NUM 29: '0x00A2'>
+      <LINE 37: '      void putstr ( uint8 column; uint8 row; string str )     (         __mvi_b column;         __mvi_c row;         __lxi_hl (uint16 str);         __callsub 0x00A3;     );'>
+         <ID 31: 'void'>
+         <ID 31: 'putstr'>
+         <BLOCK 31: '( uint8 column; uint8 row; string str )'>
+            <CHAR 31: '('>
+            <LINE 31: ' uint8 column;'>
+               <ID 31: 'uint8'>
+               <ID 31: 'column'>
+            <LINE 31: ' uint8 row;'>
+               <ID 31: 'uint8'>
+               <ID 31: 'row'>
+            <LINE 31: ' string str '>
+               <ID 31: 'string'>
+               <ID 31: 'str'>
+            <CHAR 31: ')'>
+         <BLOCK 37: '(         __mvi_b column;         __mvi_c row;         __lxi_hl (uint16 str);         __callsub 0x00A3;     )'>
+            <CHAR 32: '('>
+            <LINE 33: '         __mvi_b column;'>
+               <ID 33: '__mvi_b'>
+               <ID 33: 'column'>
+            <LINE 34: '         __mvi_c row;'>
+               <ID 34: '__mvi_c'>
+               <ID 34: 'row'>
+            <LINE 35: '         __lxi_hl (uint16 str);'>
+               <ID 35: '__lxi_hl'>
+               <EXPR 35: '(uint16 str)'>
+                  <ID 35: 'uint16'>
+                  <ID 35: 'str'>
+            <LINE 36: '         __callsub 0x00A3;'>
+               <ID 36: '__callsub'>
+               <NUM 36: '0x00A3'>
+            <LINE 37: '     '>
+            <CHAR 37: ')'>
+      <LINE 37: ' '>
+      <CHAR 38: ')'>
+<LINE 52: '   struct uint8pair (     uint8 high;     uint8 low; );'>
+   <ID 48: 'struct'>
+   <ID 48: 'uint8pair'>
+   <BLOCK 52: '(     uint8 high;     uint8 low; )'>
+      <CHAR 49: '('>
+      <LINE 50: '     uint8 high;'>
+         <ID 50: 'uint8'>
+         <ID 50: 'high'>
+      <LINE 51: '     uint8 low;'>
+         <ID 51: 'uint8'>
+         <ID 51: 'low'>
+      <LINE 51: ' '>
+      <CHAR 52: ')'>
+<LINE 58: '  union uint16Union (     uint16 word;     uint8pair bytes; );'>
+   <ID 54: 'union'>
+   <ID 54: 'uint16Union'>
+   <BLOCK 58: '(     uint16 word;     uint8pair bytes; )'>
+      <CHAR 55: '('>
+      <LINE 56: '     uint16 word;'>
+         <ID 56: 'uint16'>
+         <ID 56: 'word'>
+      <LINE 57: '     uint8pair bytes;'>
+         <ID 57: 'uint8pair'>
+         <ID 57: 'bytes'>
+      <LINE 57: ' '>
+      <CHAR 58: ')'>
+<LINE 60: '  static char charTest "x";'>
+   <ID 60: 'static'>
+   <ID 60: 'char'>
+   <ID 60: 'charTest'>
+   <STR 60: '"x"'>
+<LINE 62: '  static string stringTest "zuzu";'>
+   <ID 62: 'static'>
+   <ID 62: 'string'>
+   <ID 62: 'stringTest'>
+   <STR 62: '"zuzu"'>
+<LINE 64: '  static char textTest array 5 "12345";'>
+   <ID 64: 'static'>
+   <ID 64: 'char'>
+   <ID 64: 'textTest'>
+   <ID 64: 'array'>
+   <NUM 64: '5'>
+   <STR 64: '"12345"'>
+<LINE 66: ' const uint8 intArraySize (+ 2 3);'>
+   <ID 66: 'const'>
+   <ID 66: 'uint8'>
+   <ID 66: 'intArraySize'>
+   <EXPR 66: '(+ 2 3)'>
+      <ID 66: '+'>
+      <NUM 66: '2'>
+      <NUM 66: '3'>
+<LINE 68: '  static uint8 MyStaticArray array intArraySize (0; + 1 1; 2; 3; 4);'>
+   <ID 68: 'static'>
+   <ID 68: 'uint8'>
+   <ID 68: 'MyStaticArray'>
+   <ID 68: 'array'>
+   <ID 68: 'intArraySize'>
+   <BLOCK 68: '(0; + 1 1; 2; 3; 4)'>
+      <CHAR 68: '('>
+      <LINE 68: '0;'>
+         <NUM 68: '0'>
+      <LINE 68: ' + 1 1;'>
+         <ID 68: '+'>
+         <NUM 68: '1'>
+         <NUM 68: '1'>
+      <LINE 68: ' 2;'>
+         <NUM 68: '2'>
+      <LINE 68: ' 3;'>
+         <NUM 68: '3'>
+      <LINE 68: ' 4'>
+         <NUM 68: '4'>
+      <CHAR 68: ')'>
+<LINE 70: '  static X2AL.Zuzu MyStaticZuzu (a 5; b 10; c 15);'>
+   <ID 70: 'static'>
+   <ID 70: 'X2AL.Zuzu'>
+   <ID 70: 'MyStaticZuzu'>
+   <BLOCK 70: '(a 5; b 10; c 15)'>
+      <CHAR 70: '('>
+      <LINE 70: 'a 5;'>
+         <ID 70: 'a'>
+         <NUM 70: '5'>
+      <LINE 70: ' b 10;'>
+         <ID 70: 'b'>
+         <NUM 70: '10'>
+      <LINE 70: ' c 15'>
+         <ID 70: 'c'>
+         <NUM 70: '15'>
+      <CHAR 70: ')'>
+<LINE 75: '  struct intArray (        uint8 data array intArraySize; );'>
+   <ID 72: 'struct'>
+   <ID 72: 'intArray'>
+   <BLOCK 75: '(        uint8 data array intArraySize; )'>
+      <CHAR 73: '('>
+      <LINE 74: '        uint8 data array intArraySize;'>
+         <ID 74: 'uint8'>
+         <ID 74: 'data'>
+         <ID 74: 'array'>
+         <ID 74: 'intArraySize'>
+      <LINE 74: ' '>
+      <CHAR 75: ')'>
+<LINE 85: '  struct complexStruct (     string name;     intArray arr;     char text array 256;     string text2;         );'>
+   <ID 77: 'struct'>
+   <ID 77: 'complexStruct'>
+   <BLOCK 85: '(     string name;     intArray arr;     char text array 256;     string text2;         )'>
+      <CHAR 78: '('>
+      <LINE 79: '     string name;'>
+         <ID 79: 'string'>
+         <ID 79: 'name'>
+      <LINE 80: '     intArray arr;'>
+         <ID 80: 'intArray'>
+         <ID 80: 'arr'>
+      <LINE 81: '     char text array 256;'>
+         <ID 81: 'char'>
+         <ID 81: 'text'>
+         <ID 81: 'array'>
+         <NUM 81: '256'>
+      <LINE 82: '     string text2;'>
+         <ID 82: 'string'>
+         <ID 82: 'text2'>
+      <LINE 84: '         '>
+      <CHAR 85: ')'>
+<LINE 101: '   uint8 func(uint8 a ref; uint8 b) (     return (+ a b); );'>
+   <ID 98: 'uint8'>
+   <ID 98: 'func'>
+   <BLOCK 98: '(uint8 a ref; uint8 b)'>
+      <CHAR 98: '('>
+      <LINE 98: 'uint8 a ref;'>
+         <ID 98: 'uint8'>
+         <ID 98: 'a'>
+         <ID 98: 'ref'>
+      <LINE 98: ' uint8 b'>
+         <ID 98: 'uint8'>
+         <ID 98: 'b'>
+      <CHAR 98: ')'>
+   <BLOCK 101: '(     return (+ a b); )'>
+      <CHAR 99: '('>
+      <LINE 100: '     return (+ a b);'>
+         <ID 100: 'return'>
+         <EXPR 100: '(+ a b)'>
+            <ID 100: '+'>
+            <ID 100: 'a'>
+            <ID 100: 'b'>
+      <LINE 100: ' '>
+      <CHAR 101: ')'>
+<LINE 103: '  uint8 func(*uint8 b ref; uint8 x) ( ; );'>
+   <ID 103: 'uint8'>
+   <ID 103: 'func'>
+   <BLOCK 103: '(*uint8 b ref; uint8 x)'>
+      <CHAR 103: '('>
+      <LINE 103: '*uint8 b ref;'>
+         <ID 103: '*uint8'>
+         <ID 103: 'b'>
+         <ID 103: 'ref'>
+      <LINE 103: ' uint8 x'>
+         <ID 103: 'uint8'>
+         <ID 103: 'x'>
+      <CHAR 103: ')'>
+   <BLOCK 103: '( ; )'>
+      <CHAR 103: '('>
+      <CHAR 103: ' '>
+      <CHAR 103: ';'>
+      <LINE 103: ' '>
+      <CHAR 103: ')'>
+<LINE 130: '  void main() (     intArray myArray 0;     = (myArray.data 0) 1;     = (myArray.data 1) (myArray.data (- (myArray.data 0) 1));     if (== (myArray.data 0) 1)             (putstr 0 0 "Hello, World!")     else         (putstr 0 0 "Hello, Darkness!");          for (uint8 i 0; < i intArraySize; ++ i)     (         if (== i 2)         (             putstr 0 0 "i == 2";             = (myArray.data i) i;         );         = (myArray.data i) i;     );          uint16 x;     *uint16 px;     = px null;     = px *x;     = >px 10; );'>
+   <ID 105: 'void'>
+   <ID 105: 'main'>
+   <EXPR 105: '()'>
+   <BLOCK 130: '(     intArray myArray 0;     = (myArray.data 0) 1;     = (myArray.data 1) (myArray.data (- (myArray.data 0) 1));     if (== (myArray.data 0) 1)             (putstr 0 0 "Hello, World!")     else         (putstr 0 0 "Hello, Darkness!");          for (uint8 i 0; < i intArraySize; ++ i)     (         if (== i 2)         (             putstr 0 0 "i == 2";             = (myArray.data i) i;         );         = (myArray.data i) i;     );          uint16 x;     *uint16 px;     = px null;     = px *x;     = >px 10; )'>
+      <CHAR 106: '('>
+      <LINE 107: '     intArray myArray 0;'>
+         <ID 107: 'intArray'>
+         <ID 107: 'myArray'>
+         <NUM 107: '0'>
+      <LINE 108: '     = (myArray.data 0) 1;'>
+         <ID 108: '='>
+         <EXPR 108: '(myArray.data 0)'>
+            <ID 108: 'myArray.data'>
+            <NUM 108: '0'>
+         <NUM 108: '1'>
+      <LINE 109: '     = (myArray.data 1) (myArray.data (- (myArray.data 0) 1));'>
+         <ID 109: '='>
+         <EXPR 109: '(myArray.data 1)'>
+            <ID 109: 'myArray.data'>
+            <NUM 109: '1'>
+         <EXPR 109: '(myArray.data (- (myArray.data 0) 1))'>
+            <ID 109: 'myArray.data'>
+            <EXPR 109: '(- (myArray.data 0) 1)'>
+               <ID 109: '-'>
+               <EXPR 109: '(myArray.data 0)'>
+                  <ID 109: 'myArray.data'>
+                  <NUM 109: '0'>
+               <NUM 109: '1'>
+      <LINE 113: '     if (== (myArray.data 0) 1)             (putstr 0 0 "Hello, World!")     else         (putstr 0 0 "Hello, Darkness!");'>
+         <ID 110: 'if'>
+         <EXPR 110: '(== (myArray.data 0) 1)'>
+            <ID 110: '=='>
+            <EXPR 110: '(myArray.data 0)'>
+               <ID 110: 'myArray.data'>
+               <NUM 110: '0'>
+            <NUM 110: '1'>
+         <EXPR 111: '(putstr 0 0 "Hello, World!")'>
+            <ID 111: 'putstr'>
+            <NUM 111: '0'>
+            <NUM 111: '0'>
+            <STR 111: '"Hello, World!"'>
+         <ID 112: 'else'>
+         <EXPR 113: '(putstr 0 0 "Hello, Darkness!")'>
+            <ID 113: 'putstr'>
+            <NUM 113: '0'>
+            <NUM 113: '0'>
+            <STR 113: '"Hello, Darkness!"'>
+      <LINE 123: '          for (uint8 i 0; < i intArraySize; ++ i)     (         if (== i 2)         (             putstr 0 0 "i == 2";             = (myArray.data i) i;         );         = (myArray.data i) i;     );'>
+         <ID 115: 'for'>
+         <BLOCK 115: '(uint8 i 0; < i intArraySize; ++ i)'>
+            <CHAR 115: '('>
+            <LINE 115: 'uint8 i 0;'>
+               <ID 115: 'uint8'>
+               <ID 115: 'i'>
+               <NUM 115: '0'>
+            <LINE 115: ' < i intArraySize;'>
+               <ID 115: '<'>
+               <ID 115: 'i'>
+               <ID 115: 'intArraySize'>
+            <LINE 115: ' ++ i'>
+               <ID 115: '++'>
+               <ID 115: 'i'>
+            <CHAR 115: ')'>
+         <BLOCK 123: '(         if (== i 2)         (             putstr 0 0 "i == 2";             = (myArray.data i) i;         );         = (myArray.data i) i;     )'>
+            <CHAR 116: '('>
+            <LINE 121: '         if (== i 2)         (             putstr 0 0 "i == 2";             = (myArray.data i) i;         );'>
+               <ID 117: 'if'>
+               <EXPR 117: '(== i 2)'>
+                  <ID 117: '=='>
+                  <ID 117: 'i'>
+                  <NUM 117: '2'>
+               <BLOCK 121: '(             putstr 0 0 "i == 2";             = (myArray.data i) i;         )'>
+                  <CHAR 118: '('>
+                  <LINE 119: '             putstr 0 0 "i == 2";'>
+                     <ID 119: 'putstr'>
+                     <NUM 119: '0'>
+                     <NUM 119: '0'>
+                     <STR 119: '"i == 2"'>
+                  <LINE 120: '             = (myArray.data i) i;'>
+                     <ID 120: '='>
+                     <EXPR 120: '(myArray.data i)'>
+                        <ID 120: 'myArray.data'>
+                        <ID 120: 'i'>
+                     <ID 120: 'i'>
+                  <LINE 121: '         '>
+                  <CHAR 121: ')'>
+            <LINE 122: '         = (myArray.data i) i;'>
+               <ID 122: '='>
+               <EXPR 122: '(myArray.data i)'>
+                  <ID 122: 'myArray.data'>
+                  <ID 122: 'i'>
+               <ID 122: 'i'>
+            <LINE 123: '     '>
+            <CHAR 123: ')'>
+      <LINE 125: '          uint16 x;'>
+         <ID 125: 'uint16'>
+         <ID 125: 'x'>
+      <LINE 126: '     *uint16 px;'>
+         <ID 126: '*uint16'>
+         <ID 126: 'px'>
+      <LINE 127: '     = px null;'>
+         <ID 127: '='>
+         <ID 127: 'px'>
+         <ID 127: 'null'>
+      <LINE 128: '     = px *x;'>
+         <ID 128: '='>
+         <ID 128: 'px'>
+         <ID 128: '*x'>
+      <LINE 129: '     = >px 10;'>
+         <ID 129: '='>
+         <ID 129: '>px'>
+         <NUM 129: '10'>
+      <LINE 129: ' '>
+      <CHAR 130: ')'>
+<CHAR 130: ' '>
+<CHAR 131: ' '>

@@ -1,0 +1,28 @@
+include "arithm.inc"
+offset 0x0000
+
+subroutine test
+    LXI HL, 0x00AA
+endsub
+
+main hw
+    //LXI HL, HelloWorld
+    //LDAX HL
+    //
+    //LXI HL, 0x0004
+    //VFSA    
+    //
+    //MVI C, 40
+    //MVI D, 10
+    //CALL mul_dc
+    //
+    //MVI A, 'e'
+    //VFSA
+        
+    MVI C, 5
+    MVI D, 7
+    
+    LXI HL, 0x0004
+    CALL mul_dc 
+    
+    HLT                    // Stop execution
