@@ -11,6 +11,9 @@ Fridge is a 8-bit computer based on extended Intel 8080 instruction set with gra
 | Freon compiler | In progress
 | Fridge IDE | On hold
 
+## Block diagram
+![Block diagram](https://github.com/surtweig/fridge/blob/master/doc/fridge-block.png?raw=true)
+
 ## System specs
 
 ### CPU
