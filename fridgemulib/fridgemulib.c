@@ -21,6 +21,25 @@ FRIDGE_WORD pcRead(FRIDGE_CPU* cpu)
     }
 }
 
+void ir_LHLD(FRIDGE_CPU* cpu)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu));
+    cpu->rH = cpu->ram[addr];
+    cpu->rL = cpu->ram[addr+1];
+}
+
+void ir_SHLD(FRIDGE_CPU* cpu)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu));
+    cpu->ram[addr] = cpu->rH;
+    cpu->ram[addr+1] = cpu->rL;
+}
+
+void ir_XCNG(FRIDGE_CPU* cpu)
+{
+
+}
+
 void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
 {
     cpu->state = FRIDGE_CPU_ACTIVE;
@@ -125,6 +144,18 @@ void FRIDGE_cpu_tick (FRIDGE_CPU* cpu)
 
             case LDA: cpu->rA = cpu->ram[FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu))]; break;
             case STA: cpu->ram[FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu))] = cpu->rA; break;
+
+            case LHLD: ir_LHLD(cpu); break;
+            case SHLD: ir_SHLD(cpu); break;
+
+            case LDAX_BC: cpu->rA = cpu->ram[FRIDGE_DWORD_HL(cpu->rB, cpu->rC)]; break;
+            case LDAX_DE: cpu->rA = cpu->ram[FRIDGE_DWORD_HL(cpu->rD, cpu->rE)]; break;
+            case LDAX_HL: cpu->rA = cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]; break;
+            case STAX_BC: cpu->ram[FRIDGE_DWORD_HL(cpu->rB, cpu->rC)] = cpu->rA; break;
+            case STAX_DE: cpu->ram[FRIDGE_DWORD_HL(cpu->rD, cpu->rE)] = cpu->rA; break;
+            case STAX_HL: cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)] = cpu->rA; break;
+
+            case XCNG: ir_XCNG(cpu); break;
         }
     }
 }
