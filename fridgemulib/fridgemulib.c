@@ -1,5 +1,64 @@
 #include <fridgemulib.h>
 
+void stackPush(FRIDGE_CPU* cpu, FRIDGE_WORD hi, FRIDGE_WORD lo)
+{
+    cpu->ram[cpu->SP-1] = lo;
+    cpu->ram[cpu->SP-2] = hi;
+    cpu->SP -= 2;
+}
+
+void stackPushD(FRIDGE_CPU* cpu, FRIDGE_DWORD v)
+{
+    stackPush(cpu, FRIDGE_HIGH_WORD(v), FRIDGE_LOW_WORD(v));
+}
+
+void stackPop(FRIDGE_CPU* cpu, FRIDGE_WORD* hi, FRIDGE_WORD* lo)
+{
+    *hi = cpu->ram[cpu->SP];
+    *lo = cpu->ram[cpu->SP+1];
+    cpu->SP += 2;
+}
+
+void stackPopD(FRIDGE_CPU* cpu, FRIDGE_DWORD* v)
+{
+    FRIDGE_WORD hi;
+    FRIDGE_WORD lo;
+    stackPop(cpu, &hi, &lo);
+    *v = FRIDGE_DWORD_HL(hi, lo);
+}
+
+void defaultSetFlags(FRIDGE_CPU* cpu, FRIDGE_WORD result)
+{
+    cpu->rF &= ~(FRIDGE_FLAG_SIGN_MASK | FRIDGE_FLAG_ZERO_MASK | FRIDGE_FLAG_PARITY_MASK);
+    if (result & 1 << (FRIDGE_WORD_BITS-1))
+        cpu->rF |= FRIDGE_FLAG_SIGN_MASK;
+    if (result == 0)
+        cpu->rF |= FRIDGE_FLAG_ZERO_MASK;
+    if (result % 2 == 0) // TODO doesn't meet i8080 specification
+        cpu->rF |= FRIDGE_FLAG_PARITY_MASK;
+}
+
+void compareSetFlags(FRIDGE_CPU* cpu, FRIDGE_WORD a, FRIDGE_WORD b)
+{
+    cpu->rF &= ~(FRIDGE_FLAG_SIGN_MASK | FRIDGE_FLAG_ZERO_MASK | FRIDGE_FLAG_PARITY_MASK | FRIDGE_FLAG_CARRY_MASK);
+    if (a < b)
+        cpu->rF |= FRIDGE_FLAG_SIGN_MASK;
+    else if (a > b)
+        cpu->rF |= FRIDGE_FLAG_CARRY_MASK;
+    else
+        cpu->rF |= FRIDGE_FLAG_ZERO_MASK;
+
+    if ((a-b) % 2 == 0)
+        cpu->rF |= FRIDGE_FLAG_PARITY_MASK; // TODO doesn't meet i8080 specification
+}
+
+void setCarry(FRIDGE_CPU* cpu, FRIDGE_WORD flag)
+{
+    cpu->rF &= ~FRIDGE_FLAG_CARRY_MASK;
+    if (flag != 0)
+        cpu->rF |= FRIDGE_FLAG_CARRY_MASK;
+}
+
 FRIDGE_WORD pcRead(FRIDGE_CPU* cpu)
 {
     if (cpu->state == FRIDGE_CPU_ACTIVE)
@@ -37,7 +96,38 @@ void ir_SHLD(FRIDGE_CPU* cpu)
 
 void ir_XCNG(FRIDGE_CPU* cpu)
 {
+    FRIDGE_WORD t = cpu->rD;
+    cpu->rD = cpu->rH;
+    cpu->rH = t;
 
+    t = cpu->rE;
+    cpu->rE = cpu->rL;
+    cpu->rL = t;
+}
+
+void ir_ADD_M(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD m = cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)];
+    setCarry(cpu, ~cpu->rA < m);
+    cpu->rA += m;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_ADI(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD b = pcRead(cpu);
+    setCarry(cpu, ~cpu->rA < b);
+    cpu->rA += b;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_ADC(FRIDGE_CPU* cpu, FRIDGE_WORD add)
+{
+    FRIDGE_WORD c = FRIDGE_cpu_flag_CARRY(cpu);
+    FRIDGE_SIZE_T t = add + c; // intentionally using superset type
+    setCarry(cpu, ~cpu->rA < t);
+    cpu->rA += t;
+    defaultSetFlags(cpu, cpu->rA);
 }
 
 void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
@@ -156,6 +246,27 @@ void FRIDGE_cpu_tick (FRIDGE_CPU* cpu)
             case STAX_HL: cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)] = cpu->rA; break;
 
             case XCNG: ir_XCNG(cpu); break;
+
+            case ADD_A: setCarry(cpu, ~cpu->rA < cpu->rA); cpu->rA += cpu->rA; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_B: setCarry(cpu, ~cpu->rA < cpu->rB); cpu->rA += cpu->rB; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_C: setCarry(cpu, ~cpu->rA < cpu->rC); cpu->rA += cpu->rC; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_D: setCarry(cpu, ~cpu->rA < cpu->rD); cpu->rA += cpu->rD; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_E: setCarry(cpu, ~cpu->rA < cpu->rE); cpu->rA += cpu->rE; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_H: setCarry(cpu, ~cpu->rA < cpu->rH); cpu->rA += cpu->rH; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_L: setCarry(cpu, ~cpu->rA < cpu->rL); cpu->rA += cpu->rL; defaultSetFlags(cpu, cpu->rA); break;
+
+            case ADD_M: ir_ADD_M(cpu); break;
+            case ADI: ir_ADI(cpu); break;
+
+            case ADC_A: ir_ADC(cpu, cpu->rA); break;
+            case ADC_B: ir_ADC(cpu, cpu->rB); break;
+            case ADC_C: ir_ADC(cpu, cpu->rC); break;
+            case ADC_D: ir_ADC(cpu, cpu->rD); break;
+            case ADC_E: ir_ADC(cpu, cpu->rE); break;
+            case ADC_H: ir_ADC(cpu, cpu->rH); break;
+            case ADC_L: ir_ADC(cpu, cpu->rL); break;
+            case ADC_M: ir_ADC(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case ACI: ir_ADC(cpu, pcRead(cpu)); break;
         }
     }
 }
@@ -177,42 +288,42 @@ void FRIDGE_cpu_ram_write (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR
 
 FRIDGE_WORD FRIDGE_cpu_flag_SIGN (const FRIDGE_CPU* cpu)
 {
-
+    return (cpu->rF & FRIDGE_FLAG_SIGN_MASK) > 0;
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_ZERO (const FRIDGE_CPU* cpu)
 {
-
+    return (cpu->rF & FRIDGE_FLAG_ZERO_MASK) > 0;
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_AUX (const FRIDGE_CPU* cpu)
 {
-
+    return (cpu->rF & FRIDGE_FLAG_AUX_MASK) > 0;
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_PARITY (const FRIDGE_CPU* cpu)
 {
-
+    return (cpu->rF & FRIDGE_FLAG_PARITY_MASK) > 0;
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_CARRY (const FRIDGE_CPU* cpu)
 {
-
+    return (cpu->rF & FRIDGE_FLAG_CARRY_MASK) > 0;
 }
 
 FRIDGE_DWORD FRIDGE_cpu_pair_BC (const FRIDGE_CPU* cpu)
 {
-
+    return FRIDGE_DWORD_HL(cpu->rB, cpu->rC);
 }
 
 FRIDGE_DWORD FRIDGE_cpu_pair_DE (const FRIDGE_CPU* cpu)
 {
-
+    return FRIDGE_DWORD_HL(cpu->rD, cpu->rE);
 }
 
 FRIDGE_DWORD FRIDGE_cpu_pair_HL (const FRIDGE_CPU* cpu)
 {
-
+    return FRIDGE_DWORD_HL(cpu->rH, cpu->rL);
 }
 
 void FRIDGE_gpu_reset (FRIDGE_GPU* gpu)

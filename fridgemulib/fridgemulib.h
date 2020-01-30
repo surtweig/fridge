@@ -17,7 +17,10 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_GPU_BUS_SIZE 4
 #define FRIDGE_GPU_FRAME_EGA_WIDTH 240
 #define FRIDGE_GPU_FRAME_EGA_HEIGHT 160
-#define FRIDGE_GPU_SPRITE_MEM_SIZE 0x10000 // bytes
+#define FRIDGE_GPU_SPRITE_WIDTH 16
+#define FRIDGE_GPU_SPRITE_HEIGHT 16
+#define FRIDGE_GPU_SPRITE_SIZE 0x80 // 128 bytes (16x16 pixels)
+#define FRIDGE_GPU_SPRITE_MEMORY_SIZE 0x10000 // bytes
 #define FRIDGE_GPU_FRAME_BUFFER_SIZE 19200 // FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT >> 1; // 240x160x4 bits
 
 typedef struct FRIDGE_ROM_SEGMENT
@@ -45,8 +48,8 @@ typedef struct FRIDGE_ROM_SEGMENT
 
 typedef enum FRIDGE_VIDEO_MODE
 {
-	FRIDGE_VIDEO_EGA,
-	FRIDGE_VIDEO_TEXT
+    FRIDGE_VIDEO_EGA,
+    FRIDGE_VIDEO_TEXT
 } FRIDGE_VIDEO_MODE;
 
 typedef enum FRIDGE_VIDEO_FRAME
@@ -57,9 +60,9 @@ typedef enum FRIDGE_VIDEO_FRAME
 
 typedef struct FRIDGE_IRDATA
 {
-	FRIDGE_WORD ircode;
-	FRIDGE_WORD arg0;
-	FRIDGE_WORD arg1;
+    FRIDGE_WORD ircode;
+    FRIDGE_WORD arg0;
+    FRIDGE_WORD arg1;
 } FRIDGE_IRDATA;
 
 typedef enum FRIDGE_IRCODE {
@@ -158,13 +161,13 @@ typedef enum FRIDGE_IRCODE {
     VPAL,  // updates EGA pallette from the sprite memory at HL address as 16 triples of RGB bytes
 
     // sprites
-    VSS,  // set sprite (HL = address, B = size)
+    VSS,  // set sprite (HL = address)
     VSDQ, // draw sprite opaque (HL = position)
     VSDT, // draw sprite transparent-0 (HL = position)
-    VSDA, // draw sprite additive (HL = position)
     VSBA, // bitblit sprite AND (HL = position)
     VSBO, // bitblit sprite OR (HL = position)
     VSBX, // bitblit sprite XOR (HL = position)
+    VSRF, // read sprite from visible buffer (HL = position)
 
     IR250,
     IR251,
@@ -240,7 +243,7 @@ FRIDGE_DWORD FRIDGE_cpu_pair_HL  (const FRIDGE_CPU* cpu);
 
 typedef struct FRIDGE_GPU
 {
-    FRIDGE_WORD sprite[FRIDGE_GPU_SPRITE_MEM_SIZE];
+    FRIDGE_WORD sprite[FRIDGE_GPU_SPRITE_MEMORY_SIZE];
     FRIDGE_WORD frame_a[FRIDGE_GPU_FRAME_BUFFER_SIZE];
     FRIDGE_WORD frame_b[FRIDGE_GPU_FRAME_BUFFER_SIZE];
     FRIDGE_VIDEO_MODE vmode;
