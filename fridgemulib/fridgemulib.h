@@ -204,6 +204,9 @@ typedef enum FRIDGE_CPU_INTERRUPTS_STATE
     FRIDGE_CPU_INTERRUPTS_DISABLED
 } FRIDGE_CPU_INTERRUPTS_STATE;
 
+typedef FRIDGE_WORD (*FRIDGE_INPUT_CALLBACK)();
+typedef void (*FRIDGE_OUTPUT_CALLBACK)(FRIDGE_WORD);
+
 typedef struct FRIDGE_CPU
 {
     FRIDGE_CPU_STATE state; // HLT
@@ -222,24 +225,26 @@ typedef struct FRIDGE_CPU
     FRIDGE_CPU_INTERRUPTS_STATE inte;
     FRIDGE_WORD inteArg0;
     FRIDGE_WORD inteArg1;
-    FRIDGE_WORD iobus[FRIDGE_MAX_IO_DEVICES];
+    //FRIDGE_WORD iobus[FRIDGE_MAX_IO_DEVICES];
+    FRIDGE_INPUT_CALLBACK input_dev[FRIDGE_MAX_IO_DEVICES];
+    FRIDGE_OUTPUT_CALLBACK output_dev[FRIDGE_MAX_IO_DEVICES];
     FRIDGE_WORD gpubus[FRIDGE_GPU_BUS_SIZE];
 
 } FRIDGE_CPU;
 
-void FRIDGE_cpu_reset(FRIDGE_CPU* cpu);
-void FRIDGE_cpu_tick             (FRIDGE_CPU* cpu);
-void FRIDGE_cpu_interrupt        (FRIDGE_CPU* cpu, FRIDGE_WORD ircode, FRIDGE_WORD arg0, FRIDGE_WORD arg1);
-void FRIDGE_cpu_ram_read         (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
-void FRIDGE_cpu_ram_write        (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
-FRIDGE_WORD FRIDGE_cpu_flag_SIGN        (const FRIDGE_CPU* cpu);
-FRIDGE_WORD FRIDGE_cpu_flag_ZERO        (const FRIDGE_CPU* cpu);
-FRIDGE_WORD FRIDGE_cpu_flag_AUX         (const FRIDGE_CPU* cpu);
-FRIDGE_WORD FRIDGE_cpu_flag_PARITY      (const FRIDGE_CPU* cpu);
-FRIDGE_WORD FRIDGE_cpu_flag_CARRY       (const FRIDGE_CPU* cpu);
-FRIDGE_DWORD FRIDGE_cpu_pair_BC  (const FRIDGE_CPU* cpu);
-FRIDGE_DWORD FRIDGE_cpu_pair_DE  (const FRIDGE_CPU* cpu);
-FRIDGE_DWORD FRIDGE_cpu_pair_HL  (const FRIDGE_CPU* cpu);
+void FRIDGE_cpu_reset              (FRIDGE_CPU* cpu);
+void FRIDGE_cpu_tick               (FRIDGE_CPU* cpu);
+void FRIDGE_cpu_interrupt          (FRIDGE_CPU* cpu, FRIDGE_WORD ircode, FRIDGE_WORD arg0, FRIDGE_WORD arg1);
+void FRIDGE_cpu_ram_read           (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
+void FRIDGE_cpu_ram_write          (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
+FRIDGE_WORD FRIDGE_cpu_flag_SIGN   (const FRIDGE_CPU* cpu);
+FRIDGE_WORD FRIDGE_cpu_flag_ZERO   (const FRIDGE_CPU* cpu);
+FRIDGE_WORD FRIDGE_cpu_flag_AUX    (const FRIDGE_CPU* cpu);
+FRIDGE_WORD FRIDGE_cpu_flag_PARITY (const FRIDGE_CPU* cpu);
+FRIDGE_WORD FRIDGE_cpu_flag_CARRY  (const FRIDGE_CPU* cpu);
+FRIDGE_DWORD FRIDGE_cpu_pair_BC    (const FRIDGE_CPU* cpu);
+FRIDGE_DWORD FRIDGE_cpu_pair_DE    (const FRIDGE_CPU* cpu);
+FRIDGE_DWORD FRIDGE_cpu_pair_HL    (const FRIDGE_CPU* cpu);
 
 typedef struct FRIDGE_GPU
 {

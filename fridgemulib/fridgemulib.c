@@ -78,6 +78,12 @@ FRIDGE_WORD pcRead(FRIDGE_CPU* cpu)
             return cpu->inteArg1;
         }
     }
+    return 0;
+}
+
+FRIDGE_DWORD pcReadDouble(FRIDGE_CPU* cpu)
+{
+    return FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu));
 }
 
 void ir_LHLD(FRIDGE_CPU* cpu)
@@ -105,19 +111,10 @@ void ir_XCNG(FRIDGE_CPU* cpu)
     cpu->rL = t;
 }
 
-void ir_ADD_M(FRIDGE_CPU* cpu)
+void ir_ADD(FRIDGE_CPU* cpu, FRIDGE_WORD add)
 {
-    FRIDGE_WORD m = cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)];
-    setCarry(cpu, ~cpu->rA < m);
-    cpu->rA += m;
-    defaultSetFlags(cpu, cpu->rA);
-}
-
-void ir_ADI(FRIDGE_CPU* cpu)
-{
-    FRIDGE_WORD b = pcRead(cpu);
-    setCarry(cpu, ~cpu->rA < b);
-    cpu->rA += b;
+    setCarry(cpu, ~cpu->rA < add);
+    cpu->rA += add;
     defaultSetFlags(cpu, cpu->rA);
 }
 
@@ -128,6 +125,136 @@ void ir_ADC(FRIDGE_CPU* cpu, FRIDGE_WORD add)
     setCarry(cpu, ~cpu->rA < t);
     cpu->rA += t;
     defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_SUB(FRIDGE_CPU* cpu, FRIDGE_WORD sub)
+{
+    setCarry(cpu, cpu->rA < sub);
+    cpu->rA -= sub;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_SBB(FRIDGE_CPU* cpu, FRIDGE_WORD sub)
+{
+    FRIDGE_WORD c = FRIDGE_cpu_flag_CARRY(cpu);
+    FRIDGE_SIZE_T t = sub + c; // intentionally using superset type
+    setCarry(cpu, cpu->rA < t);
+    cpu->rA -= t;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_INR(FRIDGE_CPU* cpu, FRIDGE_WORD* w)
+{
+    setCarry(cpu, ~(*w) == 0);
+    (*w) += 1;
+    defaultSetFlags(cpu, *w);
+}
+
+void ir_DCR(FRIDGE_CPU* cpu, FRIDGE_WORD* w)
+{
+    setCarry(cpu, (*w) == 0);
+    (*w) -= 1;
+    defaultSetFlags(cpu, *w);
+}
+
+void doubleAdd(FRIDGE_WORD* h, FRIDGE_WORD* l, FRIDGE_DWORD d)
+{
+    FRIDGE_DWORD t = FRIDGE_DWORD_HL(*h, *l);
+    t += d;
+    *h = FRIDGE_HIGH_WORD(t);
+    *l = FRIDGE_LOW_WORD(t);
+}
+
+void ir_ANA(FRIDGE_CPU* cpu, FRIDGE_WORD arg)
+{
+    setCarry(cpu, 0);
+    cpu->rA &= arg;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_ORA(FRIDGE_CPU* cpu, FRIDGE_WORD arg)
+{
+    setCarry(cpu, 0);
+    cpu->rA |= arg;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_XRA(FRIDGE_CPU* cpu, FRIDGE_WORD arg)
+{
+    setCarry(cpu, 0);
+    cpu->rA ^= arg;
+    defaultSetFlags(cpu, cpu->rA);
+}
+
+void ir_RLC(FRIDGE_CPU* cpu)
+{
+    setCarry(cpu, (cpu->rA & FRIDGE_HIGHBIT_MASK) > 0);
+    cpu->rA = (cpu->rA << 1) | ((cpu->rA & FRIDGE_HIGHBIT_MASK) >> (FRIDGE_WORD_BITS-1));
+}
+
+void ir_RRC(FRIDGE_CPU* cpu)
+{
+    setCarry(cpu, (cpu->rA & FRIDGE_LOWBIT_MASK) > 0);
+    cpu->rA = (cpu->rA >> 1) | ((cpu->rA & FRIDGE_LOWBIT_MASK) << (FRIDGE_WORD_BITS-1));
+}
+
+void ir_RAL(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD c = (cpu->rA & FRIDGE_HIGHBIT_MASK) > 0;
+    cpu->rA = (cpu->rA << 1) | FRIDGE_cpu_flag_CARRY(cpu);
+    setCarry(cpu, c);
+}
+
+void ir_RAR(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD c = (cpu->rA & FRIDGE_LOWBIT_MASK) > 0;
+    cpu->rA = (cpu->rA >> 1) | (FRIDGE_cpu_flag_CARRY(cpu) << (FRIDGE_WORD_BITS-1));
+    setCarry(cpu, c);
+}
+
+void ir_jump(FRIDGE_CPU* cpu, FRIDGE_WORD condition)
+{
+    FRIDGE_RAM_ADDR addr = pcReadDouble(cpu);
+    if (condition)
+        cpu->PC = addr;
+}
+
+void ir_call(FRIDGE_CPU* cpu, FRIDGE_WORD condition)
+{
+    FRIDGE_RAM_ADDR addr = pcReadDouble(cpu);
+    if (condition)
+    {
+        stackPushD(cpu, cpu->PC);
+        cpu->PC = addr;
+    }
+}
+
+void ir_ret(FRIDGE_CPU* cpu, FRIDGE_WORD condition)
+{
+    if (condition)
+    {
+        stackPopD(cpu, &cpu->PC);
+    }
+}
+
+void ir_XTHL(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD th = cpu->rH;
+    FRIDGE_WORD tl = cpu->rL;
+    cpu->rH = cpu->ram[cpu->SP];
+    cpu->rL = cpu->ram[cpu->SP+1];
+    cpu->ram[cpu->SP] = th;
+    cpu->ram[cpu->SP+1] = tl;
+}
+
+FRIDGE_WORD dummyDevInput()
+{
+    return 0;
+}
+
+void dummyDevOutput(FRIDGE_WORD data)
+{
+
 }
 
 void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
@@ -150,6 +277,12 @@ void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
     for (FRIDGE_SIZE_T i = 0; i < FRIDGE_RAM_SIZE; ++i)
     {
         cpu->ram[i] = 0;
+    }
+
+    for (FRIDGE_SIZE_T i = 0; i < FRIDGE_MAX_IO_DEVICES; ++i)
+    {
+        cpu->input_dev[i] = &dummyDevInput;
+        cpu->output_dev[i] = &dummyDevOutput;
     }
 }
 
@@ -247,16 +380,16 @@ void FRIDGE_cpu_tick (FRIDGE_CPU* cpu)
 
             case XCNG: ir_XCNG(cpu); break;
 
-            case ADD_A: setCarry(cpu, ~cpu->rA < cpu->rA); cpu->rA += cpu->rA; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_B: setCarry(cpu, ~cpu->rA < cpu->rB); cpu->rA += cpu->rB; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_C: setCarry(cpu, ~cpu->rA < cpu->rC); cpu->rA += cpu->rC; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_D: setCarry(cpu, ~cpu->rA < cpu->rD); cpu->rA += cpu->rD; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_E: setCarry(cpu, ~cpu->rA < cpu->rE); cpu->rA += cpu->rE; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_H: setCarry(cpu, ~cpu->rA < cpu->rH); cpu->rA += cpu->rH; defaultSetFlags(cpu, cpu->rA); break;
-            case ADD_L: setCarry(cpu, ~cpu->rA < cpu->rL); cpu->rA += cpu->rL; defaultSetFlags(cpu, cpu->rA); break;
+            case ADD_A: ir_ADD(cpu, cpu->rA); break;
+            case ADD_B: ir_ADD(cpu, cpu->rB); break;
+            case ADD_C: ir_ADD(cpu, cpu->rC); break;
+            case ADD_D: ir_ADD(cpu, cpu->rD); break;
+            case ADD_E: ir_ADD(cpu, cpu->rE); break;
+            case ADD_H: ir_ADD(cpu, cpu->rH); break;
+            case ADD_L: ir_ADD(cpu, cpu->rL); break;
 
-            case ADD_M: ir_ADD_M(cpu); break;
-            case ADI: ir_ADI(cpu); break;
+            case ADD_M: ir_ADD(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case ADI: ir_ADD(cpu, pcRead(cpu)); break;
 
             case ADC_A: ir_ADC(cpu, cpu->rA); break;
             case ADC_B: ir_ADC(cpu, cpu->rB); break;
@@ -265,8 +398,166 @@ void FRIDGE_cpu_tick (FRIDGE_CPU* cpu)
             case ADC_E: ir_ADC(cpu, cpu->rE); break;
             case ADC_H: ir_ADC(cpu, cpu->rH); break;
             case ADC_L: ir_ADC(cpu, cpu->rL); break;
+
             case ADC_M: ir_ADC(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
             case ACI: ir_ADC(cpu, pcRead(cpu)); break;
+
+            case SUB_A: ir_SUB(cpu, cpu->rA); break;
+            case SUB_B: ir_SUB(cpu, cpu->rB); break;
+            case SUB_C: ir_SUB(cpu, cpu->rC); break;
+            case SUB_D: ir_SUB(cpu, cpu->rD); break;
+            case SUB_E: ir_SUB(cpu, cpu->rE); break;
+            case SUB_H: ir_SUB(cpu, cpu->rH); break;
+            case SUB_L: ir_SUB(cpu, cpu->rL); break;
+
+            case SUB_M: ir_SUB(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case SUI: ir_SUB(cpu, pcRead(cpu)); break;
+
+            case SBB_A: ir_SBB(cpu, cpu->rA); break;
+            case SBB_B: ir_SBB(cpu, cpu->rB); break;
+            case SBB_C: ir_SBB(cpu, cpu->rC); break;
+            case SBB_D: ir_SBB(cpu, cpu->rD); break;
+            case SBB_E: ir_SBB(cpu, cpu->rE); break;
+            case SBB_H: ir_SBB(cpu, cpu->rH); break;
+            case SBB_L: ir_SBB(cpu, cpu->rL); break;
+
+            case SBB_M: ir_SBB(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case SBI: ir_SBB(cpu, pcRead(cpu)); break;
+
+            case INR_A: ir_INR(cpu, &cpu->rA); break;
+            case INR_B: ir_INR(cpu, &cpu->rB); break;
+            case INR_C: ir_INR(cpu, &cpu->rC); break;
+            case INR_D: ir_INR(cpu, &cpu->rD); break;
+            case INR_E: ir_INR(cpu, &cpu->rE); break;
+            case INR_H: ir_INR(cpu, &cpu->rH); break;
+            case INR_L: ir_INR(cpu, &cpu->rL); break;
+            case INR_M: ir_INR(cpu, &cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+
+            case DCR_A: ir_INR(cpu, &cpu->rA); break;
+            case DCR_B: ir_INR(cpu, &cpu->rB); break;
+            case DCR_C: ir_INR(cpu, &cpu->rC); break;
+            case DCR_D: ir_INR(cpu, &cpu->rD); break;
+            case DCR_E: ir_INR(cpu, &cpu->rE); break;
+            case DCR_H: ir_INR(cpu, &cpu->rH); break;
+            case DCR_L: ir_INR(cpu, &cpu->rL); break;
+            case DCR_M: ir_INR(cpu, &cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+
+            case INX_BC: doubleAdd(&cpu->rB, &cpu->rC, 1); break;
+            case INX_DE: doubleAdd(&cpu->rD, &cpu->rE, 1); break;
+            case INX_HL: doubleAdd(&cpu->rH, &cpu->rL, 1); break;
+            case INX_SP: cpu->SP++; break;
+
+            case DCX_BC: doubleAdd(&cpu->rB, &cpu->rC, -1); break;
+            case DCX_DE: doubleAdd(&cpu->rD, &cpu->rE, -1); break;
+            case DCX_HL: doubleAdd(&cpu->rH, &cpu->rL, -1); break;
+            case DCX_SP: cpu->SP--; break;
+
+            case DAD_BC: doubleAdd(&cpu->rH, &cpu->rL, FRIDGE_cpu_pair_BC(cpu)); break;
+            case DAD_DE: doubleAdd(&cpu->rH, &cpu->rL, FRIDGE_cpu_pair_DE(cpu)); break;
+            case DAD_HL: doubleAdd(&cpu->rH, &cpu->rL, FRIDGE_cpu_pair_HL(cpu)); break;
+            case DAD_SP: doubleAdd(&cpu->rH, &cpu->rL, cpu->SP); break;
+
+            case ANA_A: ir_ANA(cpu, cpu->rA); break;
+            case ANA_B: ir_ANA(cpu, cpu->rB); break;
+            case ANA_C: ir_ANA(cpu, cpu->rC); break;
+            case ANA_D: ir_ANA(cpu, cpu->rD); break;
+            case ANA_E: ir_ANA(cpu, cpu->rE); break;
+            case ANA_H: ir_ANA(cpu, cpu->rH); break;
+            case ANA_L: ir_ANA(cpu, cpu->rL); break;
+            case ANA_M: ir_ANA(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case ANI  : ir_ANA(cpu, pcRead(cpu)); break;
+
+            case ORA_A: ir_ORA(cpu, cpu->rA); break;
+            case ORA_B: ir_ORA(cpu, cpu->rB); break;
+            case ORA_C: ir_ORA(cpu, cpu->rC); break;
+            case ORA_D: ir_ORA(cpu, cpu->rD); break;
+            case ORA_E: ir_ORA(cpu, cpu->rE); break;
+            case ORA_H: ir_ORA(cpu, cpu->rH); break;
+            case ORA_L: ir_ORA(cpu, cpu->rL); break;
+            case ORA_M: ir_ORA(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case ORI  : ir_ORA(cpu, pcRead(cpu)); break;
+
+            case XRA_A: ir_XRA(cpu, cpu->rA); break;
+            case XRA_B: ir_XRA(cpu, cpu->rB); break;
+            case XRA_C: ir_XRA(cpu, cpu->rC); break;
+            case XRA_D: ir_XRA(cpu, cpu->rD); break;
+            case XRA_E: ir_XRA(cpu, cpu->rE); break;
+            case XRA_H: ir_XRA(cpu, cpu->rH); break;
+            case XRA_L: ir_XRA(cpu, cpu->rL); break;
+            case XRA_M: ir_XRA(cpu, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case XRI  : ir_XRA(cpu, pcRead(cpu)); break;
+
+            case CMP_A: compareSetFlags(cpu, cpu->rA, cpu->rA); break;
+            case CMP_B: compareSetFlags(cpu, cpu->rA, cpu->rB); break;
+            case CMP_C: compareSetFlags(cpu, cpu->rA, cpu->rC); break;
+            case CMP_D: compareSetFlags(cpu, cpu->rA, cpu->rD); break;
+            case CMP_E: compareSetFlags(cpu, cpu->rA, cpu->rE); break;
+            case CMP_H: compareSetFlags(cpu, cpu->rA, cpu->rH); break;
+            case CMP_L: compareSetFlags(cpu, cpu->rA, cpu->rL); break;
+            case CMP_M: compareSetFlags(cpu, cpu->rA, cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case CPI  : compareSetFlags(cpu, cpu->rA, pcRead(cpu)); break;
+
+            case RLC: ir_RLC(cpu); break;
+            case RRC: ir_RRC(cpu); break;
+            case RAL: ir_RAL(cpu); break;
+            case RAR: ir_RAR(cpu); break;
+
+            case CMA: cpu->rA = ~cpu->rA; break;
+            case CMC: setCarry(cpu, !FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case STC: setCarry(cpu, 1); break;
+            case RTC: setCarry(cpu, 0); break;
+
+            case JMP: ir_jump(cpu, 1); break;
+            case JNZ: ir_jump(cpu, !FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case JZ : ir_jump(cpu,  FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case JNC: ir_jump(cpu, !FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case JC : ir_jump(cpu,  FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case JPO: ir_jump(cpu, !FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case JPE: ir_jump(cpu,  FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case JP : ir_jump(cpu, !FRIDGE_cpu_flag_SIGN(cpu)); break;
+            case JM : ir_jump(cpu,  FRIDGE_cpu_flag_SIGN(cpu)); break;
+
+            case CALL: ir_call(cpu, 1); break;
+            case CNZ: ir_call(cpu, !FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case CZ : ir_call(cpu,  FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case CNC: ir_call(cpu, !FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case CC : ir_call(cpu,  FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case CPO: ir_call(cpu, !FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case CPE: ir_call(cpu,  FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case CP : ir_call(cpu, !FRIDGE_cpu_flag_SIGN(cpu)); break;
+            case CM : ir_call(cpu,  FRIDGE_cpu_flag_SIGN(cpu)); break;
+
+            case RET: ir_ret(cpu, 1); break;
+            case RNZ: ir_ret(cpu, !FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case RZ : ir_ret(cpu,  FRIDGE_cpu_flag_ZERO(cpu)); break;
+            case RNC: ir_ret(cpu, !FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case RC : ir_ret(cpu,  FRIDGE_cpu_flag_CARRY(cpu)); break;
+            case RPO: ir_ret(cpu, !FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case RPE: ir_ret(cpu,  FRIDGE_cpu_flag_PARITY(cpu)); break;
+            case RP : ir_ret(cpu, !FRIDGE_cpu_flag_SIGN(cpu)); break;
+            case RM : ir_ret(cpu,  FRIDGE_cpu_flag_SIGN(cpu)); break;
+
+            case PCHL: cpu->PC = FRIDGE_cpu_pair_HL(cpu); break;
+
+            case PUSH_AF: stackPush(cpu, cpu->rA, cpu->rF); break;
+            case PUSH_BC: stackPush(cpu, cpu->rB, cpu->rC); break;
+            case PUSH_DE: stackPush(cpu, cpu->rD, cpu->rE); break;
+            case PUSH_HL: stackPush(cpu, cpu->rH, cpu->rL); break;
+            case POP_AF: stackPop(cpu, &cpu->rA, &cpu->rF); break;
+            case POP_BC: stackPop(cpu, &cpu->rB, &cpu->rC); break;
+            case POP_DE: stackPop(cpu, &cpu->rD, &cpu->rE); break;
+            case POP_HL: stackPop(cpu, &cpu->rH, &cpu->rL); break;
+
+            case XTHL: ir_XTHL(cpu); break;
+            case SPHL: cpu->SP = FRIDGE_cpu_pair_HL(cpu); break;
+            case HLSP: cpu->rH = FRIDGE_HIGH_WORD(cpu->SP); cpu->rL = FRIDGE_LOW_WORD(cpu->SP); break;
+
+            case IIN:  cpu->rA = cpu->input_dev[pcRead(cpu)](); break;
+            case IOUT: cpu->output_dev[pcRead(cpu)](cpu->rA); break;
+
+            case HLT: cpu->state = FRIDGE_CPU_HALTED; break;
+            case EI: cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED; break;
+            case DI: cpu->inte = FRIDGE_CPU_INTERRUPTS_DISABLED; break;
         }
     }
 }
