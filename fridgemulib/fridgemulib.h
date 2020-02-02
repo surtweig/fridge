@@ -7,6 +7,8 @@ typedef unsigned short FRIDGE_RAM_ADDR;
 typedef unsigned short FRIDGE_ROM_ADDR;
 typedef unsigned int FRIDGE_SIZE_T;
 
+#define FRIDGE_ASCENDING_STACK
+
 #define FRIDGE_RAM_SIZE 0x10000 // bytes
 #define FRIDGE_MAX_DWORD 0xffff
 #define FRIDGE_ROM_MAX_SEGMENTS 0x10000
@@ -22,6 +24,10 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_GPU_SPRITE_SIZE 0x80 // 128 bytes (16x16 pixels)
 #define FRIDGE_GPU_SPRITE_MEMORY_SIZE 0x10000 // bytes
 #define FRIDGE_GPU_FRAME_BUFFER_SIZE 19200 // FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT >> 1; // 240x160x4 bits
+#define FRIDGE_BOOT_SECTION_INDEX_ADDRESS 0x0003
+#define FRIDGE_EXECUTABLE_OFFSET 0x0100
+#define FRIDGE_IRQ_SYS_TIMER 0x0004
+#define FRIDGE_IRQ_KEYBOARD 0x0007
 
 typedef struct FRIDGE_ROM_SEGMENT
 {
@@ -42,6 +48,7 @@ typedef struct FRIDGE_ROM_SEGMENT
 
 #define FRIDGE_FLAG_SIGN_MASK   0x80
 #define FRIDGE_FLAG_ZERO_MASK   0x40
+#define FRIDGE_FLAG_PANIC_MASK  0x20
 #define FRIDGE_FLAG_AUX_MASK    0x10
 #define FRIDGE_FLAG_PARITY_MASK 0x04
 #define FRIDGE_FLAG_CARRY_MASK  0x01
@@ -240,6 +247,7 @@ void FRIDGE_cpu_ram_write          (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE
 FRIDGE_WORD FRIDGE_cpu_flag_SIGN   (const FRIDGE_CPU* cpu);
 FRIDGE_WORD FRIDGE_cpu_flag_ZERO   (const FRIDGE_CPU* cpu);
 FRIDGE_WORD FRIDGE_cpu_flag_AUX    (const FRIDGE_CPU* cpu);
+FRIDGE_WORD FRIDGE_cpu_flag_PANIC  (const FRIDGE_CPU* cpu);
 FRIDGE_WORD FRIDGE_cpu_flag_PARITY (const FRIDGE_CPU* cpu);
 FRIDGE_WORD FRIDGE_cpu_flag_CARRY  (const FRIDGE_CPU* cpu);
 FRIDGE_DWORD FRIDGE_cpu_pair_BC    (const FRIDGE_CPU* cpu);

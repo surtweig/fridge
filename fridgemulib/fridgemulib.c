@@ -1,10 +1,33 @@
-#include <fridgemulib.h>
+#include "fridgemulib.h"
+
+
+void setPanicFlag(FRIDGE_CPU* cpu, FRIDGE_WORD flag)
+{
+    if (flag)
+        cpu->rF |= FRIDGE_FLAG_PANIC_MASK;
+    else
+        cpu->rF &= ~FRIDGE_FLAG_PANIC_MASK;
+}
+
+void corePanic(FRIDGE_CPU* cpu)
+{
+    setPanicFlag(cpu, 1);
+    cpu->state = FRIDGE_CPU_HALTED;
+}
 
 void stackPush(FRIDGE_CPU* cpu, FRIDGE_WORD hi, FRIDGE_WORD lo)
 {
+#ifdef FRIDGE_ASCENDING_STACK
+    cpu->ram[cpu->SP] = hi;
+    cpu->ram[cpu->SP+1] = lo;
+    cpu->SP += 2;
+#else
     cpu->ram[cpu->SP-1] = lo;
     cpu->ram[cpu->SP-2] = hi;
     cpu->SP -= 2;
+#endif
+    if (cpu->SP < FRIDGE_EXECUTABLE_OFFSET)
+        corePanic(cpu);
 }
 
 void stackPushD(FRIDGE_CPU* cpu, FRIDGE_DWORD v)
@@ -14,9 +37,17 @@ void stackPushD(FRIDGE_CPU* cpu, FRIDGE_DWORD v)
 
 void stackPop(FRIDGE_CPU* cpu, FRIDGE_WORD* hi, FRIDGE_WORD* lo)
 {
+#ifdef FRIDGE_ASCENDING_STACK
+    *hi = cpu->ram[cpu->SP-2];
+    *lo = cpu->ram[cpu->SP-1];
+    cpu->SP -= 2;
+#else
     *hi = cpu->ram[cpu->SP];
     *lo = cpu->ram[cpu->SP+1];
     cpu->SP += 2;
+#endif
+    if (cpu->SP < FRIDGE_EXECUTABLE_OFFSET)
+        corePanic(cpu);
 }
 
 void stackPopD(FRIDGE_CPU* cpu, FRIDGE_DWORD* v)
@@ -63,7 +94,7 @@ FRIDGE_WORD pcRead(FRIDGE_CPU* cpu)
 {
     if (cpu->state == FRIDGE_CPU_ACTIVE)
     {
-        return cpu->ram[++cpu->PC];
+        return cpu->ram[cpu->PC++];
     }
     else if (cpu->state == FRIDGE_CPU_HALTED)
     {
@@ -245,6 +276,24 @@ void ir_XTHL(FRIDGE_CPU* cpu)
     cpu->rL = cpu->ram[cpu->SP+1];
     cpu->ram[cpu->SP] = th;
     cpu->ram[cpu->SP+1] = tl;
+}
+
+void ir_safe_IIN(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD dev = pcRead(cpu);
+    if (dev < FRIDGE_MAX_IO_DEVICES)
+        cpu->rA = cpu->input_dev[dev]();
+    else
+        corePanic(cpu);
+}
+
+void ir_safe_IOUT(FRIDGE_CPU* cpu)
+{
+    FRIDGE_WORD dev = pcRead(cpu);
+    if (dev < FRIDGE_MAX_IO_DEVICES)
+        cpu->rA = cpu->input_dev[dev]();
+    else
+        corePanic(cpu);
 }
 
 FRIDGE_WORD dummyDevInput()
@@ -433,14 +482,14 @@ void FRIDGE_cpu_tick (FRIDGE_CPU* cpu)
             case INR_L: ir_INR(cpu, &cpu->rL); break;
             case INR_M: ir_INR(cpu, &cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
 
-            case DCR_A: ir_INR(cpu, &cpu->rA); break;
-            case DCR_B: ir_INR(cpu, &cpu->rB); break;
-            case DCR_C: ir_INR(cpu, &cpu->rC); break;
-            case DCR_D: ir_INR(cpu, &cpu->rD); break;
-            case DCR_E: ir_INR(cpu, &cpu->rE); break;
-            case DCR_H: ir_INR(cpu, &cpu->rH); break;
-            case DCR_L: ir_INR(cpu, &cpu->rL); break;
-            case DCR_M: ir_INR(cpu, &cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
+            case DCR_A: ir_DCR(cpu, &cpu->rA); break;
+            case DCR_B: ir_DCR(cpu, &cpu->rB); break;
+            case DCR_C: ir_DCR(cpu, &cpu->rC); break;
+            case DCR_D: ir_DCR(cpu, &cpu->rD); break;
+            case DCR_E: ir_DCR(cpu, &cpu->rE); break;
+            case DCR_H: ir_DCR(cpu, &cpu->rH); break;
+            case DCR_L: ir_DCR(cpu, &cpu->rL); break;
+            case DCR_M: ir_DCR(cpu, &cpu->ram[FRIDGE_DWORD_HL(cpu->rH, cpu->rL)]); break;
 
             case INX_BC: doubleAdd(&cpu->rB, &cpu->rC, 1); break;
             case INX_DE: doubleAdd(&cpu->rD, &cpu->rE, 1); break;
@@ -569,12 +618,18 @@ void FRIDGE_cpu_interrupt (FRIDGE_CPU* cpu, FRIDGE_WORD ircode, FRIDGE_WORD arg0
 
 void FRIDGE_cpu_ram_read (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size)
 {
-
+    for (FRIDGE_RAM_ADDR i = 0; i < size; ++i)
+    {
+        cpu->ram[position + i] = buffer[i];
+    }
 }
 
 void FRIDGE_cpu_ram_write (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size)
 {
-
+    for (FRIDGE_RAM_ADDR i = 0; i < size; ++i)
+    {
+        buffer[i] = cpu->ram[position + i];
+    }
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_SIGN (const FRIDGE_CPU* cpu)
@@ -590,6 +645,11 @@ FRIDGE_WORD FRIDGE_cpu_flag_ZERO (const FRIDGE_CPU* cpu)
 FRIDGE_WORD FRIDGE_cpu_flag_AUX (const FRIDGE_CPU* cpu)
 {
     return (cpu->rF & FRIDGE_FLAG_AUX_MASK) > 0;
+}
+
+FRIDGE_WORD FRIDGE_cpu_flag_PANIC (const FRIDGE_CPU* cpu)
+{
+    return (cpu->rF & FRIDGE_FLAG_PANIC_MASK) > 0;
 }
 
 FRIDGE_WORD FRIDGE_cpu_flag_PARITY (const FRIDGE_CPU* cpu)
