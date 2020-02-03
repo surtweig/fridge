@@ -272,10 +272,17 @@ void ir_XTHL(FRIDGE_CPU* cpu)
 {
     FRIDGE_WORD th = cpu->rH;
     FRIDGE_WORD tl = cpu->rL;
+#ifdef FRIDGE_ASCENDING_STACK
+    cpu->rH = cpu->ram[cpu->SP-2];
+    cpu->rL = cpu->ram[cpu->SP-1];
+    cpu->ram[cpu->SP-2] = th;
+    cpu->ram[cpu->SP-1] = tl;
+#else
     cpu->rH = cpu->ram[cpu->SP];
     cpu->rL = cpu->ram[cpu->SP+1];
     cpu->ram[cpu->SP] = th;
     cpu->ram[cpu->SP+1] = tl;
+#endif
 }
 
 void ir_safe_IIN(FRIDGE_CPU* cpu)
@@ -310,7 +317,11 @@ void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
 {
     cpu->state = FRIDGE_CPU_ACTIVE;
     cpu->PC = 0;
+#ifdef FRIDGE_ASCENDING_STACK
+    cpu->SP = FRIDGE_EXECUTABLE_OFFSET;
+#else
     cpu->SP = FRIDGE_RAM_SIZE-1;
+#endif
     cpu->rA = 0;
     cpu->rB = 0;
     cpu->rC = 0;

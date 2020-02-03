@@ -63,6 +63,59 @@ bool test_cpu_mov(FRIDGE_CPU* cpu)
     return true;
 }
 
+bool test_cpu_stack(FRIDGE_CPU* cpu)
+{
+    int stackTestLength = 100;
+    FRIDGE_cpu_reset(cpu);
+    FRIDGE_RAM_ADDR sp = 0xffff;
+#ifdef FRIDGE_ASCENDING_STACK
+    sp = 0x1000;
+#endif
+    FRIDGE_RAM_ADDR pc = 0;
+    FRIDGE_WORD* regs[8] = {&cpu->rA, &cpu->rF, &cpu->rB, &cpu->rC, &cpu->rD, &cpu->rE, &cpu->rH, &cpu->rL};
+    string pairNames[4] = {"AF", "BC", "DE", "HL"};
+    cpu->SP = sp;
+    for (int i = 0; i < stackTestLength; ++i)
+    {
+        int pair = i%4;
+        FRIDGE_WORD r1 = i*2;
+        FRIDGE_WORD r2 = i*2+1;
+        *regs[pair*2] = r1;
+        *regs[pair*2+1] = r2;
+        cpu->ram[pc++] = PUSH_AF + pair;
+        FRIDGE_cpu_tick(cpu);
+
+#ifdef FRIDGE_ASCENDING_STACK
+        sp += 2;
+        FRIDGE_ASSERT(cpu->ram[sp-2] == r1 && cpu->ram[sp-1] == r2, "PUSH_" + pairNames[pair] + " test failed.");
+#else
+        sp -= 2;
+        FRIDGE_ASSERT(cpu->ram[sp] == r1 && cpu->ram[sp+1] == r2, "PUSH_" + pairNames[pair] + " test failed.");
+#endif
+    }
+    std::cout << "PUSH test passed." << std::endl;
+
+    for (int i = 0; i < stackTestLength; ++i)
+    {
+        int pair = i%4;
+        FRIDGE_WORD r1 = cpu->ram[sp-2];
+        FRIDGE_WORD r2 = cpu->ram[sp-1];
+        cpu->ram[pc++] = POP_AF + pair;
+        FRIDGE_cpu_tick(cpu);
+
+#ifdef FRIDGE_ASCENDING_STACK
+        sp -= 2;
+        FRIDGE_ASSERT(*regs[pair*2] == r1 && *regs[pair*2+1] == r2, "POP_" + pairNames[pair] + " test failed.");
+#else
+        sp += 2;
+        FRIDGE_ASSERT(*regs[pair*2] == r1 && *regs[pair*2+1] == r2, "POP_" + pairNames[pair] + " test failed.");
+#endif
+    }
+    std::cout << "POP test passed." << std::endl;
+
+    return true;
+}
+
 
 int main() {
     FRIDGE_CPU* cpu = new FRIDGE_CPU();
@@ -70,5 +123,6 @@ int main() {
     std::cout << "Hello, World! This is fridgemulib test bench." << std::endl;
 
     test_cpu_mov(cpu);
+    test_cpu_stack(cpu);
     return 0;
 }
