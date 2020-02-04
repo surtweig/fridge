@@ -24,8 +24,9 @@ void fassert(const char* expr_str, bool expr, const char* file, int line, string
     }
 }
 
-bool test_cpu_mov(FRIDGE_CPU* cpu)
+bool test_cpu_mov(FRIDGE_SYSTEM* sys)
 {
+    FRIDGE_CPU* cpu = sys->cpu;
     FRIDGE_WORD data = 79;
     const FRIDGE_RAM_ADDR addr = 10;
     const int regsN = 8;
@@ -54,7 +55,7 @@ bool test_cpu_mov(FRIDGE_CPU* cpu)
                 cpu->rL = FRIDGE_LOW_WORD(addr);
             }
             cpu->ram[0] = mov_irs[rto][rfrom];
-            FRIDGE_cpu_tick(cpu);
+            FRIDGE_sys_tick(sys);
 
             FRIDGE_ASSERT(*regs[rto] == *regs[rfrom], "MOV_" + regsNames[rto] + regsNames[rfrom] + " test failed.");
         }
@@ -63,8 +64,9 @@ bool test_cpu_mov(FRIDGE_CPU* cpu)
     return true;
 }
 
-bool test_cpu_stack(FRIDGE_CPU* cpu)
+bool test_cpu_stack(FRIDGE_SYSTEM* sys)
 {
+    FRIDGE_CPU* cpu = sys->cpu;
     int stackTestLength = 100;
     FRIDGE_cpu_reset(cpu);
     FRIDGE_RAM_ADDR sp = 0xffff;
@@ -83,7 +85,7 @@ bool test_cpu_stack(FRIDGE_CPU* cpu)
         *regs[pair*2] = r1;
         *regs[pair*2+1] = r2;
         cpu->ram[pc++] = PUSH_AF + pair;
-        FRIDGE_cpu_tick(cpu);
+        FRIDGE_sys_tick(sys);
 
 #ifdef FRIDGE_ASCENDING_STACK
         sp += 2;
@@ -101,7 +103,7 @@ bool test_cpu_stack(FRIDGE_CPU* cpu)
         FRIDGE_WORD r1 = cpu->ram[sp-2];
         FRIDGE_WORD r2 = cpu->ram[sp-1];
         cpu->ram[pc++] = POP_AF + pair;
-        FRIDGE_cpu_tick(cpu);
+        FRIDGE_sys_tick(sys);
 
 #ifdef FRIDGE_ASCENDING_STACK
         sp -= 2;
@@ -119,10 +121,13 @@ bool test_cpu_stack(FRIDGE_CPU* cpu)
 
 int main() {
     FRIDGE_CPU* cpu = new FRIDGE_CPU();
+    FRIDGE_SYSTEM* sys = new FRIDGE_SYSTEM();
+    sys->cpu = cpu;
+
     FRIDGE_cpu_reset(cpu);
     std::cout << "Hello, World! This is fridgemulib test bench." << std::endl;
 
-    test_cpu_mov(cpu);
-    test_cpu_stack(cpu);
+    test_cpu_mov(sys);
+    test_cpu_stack(sys);
     return 0;
 }

@@ -6,6 +6,7 @@ typedef unsigned short FRIDGE_DWORD;
 typedef unsigned short FRIDGE_RAM_ADDR;
 typedef unsigned short FRIDGE_ROM_ADDR;
 typedef unsigned int FRIDGE_SIZE_T;
+typedef struct FRIDGE_SYSTEM FRIDGE_SYSTEM;
 
 #define FRIDGE_ASCENDING_STACK
 
@@ -27,13 +28,11 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_BOOT_SECTION_INDEX_ADDRESS 0x0003
 #define FRIDGE_EXECUTABLE_OFFSET 0x0100
 #define FRIDGE_IRQ_SYS_TIMER 0x0004
-#define FRIDGE_IRQ_KEYBOARD 0x0007
-
-typedef struct FRIDGE_ROM_SEGMENT
-{
-    FRIDGE_ROM_ADDR position;
-    FRIDGE_WORD data[FRIDGE_ROM_SEGMENT_SIZE];
-} FRIDGE_ROM_SEGMENT;
+#define FRIDGE_IRQ_KEYBOARD_PRESS 0x0007
+#define FRIDGE_IRQ_KEYBOARD_RELEASE 0x000a
+#define FRIDGE_KEYBOARD_BUFFER_SIZE 32
+#define FRIDGE_KEYBOARD_KEY_STATE_MASK 0x80
+#define FRIDGE_KEYBOARD_KEY_CODE_MASK 0x7f
 
 #define FRIDGE_DWORD_HL(H, L) (((FRIDGE_DWORD)H) << FRIDGE_WORD_BITS) | L // big endian
 #define FRIDGE_HIGH_WORD(DW) (FRIDGE_WORD)(DW >> FRIDGE_WORD_BITS)
@@ -52,6 +51,10 @@ typedef struct FRIDGE_ROM_SEGMENT
 #define FRIDGE_FLAG_AUX_MASK    0x10
 #define FRIDGE_FLAG_PARITY_MASK 0x04
 #define FRIDGE_FLAG_CARRY_MASK  0x01
+
+#define FRIDGE_DEV_ROM_RESET_ID 0x01
+#define FRIDGE_DEV_ROM_ID 0x02
+#define FRIDGE_DEV_KEYBOARD_ID 0x03
 
 typedef enum FRIDGE_VIDEO_MODE
 {
@@ -185,17 +188,21 @@ typedef enum FRIDGE_IRCODE {
 
 } FRIDGE_IRCODE;
 
-const FRIDGE_WORD FRIDGE_ROM_MODE_STORE = 1;
-const FRIDGE_WORD FRIDGE_ROM_MODE_LOAD = 2;
-
 typedef enum FRIDGE_ROM_STATE
 {
-    FRIDGE_ROM_MODE,
+    FRIDGE_ROM_SELECT_MODE,
     FRIDGE_ROM_SEGLOW,
     FRIDGE_ROM_SEGHIGH,
     FRIDGE_ROM_OPERATE,
     FRIDGE_ROM_STREAMING,
 } FRIDGE_ROM_STATE;
+
+typedef enum FRIDGE_ROM_MODE
+{
+    FRIDGE_ROM_MODE_IDLE,
+    FRIDGE_ROM_MODE_STORE,
+    FRIDGE_ROM_MODE_LOAD
+} FRIDGE_ROM_MODE;
 
 typedef enum FRIDGE_CPU_STATE
 {
@@ -211,8 +218,8 @@ typedef enum FRIDGE_CPU_INTERRUPTS_STATE
     FRIDGE_CPU_INTERRUPTS_DISABLED
 } FRIDGE_CPU_INTERRUPTS_STATE;
 
-typedef FRIDGE_WORD (*FRIDGE_INPUT_CALLBACK)();
-typedef void (*FRIDGE_OUTPUT_CALLBACK)(FRIDGE_WORD);
+typedef FRIDGE_WORD (*FRIDGE_INPUT_CALLBACK)(FRIDGE_SYSTEM*);
+typedef void (*FRIDGE_OUTPUT_CALLBACK)(FRIDGE_SYSTEM*, FRIDGE_WORD);
 
 typedef struct FRIDGE_CPU
 {
@@ -240,8 +247,8 @@ typedef struct FRIDGE_CPU
 } FRIDGE_CPU;
 
 void FRIDGE_cpu_reset              (FRIDGE_CPU* cpu);
-void FRIDGE_cpu_tick               (FRIDGE_CPU* cpu);
-void FRIDGE_cpu_interrupt          (FRIDGE_CPU* cpu, FRIDGE_WORD ircode, FRIDGE_WORD arg0, FRIDGE_WORD arg1);
+void FRIDGE_sys_tick               (FRIDGE_SYSTEM* sys);
+void FRIDGE_cpu_interrupt          (FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode, FRIDGE_WORD arg0, FRIDGE_WORD arg1);
 void FRIDGE_cpu_ram_read           (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
 void FRIDGE_cpu_ram_write          (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size);
 FRIDGE_WORD FRIDGE_cpu_flag_SIGN   (const FRIDGE_CPU* cpu);
@@ -267,5 +274,39 @@ typedef struct FRIDGE_GPU
 void FRIDGE_gpu_reset                 (FRIDGE_GPU* gpu);
 void FRIDGE_gpu_tick                  (FRIDGE_GPU* gpu);
 FRIDGE_WORD* FRIDGE_gpu_visible_frame (const FRIDGE_GPU* gpu);
+
+void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys);
+void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);
+void FRIDGE_keyboard_release(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);
+
+typedef struct FRIDGE_ROM_SEGMENT
+{
+    FRIDGE_WORD data[FRIDGE_ROM_SEGMENT_SIZE];
+} FRIDGE_ROM_SEGMENT;
+
+typedef struct FRIDGE_ROM
+{
+    FRIDGE_ROM_SEGMENT* segments;
+    FRIDGE_SIZE_T segments_count;
+    FRIDGE_ROM_STATE state;
+    FRIDGE_ROM_ADDR active_segment;
+    FRIDGE_ROM_MODE mode;
+    FRIDGE_SIZE_T stream_position;
+} FRIDGE_ROM;
+
+typedef struct FRIDGE_KEYBOARD_CONTROLLER
+{
+    FRIDGE_WORD key_buffer[FRIDGE_KEYBOARD_BUFFER_SIZE];
+    FRIDGE_WORD input_index;
+    FRIDGE_WORD output_index;
+} FRIDGE_KEYBOARD_CONTROLLER;
+
+typedef struct FRIDGE_SYSTEM
+{
+    FRIDGE_CPU* cpu;
+    FRIDGE_GPU* gpu;
+    FRIDGE_ROM* rom;
+    FRIDGE_KEYBOARD_CONTROLLER* kbrd;
+} FRIDGE_SYSTEM;
 
 #endif
