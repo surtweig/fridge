@@ -24,6 +24,9 @@ typedef struct FRIDGE_SYSTEM FRIDGE_SYSTEM;
 #define FRIDGE_GPU_SPRITE_HEIGHT 16
 #define FRIDGE_GPU_SPRITE_SIZE 0x80 // 128 bytes (16x16 pixels)
 #define FRIDGE_GPU_SPRITE_MEMORY_SIZE 0x10000 // bytes
+#define FRIDGE_GPU_MAX_SPRITES 64
+#define FRIDGE_GPU_MAX_SPRITES_PER_PIXEL 8
+#define FRIDGE_GPU_PALETTE_SIZE 48 // 3*16
 #define FRIDGE_GPU_FRAME_BUFFER_SIZE 19200 // FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT >> 1; // 240x160x4 bits
 #define FRIDGE_BOOT_SECTION_INDEX_ADDRESS 0x0003
 #define FRIDGE_EXECUTABLE_OFFSET 0x0100
@@ -41,9 +44,9 @@ typedef struct FRIDGE_SYSTEM FRIDGE_SYSTEM;
 #define FRIDGE_HIGHBIT_MASK 0x80
 #define FRIDGE_LOWBIT_MASK 0x01
 
-#define FRIDGE_GRAM_WORD(LP, RP) (FRIDGE_WORD)( ((LP & 0x0f) << 4) | (RP & 0x0f) )
-#define FRIDGE_GRAM_LEFT_PIXEL(W) (FRIDGE_WORD)( (W & 0xf0) >> 4 )
-#define FRIDGE_GRAM_RIGHT_PIXEL(W) (FRIDGE_WORD)(W & 0x0f)
+#define FRIDGE_GPU_WORD(LP, RP) (FRIDGE_WORD)( ((LP & 0x0f) << 4) | (RP & 0x0f) )
+#define FRIDGE_GPU_LEFT_PIXEL(W) (FRIDGE_WORD)( (W & 0xf0) >> 4 )
+#define FRIDGE_GPU_RIGHT_PIXEL(W) (FRIDGE_WORD)(W & 0x0f)
 
 #define FRIDGE_FLAG_SIGN_MASK   0x80
 #define FRIDGE_FLAG_ZERO_MASK   0x40
@@ -261,19 +264,67 @@ FRIDGE_DWORD FRIDGE_cpu_pair_BC    (const FRIDGE_CPU* cpu);
 FRIDGE_DWORD FRIDGE_cpu_pair_DE    (const FRIDGE_CPU* cpu);
 FRIDGE_DWORD FRIDGE_cpu_pair_HL    (const FRIDGE_CPU* cpu);
 
+typedef enum FRIDGE_GPU_SPRITE_MODE
+{
+    FRIDGE_GPU_SPRITE_INVISIBLE,
+    FRIDGE_GPU_SPRITE_OPAQUE,
+    FRIDGE_GPU_SPRITE_TRANSPARENT0,
+    FRIDGE_GPU_SPRITE_ADDITIVE,
+    FRIDGE_GPU_SPRITE_SUBTRACTIVE,
+    FRIDGE_GPU_SPRITE_BITWISE_AND,
+    FRIDGE_GPU_SPRITE_BITWISE_OR,
+    FRIDGE_GPU_SPRITE_BITWISE_XOR
+} FRIDGE_GPU_SPRITE_MODE;
+
+typedef struct FRIDGE_GPU_SPRITE
+{
+    FRIDGE_RAM_ADDR data;
+    FRIDGE_WORD position_x;
+    FRIDGE_WORD position_y;
+    FRIDGE_WORD size_x;
+    FRIDGE_WORD size_y;
+    FRIDGE_GPU_SPRITE_MODE mode;
+} FRIDGE_GPU_SPRITE;
+
 typedef struct FRIDGE_GPU
 {
-    FRIDGE_WORD sprite[FRIDGE_GPU_SPRITE_MEMORY_SIZE];
     FRIDGE_WORD frame_a[FRIDGE_GPU_FRAME_BUFFER_SIZE];
     FRIDGE_WORD frame_b[FRIDGE_GPU_FRAME_BUFFER_SIZE];
     FRIDGE_VIDEO_MODE vmode;
     FRIDGE_VIDEO_FRAME vframe;
+    FRIDGE_WORD palette[FRIDGE_GPU_PALETTE_SIZE];
+    FRIDGE_WORD sprite_mem[FRIDGE_GPU_SPRITE_MEMORY_SIZE];
+    FRIDGE_GPU_SPRITE sprite_list[FRIDGE_GPU_MAX_SPRITES];
 
 } FRIDGE_GPU;
 
+const FRIDGE_WORD FRIDGE_gpu_default_palette[FRIDGE_GPU_PALETTE_SIZE] =
+{
+    0x00, 0x00, 0x00, // black
+    0x00, 0x00, 0x80, // blue
+    0x00, 0x80, 0x00, // green
+    0x00, 0x80, 0x80, // cyan
+    0x80, 0x00, 0x00, // red
+    0x80, 0x00, 0x80, // magenta
+    0x80, 0x40, 0x00, // brown
+    0x80, 0x80, 0x80, // light gray
+    0x40, 0x40, 0x40, // dark gray
+    0x00, 0x40, 0xff, // bright blue
+    0x40, 0xff, 0x40, // bright green
+    0x40, 0xff, 0xff, // bright cyan
+    0xff, 0x40, 0x40, // bright red
+    0xff, 0x40, 0xff, // bright magenta
+    0xff, 0xff, 0x40, // bright yellow
+    0xff, 0xff, 0xff, // white
+};
+
 void FRIDGE_gpu_reset                 (FRIDGE_GPU* gpu);
 void FRIDGE_gpu_tick                  (FRIDGE_GPU* gpu);
-FRIDGE_WORD* FRIDGE_gpu_visible_frame (const FRIDGE_GPU* gpu);
+FRIDGE_WORD* FRIDGE_gpu_visible_frame (FRIDGE_GPU* gpu);
+FRIDGE_WORD* FRIDGE_gpu_active_frame  (FRIDGE_GPU* gpu);
+void FRIDGE_gpu_render_ega_rgb8       (const FRIDGE_GPU* gpu, unsigned char* pixels);
+void FRIDGE_gpu_render_ega_rgb8_area  (const FRIDGE_GPU* gpu, unsigned char* pixels,
+                                       FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset);
 
 void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys);
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);
