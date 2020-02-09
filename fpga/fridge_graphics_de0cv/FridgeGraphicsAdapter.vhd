@@ -70,7 +70,9 @@ port (
      VMEM_STORE : in std_logic;
      VMEM_LOAD : in std_logic;
      VMEM_ADDR : in XCM2_DWORD;
-     VMEM_DATA : inout XCM2_WORD
+     VMEM_DATA : inout XCM2_WORD;
+     
+     DEBUG_BTN : in std_logic_vector(3 downto 0)
 );
 
 end FridgeGraphicsAdapter;
@@ -81,14 +83,14 @@ architecture main of FridgeGraphicsAdapter is
          
      --signal fbuf_a : XCM2_VIDEO_FBUF:= (others => 2);--(others => 2);--
      --signal fbuf_b : XCM2_VIDEO_FBUF:= (others => 2);--WelcomeScreenData;--(others => 2);--
-     signal linebuffer : XCM2_VIDEO_LINEBUF;
+     signal linebuffer, linebufferRead : XCM2_VIDEO_LINEBUF;
      signal visible_buf : std_logic:= '0';
      signal swap_next : std_logic:= '0';
      signal present_trigger_lock : std_logic:= '0';
 
      --signal vmem : XCM2_GRAM:= (others => 0);
      signal palette : XCM2_VIDEO_PALETTE:= DefaultPalette;
-     signal vmode : XCM2_VIDEO_MODE:= XCM2_VIDEO_EGA;
+     signal vmode : XCM2_VIDEO_MODE:= XCM2_VIDEO_TEXT;
 
      signal vbuffer_horcounter : integer range 0 to XCM2_VIDEO_FRAME_WIDTH:= 0;
      signal vbuffer_vercounter : integer range 0 to XCM2_VIDEO_FRAME_HEIGHT:= 0;
@@ -124,6 +126,7 @@ architecture main of FridgeGraphicsAdapter is
      signal gramReadEnabled : std_logic;
      signal vgaIdle : std_logic:= '0';
      signal vbufferSize : integer range 0 to XCM2_VIDEO_FRAME_WIDTH/2:= XCM2_VIDEO_FRAME_WIDTH/2;--*XCM2_VIDEO_FRAME_HEIGHT/2:= XCM2_VIDEO_FRAME_WIDTH*XCM2_VIDEO_FRAME_HEIGHT/2;
+     signal lineSwapVPos : integer range 0 to VRange:= 0;
      signal colorPhase : unsigned(3 downto 0);
      signal colorPhaseDivider : integer range 0 to 2;
      
@@ -148,12 +151,12 @@ begin
      begin
           if falling_edge(COMMAND_CLK) then
                if (gramReadEnabled = '1') then
-                    if (to_integer(gramReadAddrOffset) < vbufferSize) then
-                         offset:= gramReadAddrOffset;
-                         linebuffer(to_integer(gramReadAddrOffset)*2) <= to_integer(gramReadData(0 to 3));
-                         linebuffer(to_integer(gramReadAddrOffset)*2+1) <= to_integer(gramReadData(4 to 7));
+                    offset:= gramReadAddrOffset;
+                    if (to_integer(offset) < vbufferSize) then
+                         linebufferRead(to_integer(offset)*2) <= to_integer(gramReadData(0 to 3));
+                         linebufferRead(to_integer(offset)*2+1) <= to_integer(gramReadData(4 to 7));
                          gramReadAddr <= gramReadAddrBase + offset - 1;
-                         gramReadAddrOffset <= gramReadAddrOffset + 1;
+                         gramReadAddrOffset <= offset + 1;
                          --fbuf_a(2 to XCM2_VIDEO_FRAME_HEIGHT*XCM2_VIDEO_FRAME_WIDTH-1) <= fbuf_a(0 to XCM2_VIDEO_FRAME_HEIGHT*XCM2_VIDEO_FRAME_WIDTH-3);
                          --fbuf_a(0) <= to_integer(gramReadData(0 to 3));
                          --fbuf_a(1) <= to_integer(gramReadData(4 to 7));
@@ -178,8 +181,8 @@ begin
                --end if;
 
                if RESET = '1' then
-                    vmode <= XCM2_VIDEO_EGA;
-               else                         
+                    vmode <= XCM2_VIDEO_TEXT;
+               else                                            
                     if PRESENT_TRIGGER = '1' and present_trigger_lock = '0' then
                          swap_next <= '1';
                          present_trigger_lock <= '1';
@@ -218,6 +221,10 @@ begin
                     --end if;
                     
                     if (HPOS >= HStart and VPOS >= VStart) then
+                         if (screen_horcounter = 1 and screen_vercounter = 0) then
+                              gramReadEnabled <= '1';
+                         end if;
+                         
                          if (screen_horcounter < ScreenWidth) then
                               screen_horcounter <= screen_horcounter + 1;
                          else
@@ -226,6 +233,15 @@ begin
                                    screen_vercounter <= screen_vercounter + 1;
                                    --vbuffer_horcounter <= 0;
                               else
+                              
+                                   if DEBUG_BTN(0) = '0' then
+                                        vmode <= XCM2_VIDEO_EGA;
+                                        vbufferSize <= XCM2_VIDEO_FRAME_WIDTH/2;
+                                   elsif DEBUG_BTN(1) = '0' then
+                                        vmode <= XCM2_VIDEO_TEXT;
+                                        vbufferSize <= VTextModeCols*2;
+                                   end if;
+                    
                                    screen_vercounter <= 0;
                                    --subpixel_counter <= 0;
                                    --vbuffer_horcounter <= 0;
@@ -237,6 +253,8 @@ begin
                                    text_cellpixel_vercounter <= 0;
                                    text_rowcounter <= 0;
                                    text_row_addr <= 0;
+                                   lineSwapVPos <= ScreenVerOffset;
+                                   gramReadEnabled <= '0';
   
                                    --colorPhaseDivider <= colorPhaseDivider + 1;
                                    --if colorPhaseDivider = 0 then
@@ -255,6 +273,23 @@ begin
                                         swap_next <= '0';
                                    end if;
                               end if;                         
+                         end if;
+                         
+                         if (screen_vercounter = lineSwapVPos and screen_vercounter < ScreenHeight-ScreenVerOffset) then
+                              if (screen_horcounter = 0) then
+                                   linebuffer <= linebufferRead;
+                                   vbuffer_line_addr <= vbuffer_line_addr + vbufferSize;
+                                   gramReadEnabled <= '0';
+                              elsif (screen_horcounter = ScreenHorOffset-1) then
+                                   --gramReadAddrOffset <= X"0000";
+                                   gramReadAddrBase <= to_unsigned(vbuffer_line_addr, 16);
+                                   if vmode = XCM2_VIDEO_EGA then
+                                        lineSwapVPos <= lineSwapVPos + PixelSize;
+                                   elsif vmode = XCM2_VIDEO_TEXT then
+                                        lineSwapVPos <= lineSwapVPos + PixelSize*VTextModeCharHeight;
+                                   end if;
+                                   gramReadEnabled <= '1';
+                              end if;
                          end if;
                          
                          if (screen_horcounter >= ScreenHorOffset and screen_horcounter < ScreenWidth-ScreenHorOffset and
@@ -286,20 +321,20 @@ begin
                                              
                                              if (text_cellpixel_vercounter < VTextModeCharHeight-1) then
                                                   text_cellpixel_vercounter <= text_cellpixel_vercounter + 1;
-                                                  if (text_cellpixel_vercounter = VTextModeCharHeight-2 and vmode = XCM2_VIDEO_TEXT) then
-                                                       vbuffer_line_addr <= vbuffer_line_addr + VTextModeCols*2;
-                                                  end if;
+                                                  --if (text_cellpixel_vercounter = VTextModeCharHeight-2 and vmode = XCM2_VIDEO_TEXT) then
+                                                  --     vbuffer_line_addr <= vbuffer_line_addr + VTextModeCols*2;
+                                                  --end if;
                                              else
                                                   text_cellpixel_vercounter <= 0;
                                                   text_rowcounter <= text_rowcounter + 1;
                                                   text_row_addr <= text_row_addr + VTextModeCols*4;
                                              end if;
                                              
-                                             if vmode = XCM2_VIDEO_EGA then
-                                                  vbuffer_line_addr <= vbuffer_line_addr + XCM2_VIDEO_FRAME_WIDTH/2;
-                                             end if;
+                                             --if vmode = XCM2_VIDEO_EGA then
+                                             --     vbuffer_line_addr <= vbuffer_line_addr + XCM2_VIDEO_FRAME_WIDTH/2;
+                                             --end if;
                                              
-                                             gramReadAddrBase <= to_unsigned(vbuffer_line_addr, 16);
+                                             --gramReadAddrBase <= to_unsigned(vbuffer_line_addr, 16);
                                         end if;
                                         
                                         --if (vbuffer_vercounter < BufferHeight-1) then
@@ -351,9 +386,9 @@ begin
                               G <= palColor(7 downto 4);
                               B <= palColor(3 downto 0);
                          else
-                              R <= ('0', '1', '0', '0');--(others=>'0');
-                              G <= ('0', '1', '0', '0');--(others=>'0');
-                              B <= ('0', '1', '0', '0');--(others=>'0');
+                              R <= ('0', '0', '0', '0');--(others=>'0');
+                              G <= ('0', '0', '0', '0');--(others=>'0');
+                              B <= ('0', '0', '0', '0');--(others=>'0');
                          end if;
                     end if;
                end if;
@@ -386,10 +421,10 @@ begin
                     G <= (others => '0');
                     B <= (others => '0');
                     vgaIdle <= '1';
-                    gramReadEnabled <= '0';
+                    --gramReadEnabled <= '0';
                else
                     vgaIdle <= '0';
-                    gramReadEnabled <= '1';
+                    --gramReadEnabled <= '1';
                end if;
           end if;
      end process;

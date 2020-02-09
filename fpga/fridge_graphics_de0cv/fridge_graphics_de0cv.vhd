@@ -131,7 +131,9 @@ architecture main of FridgeMain is
                VMEM_STORE : in std_logic;
                VMEM_LOAD : in std_logic;
                VMEM_ADDR : in XCM2_DWORD;
-               VMEM_DATA : inout XCM2_WORD
+               VMEM_DATA : inout XCM2_WORD;
+               
+               DEBUG_BTN : in std_logic_vector(3 downto 0)
           );     
      end component FridgeGraphicsAdapter;
      
@@ -175,7 +177,8 @@ begin
           VGA_HS, VGA_VS, VGA_R, VGA_G, VGA_B,
           GPU_VIDEO_MODE_SWITCH, GPU_PALETTE_SWITCH, GPU_PRESENT_TRIGGER,
           GPU_BACK_STORE, GPU_BACK_LOAD, GPU_BACK_ADDR, GPU_BACK_DATA, GPU_BACK_CLR,
-          GPU_VMEM_STORE, GPU_VMEM_LOAD, GPU_VMEM_ADDR, GPU_VMEM_DATA
+          GPU_VMEM_STORE, GPU_VMEM_LOAD, GPU_VMEM_ADDR, GPU_VMEM_DATA,
+          KEY
           );
           
 end main;
