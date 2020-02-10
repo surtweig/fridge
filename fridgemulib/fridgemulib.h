@@ -123,8 +123,6 @@ typedef enum FRIDGE_IRCODE {
 
     DAD_BC, DAD_DE, DAD_HL, DAD_SP,
 
-    //DAA,
-
     ANA_A, ANA_B, ANA_C, ANA_D, ANA_E, ANA_H, ANA_L, ANA_M,
     ANI,
     ORA_A, ORA_B, ORA_C, ORA_D, ORA_E, ORA_H, ORA_L, ORA_M,
@@ -154,34 +152,47 @@ typedef enum FRIDGE_IRCODE {
 
     XTHL, SPHL, HLSP,
 
-    IIN, IOUT, HLT, EI, DI,
+    IIN, IOUT, HLT, EI, DI, // 231 instructions
 
-    // video memory instructions
+    // video controller instructions
+    VPRE,  // swaps back and visible buffers
+    VMODE, // switches video mode (A = 0 for EGA and 1 for TEXT)
+    VPAL,  // updates EGA pallette color (color A, rgb B, C, D)
+
+    // back buffer instructions
     VFSA,  // store A as byte on the back buffer at address HL
     VFSAC, // store A as color on the back buffer at position HL
     VFLA,  // load to A a byte on the back buffer at address HL
     VFLAC, // load to A a color on the back buffer at position HL
-    VFCLR, // fill back buffer with byte A
+    VS2F,  // (address BC, address HL)
+           // copies one byte (two pixels) from sprite memory at address HL
+           // to backbuffer at address BC
 
+    // sprite memory instructions
     VSSA,  // store A as byte in sprite memory at address HL
     VSSAC, // store A as color in sprite memory at position HL
     VSLA,  // load to A a byte in sprite memory at address HL
     VSLAC, // load to A a color in sprite memory at position HL
 
-    // video controller instructions
-    VPRE,  // swaps back and visible buffers
-    VMODE, // switches video mode (0 for EGA and 1 for TEXT)
-    VPAL,  // updates EGA pallette from the sprite memory at HL address as 16 triples of RGB bytes
 
     // sprites
-    VSS,  // set sprite (HL = address)
-    VSDQ, // draw sprite opaque (HL = position)
-    VSDT, // draw sprite transparent-0 (HL = position)
-    VSBA, // bitblit sprite AND (HL = position)
-    VSBO, // bitblit sprite OR (HL = position)
-    VSBX, // bitblit sprite XOR (HL = position)
-    VSRF, // read sprite from visible buffer (HL = position)
+    VSS, // set sprite (index A, width B, height C, address HL)
+    VSD, // draw sprite (index A, mode B, position HL)
+         // mode:
+         // 0 - invisible
+         // 1 - opaque
+         // 2 - transparent0
+         // 3 - additive
+         // 4 - subtractive
+         // 5 - bitwise and
+         // 6 - bitwise or
+         // 7 - bitwise xor
 
+    IR245,
+    IR246,
+    IR247,
+    IR248,
+    IR249,
     IR250,
     IR251,
     IR252,

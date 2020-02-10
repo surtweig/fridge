@@ -305,6 +305,102 @@ void ir_safe_IOUT(FRIDGE_SYSTEM* sys)
         corePanic(cpu);
 }
 
+void ir_VPRE(FRIDGE_SYSTEM* sys)
+{
+    if (sys->gpu->vframe == FRIDGE_VIDEO_FRAME_A)
+        sys->gpu->vframe = FRIDGE_VIDEO_FRAME_B;
+    else
+        sys->gpu->vframe = FRIDGE_VIDEO_FRAME_A;
+}
+
+void ir_VMODE(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD mode = sys->cpu->rA;
+    if (mode == 0)
+        sys->gpu->vmode = FRIDGE_VIDEO_EGA;
+    else if (mode == 1)
+        sys->gpu->vmode = FRIDGE_VIDEO_TEXT;
+}
+
+void ir_VPAL(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD colorPos = 3*sys->cpu->rA;
+    if (colorPos+2 < FRIDGE_GPU_PALETTE_SIZE)
+    {
+        sys->gpu->palette[colorPos] = sys->cpu->rB;
+        sys->gpu->palette[colorPos+1] = sys->cpu->rC;
+        sys->gpu->palette[colorPos+2] = sys->cpu->rD;
+    }
+}
+
+void ir_VFSA(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_FRAME_BUFFER_SIZE)
+        FRIDGE_gpu_active_frame(sys->gpu)[addr] = sys->cpu->rA;
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VFSAC(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD posX = sys->cpu->rH;
+    FRIDGE_WORD posY = sys->cpu->rL;
+    FRIDGE_RAM_ADDR addr = (posX + posY*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
+    if (addr < FRIDGE_GPU_FRAME_BUFFER_SIZE)
+    {
+        FRIDGE_WORD* frame = FRIDGE_gpu_active_frame(sys->gpu);
+        if (posX % 2 == 0)
+            frame[addr] = FRIDGE_GPU_WORD(
+                    FRIDGE_GPU_LEFT_PIXEL(sys->cpu->rA),
+                    FRIDGE_GPU_RIGHT_PIXEL(frame[addr]));
+        else
+            frame[addr] = FRIDGE_GPU_WORD(
+                    FRIDGE_GPU_LEFT_PIXEL(frame[addr]),
+                    FRIDGE_GPU_RIGHT_PIXEL(sys->cpu->rA));
+    }
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VFLA(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_FRAME_BUFFER_SIZE)
+        sys->cpu->rA = FRIDGE_gpu_active_frame(sys->gpu)[addr];
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VFLAC(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD posX = sys->cpu->rH;
+    FRIDGE_WORD posY = sys->cpu->rL;
+    FRIDGE_RAM_ADDR addr = (posX + posY*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
+    if (addr < FRIDGE_GPU_FRAME_BUFFER_SIZE)
+    {
+        FRIDGE_WORD* frame = FRIDGE_gpu_active_frame(sys->gpu);
+        if (posX % 2 == 0)
+            sys->cpu->rA = FRIDGE_GPU_LEFT_PIXEL(frame[addr]);
+        else
+            sys->cpu->rA = FRIDGE_GPU_RIGHT_PIXEL(frame[addr]);
+    }
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VS2F(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR spriteAddr = FRIDGE_cpu_pair_HL(sys->cpu);
+    FRIDGE_RAM_ADDR frameAddr = FRIDGE_cpu_pair_BC(sys->cpu);
+    if (spriteAddr < FRIDGE_GPU_SPRITE_MEMORY_SIZE && frameAddr < FRIDGE_GPU_FRAME_BUFFER_SIZE)
+    {
+        FRIDGE_gpu_active_frame(sys->gpu)[frameAddr] = sys->gpu->sprite_mem[spriteAddr];
+    }
+    else
+        corePanic(sys->cpu);
+}
+
 FRIDGE_WORD dummyDevInput(FRIDGE_SYSTEM* sys)
 {
     return 0;
@@ -411,7 +507,6 @@ FRIDGE_WORD rom_dev_input(FRIDGE_SYSTEM* sys)
     corePanic(sys->cpu);
     return 0;
 }
-
 
 void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
 {
@@ -721,6 +816,15 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case HLT: cpu->state = FRIDGE_CPU_HALTED; break;
         case EI: cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED; break;
         case DI: cpu->inte = FRIDGE_CPU_INTERRUPTS_DISABLED; break;
+
+        case VPRE:  ir_VPRE(sys);  break;
+        case VMODE: ir_VMODE(sys); break;
+        case VPAL:  ir_VPAL(sys);  break;
+        case VFSA:  ir_VFSA(sys);  break;
+        case VFSAC: ir_VFSAC(sys); break;
+        case VFLA:  ir_VFLA(sys);  break;
+        case VFLAC: ir_VFLAC(sys); break;
+        case VS2F:  ir_VS2F(sys);  break;
     }
 }
 
@@ -890,7 +994,7 @@ void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixel
             if (py >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
                 continue;
 
-            FRIDGE_RAM_ADDR addr = px/2 + py*FRIDGE_GPU_FRAME_EGA_WIDTH;
+            FRIDGE_RAM_ADDR addr = (px + py*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
             FRIDGE_WORD color;
             if (px % 2 == 0)
                 color = FRIDGE_GPU_LEFT_PIXEL(frame[addr]);
@@ -898,12 +1002,20 @@ void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixel
                 color = FRIDGE_GPU_RIGHT_PIXEL(frame[addr]);
             FRIDGE_WORD rgb[3] = {gpu->palette[color*3], gpu->palette[color*3+1], gpu->palette[color*3+2]};
 
+            int sprCounter = 0;
             for (int sid = 0; sid < FRIDGE_GPU_MAX_SPRITES; ++sid)
             {
                 FRIDGE_GPU_SPRITE* spr = &gpu->sprite_list[sid];
+                if (spr->mode == FRIDGE_GPU_SPRITE_INVISIBLE)
+                    continue;
+
+                if (sprCounter >= FRIDGE_GPU_MAX_SPRITES_PER_PIXEL)
+                    break;
+
                 if (px >= spr->position_x && py >= spr->position_y &&
                     px < spr->position_x+spr->size_x && py < spr->position_y+spr->size_y)
                 {
+                    ++sprCounter;
                     int sx = px - spr->position_x;
                     int sy = py - spr->position_y;
                     FRIDGE_RAM_ADDR pixelAddr = spritesDataSize[sid] + (sx + sy*spr->size_x)/2;
