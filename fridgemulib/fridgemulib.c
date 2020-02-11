@@ -481,11 +481,13 @@ FRIDGE_WORD keyboard_controller_dev_input(FRIDGE_SYSTEM* sys)
 void rom_tick(FRIDGE_SYSTEM* sys)
 {
     FRIDGE_ROM *rom = sys->rom;
-    if (rom->state == FRIDGE_ROM_OPERATE)
+    if (rom)
     {
-        FRIDGE_cpu_interrupt(sys, NOP, 0, 0);
-        rom->stream_position = 0;
-        rom->state = FRIDGE_ROM_STREAMING;
+        if (rom->state == FRIDGE_ROM_OPERATE) {
+            FRIDGE_cpu_interrupt(sys, NOP, 0, 0);
+            rom->stream_position = 0;
+            rom->state = FRIDGE_ROM_STREAMING;
+        }
     }
 }
 
