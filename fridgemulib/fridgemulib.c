@@ -401,6 +401,65 @@ void ir_VS2F(FRIDGE_SYSTEM* sys)
         corePanic(sys->cpu);
 }
 
+void ir_VFO(FRIDGE_SYSTEM* sys)
+{
+    sys->gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
+    sys->gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
+}
+
+void ir_VSSA(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
+        sys->gpu->sprite_mem[addr] = sys->cpu->rA;
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VSLA(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
+        sys->cpu->rA = sys->gpu->sprite_mem[addr];
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VSS(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD sid = sys->cpu->rA;
+    FRIDGE_WORD width = sys->cpu->rB;
+    FRIDGE_WORD height = sys->cpu->rC;
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    FRIDGE_RAM_ADDR size = width*height;
+    FRIDGE_RAM_ADDR endAddr = addr + size/2 + size%2;
+    if (sid >= FRIDGE_GPU_MAX_SPRITES || endAddr >= FRIDGE_GPU_SPRITE_MEMORY_SIZE)
+        corePanic(sys->cpu);
+    else
+    {
+        sys->gpu->sprite_list[sid].mode = FRIDGE_GPU_SPRITE_INVISIBLE;
+        sys->gpu->sprite_list[sid].size_x = width;
+        sys->gpu->sprite_list[sid].size_y = height;
+        sys->gpu->sprite_list[sid].data = addr;
+    }
+}
+
+void ir_VSD(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD sid = sys->cpu->rA;
+    FRIDGE_WORD mode = sys->cpu->rB;
+    FRIDGE_WORD position_x = sys->cpu->rH;
+    FRIDGE_WORD position_y = sys->cpu->rL;
+    if (sid >= FRIDGE_GPU_MAX_SPRITES)
+        corePanic(sys->cpu);
+    else
+    {
+        sys->gpu->sprite_list[sid].mode = mode;
+        sys->gpu->sprite_list[sid].position_x = position_x;
+        sys->gpu->sprite_list[sid].position_y = position_y;
+    }
+}
+
 FRIDGE_WORD dummyDevInput(FRIDGE_SYSTEM* sys)
 {
     return 0;
@@ -825,6 +884,11 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VFLA:  ir_VFLA(sys);  break;
         case VFLAC: ir_VFLAC(sys); break;
         case VS2F:  ir_VS2F(sys);  break;
+        case VFO:   ir_VFO(sys);   break;
+        case VSSA:  ir_VSSA(sys);  break;
+        case VSLA:  ir_VSLA(sys);  break;
+        case VSS:   ir_VSS(sys);   break;
+        case VSD:   ir_VSD(sys);   break;
     }
 }
 
@@ -936,6 +1000,8 @@ void FRIDGE_gpu_reset (FRIDGE_GPU* gpu)
     {
         gpu->palette[i] = FRIDGE_gpu_default_palette[i];
     }
+    gpu->frame_hor_offset = 0;
+    gpu->frame_ver_offset = 0;
 }
 
 void FRIDGE_gpu_tick(FRIDGE_GPU* gpu)
@@ -961,12 +1027,12 @@ FRIDGE_WORD* FRIDGE_gpu_active_frame(FRIDGE_GPU* gpu)
     return 0;
 }
 
-void FRIDGE_gpu_render_ega_rgb8(const FRIDGE_GPU* gpu, unsigned char* pixels)
+void FRIDGE_gpu_render_ega_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels)
 {
     FRIDGE_gpu_render_ega_rgb8_area(gpu, pixels, 0, 0, FRIDGE_GPU_FRAME_EGA_WIDTH, FRIDGE_GPU_FRAME_EGA_HEIGHT, 0);
 }
 
-void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixels,
+void FRIDGE_gpu_render_ega_rgb8_area(FRIDGE_GPU* gpu, unsigned char* pixels,
                                      FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset)
 {
     FRIDGE_RAM_ADDR spritesDataSize[FRIDGE_GPU_MAX_SPRITES];
@@ -985,14 +1051,17 @@ void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixel
     if (h > FRIDGE_GPU_FRAME_EGA_HEIGHT)
         h = FRIDGE_GPU_FRAME_EGA_HEIGHT;
 
-    for (FRIDGE_WORD py = y; py < y + h; ++py)
+    for (FRIDGE_WORD iy = y; iy < y + h; ++iy)
     {
-        for (FRIDGE_WORD px = x; px < x + w; ++px)
+        for (FRIDGE_WORD ix = x; ix < x + w; ++ix)
         {
-            if (px >= FRIDGE_GPU_FRAME_EGA_WIDTH)
+            if (ix >= FRIDGE_GPU_FRAME_EGA_WIDTH)
                 continue;
-            if (py >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
+            if (iy >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
                 continue;
+
+            FRIDGE_WORD px = (ix + gpu->frame_hor_offset) % FRIDGE_GPU_FRAME_EGA_WIDTH;
+            FRIDGE_WORD py = (iy + gpu->frame_ver_offset) % FRIDGE_GPU_FRAME_EGA_HEIGHT;
 
             FRIDGE_RAM_ADDR addr = (px + py*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
             FRIDGE_WORD color;
@@ -1012,12 +1081,12 @@ void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixel
                 if (sprCounter >= FRIDGE_GPU_MAX_SPRITES_PER_PIXEL)
                     break;
 
-                if (px >= spr->position_x && py >= spr->position_y &&
-                    px < spr->position_x+spr->size_x && py < spr->position_y+spr->size_y)
+                FRIDGE_WORD sx = px - spr->position_x;
+                FRIDGE_WORD sy = py - spr->position_y;
+
+                if (sx < spr->size_x && sy < spr->size_y)
                 {
                     ++sprCounter;
-                    int sx = px - spr->position_x;
-                    int sy = py - spr->position_y;
                     FRIDGE_RAM_ADDR pixelAddr = spritesDataSize[sid] + (sx + sy*spr->size_x)/2;
                     FRIDGE_WORD sprcolor = 0;
                     if (pixelAddr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
@@ -1087,7 +1156,7 @@ void FRIDGE_gpu_render_ega_rgb8_area(const FRIDGE_GPU* gpu, unsigned char* pixel
 
 void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_cpu_interrupt(sys->cpu, CALL, FRIDGE_HIGH_WORD(FRIDGE_IRQ_SYS_TIMER), FRIDGE_LOW_WORD(FRIDGE_IRQ_SYS_TIMER));
+    FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_HIGH_WORD(FRIDGE_IRQ_SYS_TIMER), FRIDGE_LOW_WORD(FRIDGE_IRQ_SYS_TIMER));
 }
 
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)

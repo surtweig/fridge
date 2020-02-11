@@ -167,12 +167,11 @@ typedef enum FRIDGE_IRCODE {
     VS2F,  // (address BC, address HL)
            // copies one byte (two pixels) from sprite memory at address HL
            // to backbuffer at address BC
+    VFO,   // sets visual buffer pixel offset (position HL)
 
     // sprite memory instructions
     VSSA,  // store A as byte in sprite memory at address HL
-    VSSAC, // store A as color in sprite memory at position HL
     VSLA,  // load to A a byte in sprite memory at address HL
-    VSLAC, // load to A a color in sprite memory at position HL
 
 
     // sprites
@@ -188,6 +187,7 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
+    IR244,
     IR245,
     IR246,
     IR247,
@@ -303,6 +303,8 @@ typedef struct FRIDGE_GPU
     FRIDGE_WORD frame_b[FRIDGE_GPU_FRAME_BUFFER_SIZE];
     FRIDGE_VIDEO_MODE vmode;
     FRIDGE_VIDEO_FRAME vframe;
+    FRIDGE_WORD frame_hor_offset;
+    FRIDGE_WORD frame_ver_offset;
     FRIDGE_WORD palette[FRIDGE_GPU_PALETTE_SIZE];
     FRIDGE_WORD sprite_mem[FRIDGE_GPU_SPRITE_MEMORY_SIZE];
     FRIDGE_GPU_SPRITE sprite_list[FRIDGE_GPU_MAX_SPRITES];
@@ -333,8 +335,8 @@ void FRIDGE_gpu_reset                 (FRIDGE_GPU* gpu);
 void FRIDGE_gpu_tick                  (FRIDGE_GPU* gpu);
 FRIDGE_WORD* FRIDGE_gpu_visible_frame (FRIDGE_GPU* gpu);
 FRIDGE_WORD* FRIDGE_gpu_active_frame  (FRIDGE_GPU* gpu);
-void FRIDGE_gpu_render_ega_rgb8       (const FRIDGE_GPU* gpu, unsigned char* pixels);
-void FRIDGE_gpu_render_ega_rgb8_area  (const FRIDGE_GPU* gpu, unsigned char* pixels,
+void FRIDGE_gpu_render_ega_rgb8       (FRIDGE_GPU* gpu, unsigned char* pixels);
+void FRIDGE_gpu_render_ega_rgb8_area  (FRIDGE_GPU* gpu, unsigned char* pixels,
                                        FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset);
 
 void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys);
