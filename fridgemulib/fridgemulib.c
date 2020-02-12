@@ -472,7 +472,7 @@ void dummyDevOutput(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
 
 FRIDGE_WORD keyboard_controller_dev_input(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_KEYBOARD_CONTROLLER* kbrd;
+    FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
     FRIDGE_WORD kdata = kbrd->key_buffer[kbrd->output_index];
     kbrd->key_buffer[kbrd->output_index++] = 0;
     return kdata;
@@ -549,7 +549,7 @@ void rom_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
     else
     {
         corePanic(sys->cpu);
-        rom->state == FRIDGE_ROM_SELECT_MODE;
+        rom->state = FRIDGE_ROM_SELECT_MODE;
     }
 }
 
@@ -1164,7 +1164,7 @@ void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
 {
     FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
-    FRIDGE_WORD keyData = FRIDGE_KEYBOARD_KEY_STATE_MASK | FRIDGE_KEYBOARD_KEY_CODE_MASK & key;
+    FRIDGE_WORD keyData = FRIDGE_KEYBOARD_KEY_STATE_MASK | (FRIDGE_KEYBOARD_KEY_CODE_MASK & key);
     kbrd->key_buffer[kbrd->input_index++] = keyData;
     if (kbrd->input_index >= FRIDGE_KEYBOARD_BUFFER_SIZE)
         kbrd->input_index = 0;
@@ -1173,7 +1173,7 @@ void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
 void FRIDGE_keyboard_release(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
 {
     FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
-    FRIDGE_WORD keyData = 0x00 | FRIDGE_KEYBOARD_KEY_CODE_MASK & key;
+    FRIDGE_WORD keyData = FRIDGE_KEYBOARD_KEY_CODE_MASK & key;
     kbrd->key_buffer[kbrd->input_index++] = keyData;
     if (kbrd->input_index >= FRIDGE_KEYBOARD_BUFFER_SIZE)
         kbrd->input_index = 0;
