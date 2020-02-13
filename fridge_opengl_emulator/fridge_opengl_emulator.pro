@@ -16,11 +16,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    ../falc/FridgeAssemblyLanguageCompiler.cpp \
     ../fridgemulib/fridgemulib.c \
     main.cpp \
     mainwindow.cpp
 
 HEADERS += \
+    ../falc/FridgeAssemblyLanguageCompiler.h \
     ../fridgemulib/fridgemulib.h \
     mainwindow.h
 
@@ -28,12 +30,19 @@ FORMS += \
     mainwindow.ui
 
 INCLUDEPATH += \
+    $$PWD/../include \
+    $$PWD/../falc \
     $$PWD/../fridgemulib
 
 DEPENDPATH += \
+    $$PWD/../falc \
     $$PWD/../fridgemulib
+
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
+RESOURCES += \
+    buttons.qrc

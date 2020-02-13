@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/buttons">
+        <file>icons8-forward-96.png</file>
+        <file>icons8-pause-96.png</file>
+        <file>icons8-play-96.png</file>
+        <file>icons8-refresh-96.png</file>
+        <file>icons8-reset-96.png</file>
+        <file>icons8-load-cargo-96.png</file>
+        <file>icons8-long-arrow-left-96.png</file>
+        <file>icons8-open-document-96.png</file>
+        <file>icons8-right-arrow-96.png</file>
+    </qresource>
+</RCC>

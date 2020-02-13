@@ -18,8 +18,18 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    void updateRegistersView();
+
+private slots:
+    void on_sysTickBtn_clicked();
+
+    void on_sysResetBtn_clicked();
+
 private:
     Ui::MainWindow *ui;
-    FRIDGE_CPU *cpu;
+    FRIDGE_SYSTEM *sys;
+
+    void initFridge();
+    void destroyFridge();
 };
 #endif // MAINWINDOW_H
