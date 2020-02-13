@@ -135,7 +135,7 @@ typedef enum FRIDGE_IRCODE {
     IIN, IOUT, HLT, EI, DI, // 231 instructions
 
     // video controller instructions
-    VPRE,  // swaps back and visible buffers
+    VPRE,  // swaps back and visible buffers and sets buffer offset (position HL)
     VMODE, // switches video mode (A = 0 for EGA and 1 for TEXT)
     VPAL,  // updates EGA pallette color (color A, rgb B, C, D)
 
@@ -147,7 +147,6 @@ typedef enum FRIDGE_IRCODE {
     VS2F,  // (address BC, address HL)
            // copies one byte (two pixels) from sprite memory at address HL
            // to backbuffer at address BC
-    VFO,   // sets visual buffer pixel offset (position HL)
 
     // sprite memory instructions
     VSSA,  // store A as byte in sprite memory at address HL

@@ -307,6 +307,9 @@ void ir_safe_IOUT(FRIDGE_SYSTEM* sys)
 
 void ir_VPRE(FRIDGE_SYSTEM* sys)
 {
+    sys->gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
+    sys->gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
+
     if (sys->gpu->vframe == FRIDGE_VIDEO_FRAME_A)
         sys->gpu->vframe = FRIDGE_VIDEO_FRAME_B;
     else
@@ -399,12 +402,6 @@ void ir_VS2F(FRIDGE_SYSTEM* sys)
     }
     else
         corePanic(sys->cpu);
-}
-
-void ir_VFO(FRIDGE_SYSTEM* sys)
-{
-    sys->gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
-    sys->gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
 }
 
 void ir_VSSA(FRIDGE_SYSTEM* sys)
@@ -886,7 +883,6 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VFLA:  ir_VFLA(sys);  break;
         case VFLAC: ir_VFLAC(sys); break;
         case VS2F:  ir_VS2F(sys);  break;
-        case VFO:   ir_VFO(sys);   break;
         case VSSA:  ir_VSSA(sys);  break;
         case VSLA:  ir_VSLA(sys);  break;
         case VSS:   ir_VSS(sys);   break;
