@@ -207,6 +207,13 @@
              <item>
               <layout class="QHBoxLayout" name="horizontalLayout_6">
                <item>
+                <widget class="QLineEdit" name="ramAddrEdit">
+                 <property name="placeholderText">
+                  <string>Search address</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <spacer name="horizontalSpacer_2">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>
@@ -236,7 +243,7 @@
               </layout>
              </item>
              <item>
-              <widget class="QTableView" name="ramTableView"/>
+              <widget class="QTableWidget" name="ramTableWidget"/>
              </item>
              <item>
               <layout class="QHBoxLayout" name="horizontalLayout_7">
@@ -310,6 +317,66 @@
             <attribute name="title">
              <string>Assembler</string>
             </attribute>
+            <layout class="QVBoxLayout" name="verticalLayout_24">
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_10">
+               <item>
+                <spacer name="horizontalSpacer_3">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QPushButton" name="asmCompileBtn">
+                 <property name="text">
+                  <string>Compile</string>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="buttons.qrc">
+                   <normaloff>:/buttons/icons8-load-cargo-96.png</normaloff>:/buttons/icons8-load-cargo-96.png</iconset>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="asmLoadCodeBtn">
+                 <property name="text">
+                  <string>Load...</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="asmSaveCodeBtn">
+                 <property name="text">
+                  <string>Save...</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <widget class="QTextEdit" name="textEdit">
+               <property name="font">
+                <font>
+                 <family>Consolas</family>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="lineWrapMode">
+                <enum>QTextEdit::NoWrap</enum>
+               </property>
+               <property name="acceptRichText">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
            <widget class="QWidget" name="tab_6">
             <attribute name="title">
