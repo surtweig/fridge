@@ -10,9 +10,13 @@ MainWindow::MainWindow(QWidget *parent)
     initFridge();
 
     ui->setupUi(this);
+
+    pixBufferRenderer = new PixBufferRenderer(ui->VisibleBufferWidget);
+    pixBufferRenderer->sys = sys;
+
     ramViewPosition = 0;
     ramSelectedAddress = 0;
-
+    logbuf = new MessagesLogBuf(ui->messagesLogView);
     updateRegistersView();
     updateRAMView();
 }
@@ -21,7 +25,9 @@ void MainWindow::initFridge()
 {
     sys = new FRIDGE_SYSTEM();
     sys->cpu = new FRIDGE_CPU();
+    sys->gpu = new FRIDGE_GPU();
     FRIDGE_cpu_reset(sys->cpu);
+    FRIDGE_gpu_reset(sys->gpu);
 }
 
 void MainWindow::destroyFridge()
@@ -126,6 +132,7 @@ void MainWindow::on_sysTickBtn_clicked()
     FRIDGE_sys_tick(sys);
     updateRegistersView();
     updateRAMView();
+    ui->VisibleBufferWidget->repaint();
 }
 
 void MainWindow::on_sysResetBtn_clicked()
@@ -192,4 +199,29 @@ void MainWindow::on_ramScrollToSP_clicked()
 
 void MainWindow::on_asmCompileBtn_clicked()
 {
+    ofstream falcFile(FalcTempFile, ios::out);
+    falcFile << ui->asmCodeEdit->toPlainText().toStdString();
+    falcFile.close();
+    ostream logstream(logbuf);
+    FridgeAssemblyLanguageCompiler falc("", FalcTempFile, "", {}, &logstream);
+    memcpy(sys->cpu->ram + falc.getOffset(), falc.getObjectCode(), falc.getProgramSize());
+
+    updateRAMView();
+}
+
+MessagesLogBuf::MessagesLogBuf(QPlainTextEdit* textView) : streambuf()
+{
+    this->textView = textView;
+}
+
+std::streamsize MessagesLogBuf::xsputn(const char_type* s, std::streamsize n)
+{
+    textView->appendPlainText(QString::fromLocal8Bit(s, n));
+    return n;
+}
+
+streambuf::int_type MessagesLogBuf::overflow(int_type c)
+{
+    textView->appendPlainText(QString((char)c));
+    return c;
 }

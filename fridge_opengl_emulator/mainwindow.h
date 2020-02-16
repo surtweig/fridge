@@ -5,10 +5,27 @@
 extern "C" {
 #include <fridgemulib.h>
 }
+#include <iostream>
+#include <fstream>
+#include <streambuf>
+#include <qplaintextedit.h>
+#include <PixBufferRenderer.h>
+using namespace std;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
+
+class MessagesLogBuf : public streambuf
+{
+private:
+    QPlainTextEdit* textView;
+
+public:
+    MessagesLogBuf(QPlainTextEdit* textView);
+    virtual std::streamsize xsputn(const char_type* s, std::streamsize n);
+    virtual int_type overflow(int_type c);
+};
 
 class MainWindow : public QMainWindow
 {
@@ -17,6 +34,11 @@ class MainWindow : public QMainWindow
     const int RAMViewRowsCount = 16;
     const int RAMViewColumnsCount = 16;
     const QColor ErrorBackgroundColor = QColor::fromRgb(255, 128, 128);
+    const string FalcTempFile = "TempProgram.falc";
+    const string BinTempFile = "TempProgram.bin";
+
+private:
+    PixBufferRenderer* pixBufferRenderer;
 
 public:
     MainWindow(QWidget *parent = nullptr);
@@ -42,6 +64,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     FRIDGE_SYSTEM *sys;
+    MessagesLogBuf *logbuf;
 
     int ramViewPosition;
     int ramSelectedAddress;
