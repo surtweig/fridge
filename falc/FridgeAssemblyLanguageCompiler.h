@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cctype>
 #include <vector>
 #include <array>
 #include <map>
@@ -112,8 +113,12 @@ private:
     string int_to_hex_vhd(FRIDGE_WORD i);
 
 public:
-    FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL = false);
-
+    FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName,
+                                   string outputFile,
+                                   vector<string> includeFolders, ostream* errstr, bool saveVHDL = false);
+    FRIDGE_WORD* getObjectCode() { return objectCode; }
+    FRIDGE_RAM_ADDR getOffset() { return offset; }
+    FRIDGE_RAM_ADDR getProgramSize() { return programSize; }
     void printParsed();
     void printCompiled();
     void printCompiled(ostream* f);

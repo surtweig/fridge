@@ -34,9 +34,12 @@ FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRoot
                 if (addressMarkup())
                     if (generateObjectCode())
                     {
-                        saveObjectCode(outputFile);
-                        if (saveVHDL)
-                            saveObjectCodeVHDL(outputFile + ".vhd");
+                        if (outputFile.length() > 0)
+                        {
+                            saveObjectCode(outputFile);
+                            if (saveVHDL)
+                                saveObjectCodeVHDL(outputFile + ".vhd");
+                        }
                         noerrors = true;
                         logout("Compilation successful.");
                     }
@@ -1623,4 +1626,6 @@ FridgeAssemblyLanguageCompiler::~FridgeAssemblyLanguageCompiler()
 {
     if (objectCode != nullptr)
         free(objectCode);
+    for (map<string, StaticResourceInfo>::iterator i = resources.begin(); i != resources.end(); ++i)
+        free(i->second.pdata);
 }
