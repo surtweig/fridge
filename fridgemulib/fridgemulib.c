@@ -1042,7 +1042,7 @@ void FRIDGE_gpu_render_ega_rgb8_area(FRIDGE_GPU* gpu, unsigned char* pixels,
     }
 
     FRIDGE_WORD* frame = FRIDGE_gpu_visible_frame(gpu);
-    FRIDGE_RAM_ADDR output_addr = 0;
+    unsigned int output_addr = 0;
 
     if (w > FRIDGE_GPU_FRAME_EGA_WIDTH)
         w = FRIDGE_GPU_FRAME_EGA_WIDTH;
