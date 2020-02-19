@@ -9,7 +9,9 @@ extern "C" {
 #include <fstream>
 #include <streambuf>
 #include <qplaintextedit.h>
-#include <PixBufferRenderer.h>
+#include "PixBufferRenderer.h"
+#include "EmulatorThread.h"
+
 using namespace std;
 
 QT_BEGIN_NAMESPACE
@@ -39,6 +41,7 @@ class MainWindow : public QMainWindow
 
 private:
     PixBufferRenderer* pixBufferRenderer;
+    EmulatorThread* emuThread;
 
 public:
     MainWindow(QWidget *parent = nullptr);
@@ -46,6 +49,7 @@ public:
 
     void updateRegistersView();
     void updateRAMView();
+    void updateAll();
 
 private slots:
     void on_sysTickBtn_clicked();
@@ -54,12 +58,14 @@ private slots:
     void on_ramScrollLeftBtn_clicked();
     void on_ramAddrEdit_returnPressed();
     void on_ramAddrEdit_textChanged(const QString &arg1);
-
     void on_ramScrollToPC_clicked();
-
     void on_ramScrollToSP_clicked();
-
     void on_asmCompileBtn_clicked();
+    void on_emuThread_framePresented();
+
+    void on_sysRunBtn_clicked();
+
+    void on_sysPauseBtn_clicked();
 
 private:
     Ui::MainWindow *ui;

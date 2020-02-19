@@ -14,6 +14,11 @@ MainWindow::MainWindow(QWidget *parent)
     pixBufferRenderer = new PixBufferRenderer(ui->VisibleBufferWidget);
     pixBufferRenderer->sys = sys;
 
+    emuThread = new EmulatorThread(sys, 1e7, 1e5);
+    connect(emuThread, &EmulatorThread::framePresented, this, &MainWindow::on_emuThread_framePresented);
+    //connect(emuThread, &EmulatorThread::finished, emuThread, &QObject::deleteLater);
+    emuThread->start();
+
     ramViewPosition = 0;
     ramSelectedAddress = 0;
     logbuf = new MessagesLogBuf(ui->messagesLogView);
@@ -33,11 +38,13 @@ void MainWindow::initFridge()
 void MainWindow::destroyFridge()
 {
     delete sys->cpu;
+    delete sys->gpu;
     delete sys;
 }
 
 MainWindow::~MainWindow()
 {
+    delete emuThread;
     delete ui;
     destroyFridge();
 }
@@ -121,25 +128,49 @@ void MainWindow::updateRAMView()
     */
 }
 
+void MainWindow::updateAll()
+{
+    emuThread->SetLock();
+    updateRAMView();
+    updateRegistersView();
+    ui->VisibleBufferWidget->repaint();
+    if (emuThread->IsActive())
+        this->setWindowTitle("Fridge emulator [Running] " + QString::number(emuThread->MeasuredFrequency()));
+    else
+        this->setWindowTitle("Fridge emulator");
+    emuThread->ReleaseLock();
+}
+
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    emuThread->SetLock();
     updateRAMView();
+    emuThread->ReleaseLock();
 }
 
 void MainWindow::on_sysTickBtn_clicked()
 {
-    FRIDGE_sys_tick(sys);
-    updateRegistersView();
-    updateRAMView();
-    ui->VisibleBufferWidget->repaint();
+    if (!emuThread->IsActive())
+    {
+        emuThread->SetLock();
+        FRIDGE_sys_tick(sys);
+        updateRegistersView();
+        updateRAMView();
+        ui->VisibleBufferWidget->repaint();
+        emuThread->ReleaseLock();
+    }
 }
 
 void MainWindow::on_sysResetBtn_clicked()
 {
+    emuThread->SetActive(false);
+
+    emuThread->SetLock();
     FRIDGE_cpu_reset(sys->cpu);
-    updateRegistersView();
-    updateRAMView();
+    FRIDGE_gpu_reset(sys->gpu);
+    emuThread->ReleaseLock();
+    updateAll();
 }
 
 void MainWindow::on_ramScrollRightBtn_clicked()
@@ -147,7 +178,10 @@ void MainWindow::on_ramScrollRightBtn_clicked()
     ramViewPosition += RAMViewRowsCount*RAMViewColumnsCount;
     if (ramViewPosition >= FRIDGE_RAM_SIZE)
         ramViewPosition = FRIDGE_RAM_SIZE - RAMViewRowsCount*RAMViewColumnsCount;
+
+    emuThread->SetLock();
     updateRAMView();
+    emuThread->ReleaseLock();
 }
 
 void MainWindow::on_ramScrollLeftBtn_clicked()
@@ -155,7 +189,10 @@ void MainWindow::on_ramScrollLeftBtn_clicked()
     ramViewPosition -= RAMViewRowsCount*RAMViewColumnsCount;
     if (ramViewPosition < 0)
         ramViewPosition = 0;
+
+    emuThread->SetLock();
     updateRAMView();
+    emuThread->ReleaseLock();
 }
 
 void MainWindow::on_ramAddrEdit_returnPressed()
@@ -166,7 +203,10 @@ void MainWindow::on_ramAddrEdit_returnPressed()
     {
         ramSelectedAddress = addr;
         ramViewPosition = (addr / (RAMViewRowsCount*RAMViewColumnsCount)) * RAMViewRowsCount*RAMViewColumnsCount;
+
+        emuThread->SetLock();
         updateRAMView();
+        emuThread->ReleaseLock();
     }
 }
 
@@ -187,26 +227,42 @@ void MainWindow::on_ramScrollToPC_clicked()
 {
     ramSelectedAddress = sys->cpu->PC;
     ramViewPosition = (ramSelectedAddress / (RAMViewRowsCount*RAMViewColumnsCount)) * RAMViewRowsCount*RAMViewColumnsCount;
+
+    emuThread->SetLock();
     updateRAMView();
+    emuThread->ReleaseLock();
 }
 
 void MainWindow::on_ramScrollToSP_clicked()
 {
     ramSelectedAddress = sys->cpu->SP;
     ramViewPosition = (ramSelectedAddress / (RAMViewRowsCount*RAMViewColumnsCount)) * RAMViewRowsCount*RAMViewColumnsCount;
+
+    emuThread->SetLock();
     updateRAMView();
+    emuThread->ReleaseLock();
 }
 
 void MainWindow::on_asmCompileBtn_clicked()
 {
-    ofstream falcFile(FalcTempFile, ios::out);
-    falcFile << ui->asmCodeEdit->toPlainText().toStdString();
-    falcFile.close();
-    ostream logstream(logbuf);
-    FridgeAssemblyLanguageCompiler falc("", FalcTempFile, "", {}, &logstream);
-    memcpy(sys->cpu->ram + falc.getOffset(), falc.getObjectCode(), falc.getProgramSize());
+    if (!emuThread->IsActive())
+    {
+        ofstream falcFile(FalcTempFile, ios::out);
+        falcFile << ui->asmCodeEdit->toPlainText().toStdString();
+        falcFile.close();
+        ostream logstream(logbuf);
+        FridgeAssemblyLanguageCompiler falc("", FalcTempFile, "", {}, &logstream);
 
-    updateRAMView();
+        emuThread->SetLock();
+        memcpy(sys->cpu->ram + falc.getOffset(), falc.getObjectCode(), falc.getProgramSize());
+        updateRAMView();
+        emuThread->ReleaseLock();
+    }
+}
+
+void MainWindow::on_emuThread_framePresented()
+{
+    updateAll();
 }
 
 MessagesLogBuf::MessagesLogBuf(QPlainTextEdit* textView) : streambuf()
@@ -224,4 +280,19 @@ streambuf::int_type MessagesLogBuf::overflow(int_type c)
 {
     textView->appendPlainText(QString((char)c));
     return c;
+}
+
+void MainWindow::on_sysRunBtn_clicked()
+{
+    emuThread->SetActive(true);
+    ui->sysTickBtn->setEnabled(false);
+    ui->asmCompileBtn->setEnabled(false);
+}
+
+void MainWindow::on_sysPauseBtn_clicked()
+{
+    emuThread->SetActive(false);
+    ui->sysTickBtn->setEnabled(true);
+    ui->asmCompileBtn->setEnabled(true);
+    updateAll();
 }

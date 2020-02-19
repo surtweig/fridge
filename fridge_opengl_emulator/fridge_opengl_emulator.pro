@@ -18,6 +18,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     ../falc/FridgeAssemblyLanguageCompiler.cpp \
     ../fridgemulib/fridgemulib.c \
+    EmulatorThread.cpp \
     PixBufferRenderer.cpp \
     main.cpp \
     mainwindow.cpp
@@ -25,6 +26,7 @@ SOURCES += \
 HEADERS += \
     ../falc/FridgeAssemblyLanguageCompiler.h \
     ../fridgemulib/fridgemulib.h \
+    EmulatorThread.h \
     PixBufferRenderer.h \
     mainwindow.h
 
