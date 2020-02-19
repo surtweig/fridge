@@ -8,7 +8,7 @@ namespace CPM
 {
     struct CPMRelativeCodeChunk
     {
-        XCM2_WORD* code;
+        FRIDGE_WORD* code;
         int size;
         vector<int> internalReferences;
         map<int, CPMStaticSymbol*> staticReferences;
@@ -38,13 +38,14 @@ namespace CPM
         CPMFunctionSymbol* ownerFunction;
         CPMSyntaxTreeNode* syntaxNode;
         CPMExecutableSemanticNode* parent;
-        vector<CPMExecutableSemanticNode*> children;
 
     protected:
-        CPMExecutableSemanticNode(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
-        virtual void procreate() = 0;
+        vector<CPMExecutableSemanticNode*> children;
+
+        virtual void procreate() {};
     public:
-        virtual void GenerateCode(CPMRelativeCodeChunk& code) = 0;
+        CPMExecutableSemanticNode(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
+        virtual void GenerateCode(CPMRelativeCodeChunk& code) {};
         inline CPMFunctionSymbol* OwnerFunction() { return ownerFunction; }
         inline CPMSyntaxTreeNode* SyntaxNode() { return syntaxNode; }
         inline CPMExecutableSemanticNode* Parent() { return parent; }
@@ -52,7 +53,7 @@ namespace CPM
         ~CPMExecutableSemanticNode();
     };
 
-    class CPMSemanticOperator : CPMExecutableSemanticNode
+    class CPMSemanticOperator : public CPMExecutableSemanticNode
     {
     private:
         CPMFunctionSignature signature;
@@ -66,30 +67,32 @@ namespace CPM
 
     };
 
-    class CPMSemanticBlock : CPMExecutableSemanticNode
+    class CPMSemanticBlock : public CPMExecutableSemanticNode
     {
     protected:
         map<string, CPMDataSymbol> locals;
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
-        CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         virtual void procreate();
+
+        friend class CPMOperator_Alloc;
     public:
+        CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         ~CPMSemanticBlock();
     };
 
-    class CPMFunctionSemanticBlock : CPMSemanticBlock
+    class CPMFunctionSemanticBlock : public CPMSemanticBlock
     {
     public:
         CPMFunctionSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
     };
 
-    class CPMOperator_Alloc : CPMExecutableSemanticNode
+    class CPMOperator_Alloc : public CPMExecutableSemanticNode
     {
-    protected:
-        CPMOperator_Alloc(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
     public:
+        CPMOperator_Alloc(CPMDataType dataType, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         virtual void GenerateCode(CPMRelativeCodeChunk& code);
+        virtual void procreate() {};
     };
 
     class CPMIntermediate

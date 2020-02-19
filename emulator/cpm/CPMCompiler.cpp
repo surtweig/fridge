@@ -197,7 +197,7 @@ namespace CPM
         CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
         ss->isconst = isConst;
         ss->field.type = type;
-        ss->field.data.push_back((XCM2_WORD*)data);
+        ss->field.data.push_back((FRIDGE_WORD*)data);
         return ss;
     }
 
@@ -918,7 +918,7 @@ namespace CPM
         }
     }
 
-    CPMDataType CPMCompiler::resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    vector<string> CPMCompiler::ParseSymbolName(const string& name)
     {
         vector<string> parsedName;
         stringstream sname;
@@ -926,6 +926,12 @@ namespace CPM
         string subname;
         while (getline(sname, subname, NameSeparator))
             parsedName.push_back(subname);
+        return parsedName;
+    }
+
+    CPMDataType CPMCompiler::resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    {
+        vector<string> parsedName = CPMCompiler::ParseSymbolName(name);
 
         CPMDataType result = CPM_DATATYPE_UNDEFINED;
 
@@ -1052,9 +1058,9 @@ namespace CPM
         return result;
     }
 
-    CPMFunctionSymbol* CPMCompiler::resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL)
+    CPMFunctionSymbol* CPMCompiler::resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
     {
-
+        return NULL;
     }
 
     int CPMCompiler::parseNum(const string &num)
@@ -1224,8 +1230,8 @@ namespace CPM
     {
         if (valueNode->type == CPM_BLOCK)
         {
-            CPMStructSymbol* structInstance = new CPMStructSymbol(*structTypes[symbol->type]);//(XCM2_WORD*)malloc(structsymbol->size);           
-            symbol->data[index] = (XCM2_WORD*)structInstance;
+            CPMStructSymbol* structInstance = new CPMStructSymbol(*structTypes[symbol->type]);//(FRIDGE_WORD*)malloc(structsymbol->size);           
+            symbol->data[index] = (FRIDGE_WORD*)structInstance;
 
             for (int i = 1; i < valueNode->children.size() - 1; ++i)
             {                
@@ -1385,7 +1391,7 @@ namespace CPM
             }
             else
             {
-                symbol->data[index] = (XCM2_WORD*)val;
+                symbol->data[index] = (FRIDGE_WORD*)val;
                 return true;
             }
         }
@@ -1404,7 +1410,7 @@ namespace CPM
         if (valueNode->type == CPM_STR)
         {
             string s = CPMSTRContent(valueNode);
-            XCM2_WORD* s_ptr = (XCM2_WORD*)malloc(s.size() + 1);
+            FRIDGE_WORD* s_ptr = (FRIDGE_WORD*)malloc(s.size() + 1);
             memcpy(s_ptr, s.c_str(), s.size());
             s_ptr[s.size()] = 0;
 
@@ -1425,7 +1431,7 @@ namespace CPM
 
         if (valueNode->type == CPM_STR && valueNode->text.size() == 3)
         {
-            symbol->data[index] = (XCM2_WORD*)valueNode->text[1];
+            symbol->data[index] = (FRIDGE_WORD*)valueNode->text[1];
         }
         else if (valueNode->type == CPM_NUM)
         {
@@ -1436,11 +1442,11 @@ namespace CPM
                 noErrors = false;
                 return false;
             }
-            symbol->data[index] = (XCM2_WORD*)ccode;
+            symbol->data[index] = (FRIDGE_WORD*)ccode;
         }
         else if (valueNode->type == CPM_CHAR)
         {
-            symbol->data[index] = (XCM2_WORD*)valueNode->text[0];
+            symbol->data[index] = (FRIDGE_WORD*)valueNode->text[0];
         }
         else
         {
@@ -1457,23 +1463,23 @@ namespace CPM
         switch (symbol->field.type)
         {
         case CPM_DATATYPE_INT16:
-            symbol->data = (XCM2_WORD*)malloc(sizeof(CPM_INT16));
+            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_INT16));
             (*(CPM_INT16*)symbol->data) = (CPM_INT16)value;
             break;
         case CPM_DATATYPE_INT8:
-            symbol->data = (XCM2_WORD*)malloc(sizeof(CPM_INT8));
+            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_INT8));
             (*(CPM_INT8*)symbol->data) = (CPM_INT8)value;
             break;
         case CPM_DATATYPE_UINT16:
-            symbol->data = (XCM2_WORD*)malloc(sizeof(CPM_UINT16));
+            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_UINT16));
             (*(CPM_UINT16*)symbol->data) = (CPM_UINT16)value;
             break;
         case CPM_DATATYPE_UINT8:
-            symbol->data = (XCM2_WORD*)malloc(sizeof(CPM_UINT8));
+            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_UINT8));
             (*(CPM_UINT8*)symbol->data) = (CPM_UINT8)value;
             break;
         case CPM_DATATYPE_CHAR:
-            symbol->data = (XCM2_WORD*)malloc(sizeof(char));
+            symbol->data = (FRIDGE_WORD*)malloc(sizeof(char));
             (*(char*)symbol->data) = (char)value;
             break;
         }

@@ -3,7 +3,8 @@
 #include <ostream>
 #include <sstream>
 #include <iterator>
-#include "../emulator/XCM2.h"
+//#include "../emulator/XCM2.h"
+#include "../../include/fridge.h"
 #include "Logger.h"
 #include "CPMParser.h"
 #include <map>
@@ -78,8 +79,8 @@ namespace CPM
         CPMDataType type;
         bool isPtr;
         int count;
-        XCM2_DWORD offset;
-        vector<XCM2_WORD*> data;
+        FRIDGE_DWORD offset;
+        vector<FRIDGE_WORD*> data;
         CPMNamespace* owner;
 
         CPMDataSymbol();
@@ -124,6 +125,9 @@ namespace CPM
 
         bool operator< (const CPMFunctionSignature& other) const; // other < this
     };
+
+    struct CPMNamespace;
+    class CPMCompiler;
 
     struct CPMFunctionSymbol
     {
@@ -183,12 +187,11 @@ namespace CPM
         void readFunctions();
         void detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner);
 
-        int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         int parseNum(const string &num);
         bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode> &unfolded);
         int evalNum(vector<CPMUnfoldedExpressionNode> &unfolded, CPMNamespace* currentNS = NULL);
 
-        bool parseLiteralValue (CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
+        
         bool parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralChar  (CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
@@ -207,9 +210,14 @@ namespace CPM
         void PrintStaticData();
         ~CPMCompiler();
 
+        CPMSourceFile* getSourceFile(const string& sourceFileName) { return &sources[sourceFileName]; }
+        int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
+        bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
         CPMDataType resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         CPMStaticSymbol* resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+
+        static vector<string> ParseSymbolName(const string& name);
     };
 
 }

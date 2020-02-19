@@ -18,7 +18,7 @@ namespace CPM
         for (int i = 0; i < merge.size(); ++i)
             totalSize += merge[i]->size;
 
-        XCM2_WORD* mergedCode = (XCM2_WORD*)malloc(totalSize);
+        FRIDGE_WORD* mergedCode = (FRIDGE_WORD*)malloc(totalSize);
         int offset = 0;
 
         memcpy(mergedCode, code, size);
@@ -37,11 +37,11 @@ namespace CPM
             for (int ir = 0; ir < merge[i]->internalReferences.size(); ++ir)
             {
                 int relPos = merge[i]->internalReferences[ir];
-                XCM2_DWORD ref = XCM2_DWORD_HL(merge[i]->code[relPos], merge[i]->code[relPos + 1]);
+                FRIDGE_DWORD ref = FRIDGE_DWORD_HL(merge[i]->code[relPos], merge[i]->code[relPos + 1]);
                 internalReferences.push_back(offset + relPos);
                 ref += offset;
-                mergedCode[offset + relPos] = XCM2_HIGH_WORD(ref);
-                mergedCode[offset + relPos + 1] = XCM2_LOW_WORD(ref);
+                mergedCode[offset + relPos] = FRIDGE_HIGH_WORD(ref);
+                mergedCode[offset + relPos + 1] = FRIDGE_LOW_WORD(ref);
             }
 
             offset += merge[i]->size;
@@ -98,7 +98,29 @@ namespace CPM
                         //
                         // node->procreate
 
-                        //OwnerFunction()->compiler->resolveDataTypeName()
+                        CPMDataType dataType = OwnerFunction()->compiler->resolveDataTypeName(
+                            opname->text,
+                            OwnerFunction()->compiler->getSourceFile(line->sourceFileName),
+                            OwnerFunction()->owner);
+
+                        if (dataType > 0)
+                        {
+                            children.push_back(new CPMOperator_Alloc(dataType, this, line));
+                        }
+                        else if (dataType == CPM_DATATYPE_AMBIGUOUS)
+                        {
+                            CompilerLog()->Add(LOG_ERROR, "Type reference '" + opname->text + "' is ambiguous in this context. See the message above.", opname->sourceFileName, opname->lineNumber);
+                            return;
+                        }
+                        else if (dataType == CPM_DATATYPE_VOID)
+                        {
+                            CompilerLog()->Add(LOG_ERROR, "Void type is not allowed for local symbols.", opname->sourceFileName, opname->lineNumber);
+                            return;
+                        }
+                        else
+                        {
+
+                        }
                     }
                     else
                     {
@@ -122,9 +144,61 @@ namespace CPM
         ns = proto->owner;
     }
 
-    CPMOperator_Alloc::CPMOperator_Alloc(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode) : CPMExecutableSemanticNode(parent, syntaxNode)
+    CPMOperator_Alloc::CPMOperator_Alloc(CPMDataType dataType, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+        : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
-    
+        CPM_SEMANTIC_ASSERT(parent->SyntaxNode()->type == CPM_BLOCK);
+        
+        if (syntaxNode->children.size() >= 2 || syntaxNode->children.size() <= 5)
+        {
+            CPMSemanticBlock* blockParent = (CPMSemanticBlock*)parent;
+            CPMSyntaxTreeNode* nameNode = syntaxNode->children[1];
+            CPMSyntaxTreeNode* valueNode = nullptr;
+            CPMSyntaxTreeNode* arraySizeNode = nullptr;
+            
+            if (syntaxNode->children.size() == 3)
+                valueNode = syntaxNode->children[2];
+            else if (syntaxNode->children.size() == 5)
+                valueNode = syntaxNode->children[4];
+
+            if (syntaxNode->children.size() > 3)
+            {
+                if (syntaxNode->children[2]->text == R_ARRAY)
+                {
+                    arraySizeNode = syntaxNode->children[3];
+                }
+                else
+                {
+                    CompilerLog()->Add(LOG_ERROR, "Missing array keyword for local array symbol declaration.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+                    return;
+                }
+            }
+
+            if (nameNode->type == CPM_ID)
+            {
+                vector<string> parsedName = CPMCompiler::ParseSymbolName(nameNode->text);
+                if (parsedName.size() == 1)
+                {
+                    blockParent->locals[nameNode->text].name = nameNode->text;
+                    CPMDataSymbol* symbol = &blockParent->locals[nameNode->text];
+                    symbol->type = dataType;
+                    if (arraySizeNode)
+                        symbol->count = OwnerFunction()->compiler->parseArraySizeDecl(arraySizeNode, OwnerFunction()->owner);
+                    else
+                        symbol->count = 1;
+                    if (valueNode)
+                    {
+                        OwnerFunction()->compiler->parseLiteralValue(symbol, valueNode);
+                    }
+                }
+                else
+                    CompilerLog()->Add(LOG_ERROR, "Local symbol name cannot contain namespace references.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+            }
+            else
+                CompilerLog()->Add(LOG_ERROR, "Local symbol name must be an identificator.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+        }
+        else
+            CompilerLog()->Add(LOG_ERROR, "Invalid local symbol declaration syntax.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
     }
 
     void CPMOperator_Alloc::GenerateCode(CPMRelativeCodeChunk& code)

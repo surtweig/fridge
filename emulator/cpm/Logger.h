@@ -5,6 +5,8 @@
 
 #define CPM_ASSERT(EXPRESSION) if (!(EXPRESSION)) { compilerLog.Add(LOG_INTERNAL, #EXPRESSION, __FILE__, __LINE__); noErrors = false; return false; }
 #define CPM_ASSERT_MESSAGE(EXPRESSION, MESSAGE) if (!(EXPRESSION)) { compilerLog.Add(LOG_INTERNAL, MESSAGE, __FILE__, __LINE__); noErrors = false; return false; }
+#define CPM_SEMANTIC_ASSERT(EXPRESSION) if (!(EXPRESSION)) { CompilerLog()->Add(LOG_INTERNAL, #EXPRESSION, __FILE__, __LINE__); }
+#define CPM_SEMANTIC_ASSERT_MESSAGE(EXPRESSION, MESSAGE) if (!(EXPRESSION)) { CompilerLog()->Add(LOG_INTERNAL, MESSAGE, __FILE__, __LINE__); }
 
 using namespace std;
 
