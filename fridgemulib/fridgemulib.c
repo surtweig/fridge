@@ -345,6 +345,20 @@ void ir_VFSA(FRIDGE_SYSTEM* sys)
         corePanic(sys->cpu);
 }
 
+void ir_VFSI(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_FRAME_BUFFER_SIZE-1)
+    {
+        FRIDGE_gpu_active_frame(sys->gpu)[addr++] = pcRead(sys->cpu);
+        FRIDGE_gpu_active_frame(sys->gpu)[addr++] = pcRead(sys->cpu);
+        sys->cpu->rH = FRIDGE_HIGH_WORD(addr);
+        sys->cpu->rL = FRIDGE_LOW_WORD(addr);
+    }
+    else
+        corePanic(sys->cpu);
+}
+
 void ir_VFSAC(FRIDGE_SYSTEM* sys)
 {
     FRIDGE_WORD posX = sys->cpu->rH;
@@ -409,6 +423,20 @@ void ir_VSSA(FRIDGE_SYSTEM* sys)
     FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
     if (addr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
         sys->gpu->sprite_mem[addr] = sys->cpu->rA;
+    else
+        corePanic(sys->cpu);
+}
+
+void ir_VSSI(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_RAM_ADDR addr = FRIDGE_cpu_pair_HL(sys->cpu);
+    if (addr < FRIDGE_GPU_SPRITE_MEMORY_SIZE-1)
+    {
+        sys->gpu->sprite_mem[addr++] = pcRead(sys->cpu);
+        sys->gpu->sprite_mem[addr++] = pcRead(sys->cpu);
+        sys->cpu->rH = FRIDGE_HIGH_WORD(addr);
+        sys->cpu->rL = FRIDGE_LOW_WORD(addr);
+    }
     else
         corePanic(sys->cpu);
 }
@@ -879,11 +907,13 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VMODE: ir_VMODE(sys); break;
         case VPAL:  ir_VPAL(sys);  break;
         case VFSA:  ir_VFSA(sys);  break;
+        case VFSI:  ir_VFSI(sys);  break;
         case VFSAC: ir_VFSAC(sys); break;
         case VFLA:  ir_VFLA(sys);  break;
         case VFLAC: ir_VFLAC(sys); break;
         case VS2F:  ir_VS2F(sys);  break;
         case VSSA:  ir_VSSA(sys);  break;
+        case VSSI:  ir_VSSI(sys);  break;
         case VSLA:  ir_VSLA(sys);  break;
         case VSS:   ir_VSS(sys);   break;
         case VSD:   ir_VSD(sys);   break;

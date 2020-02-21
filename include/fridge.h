@@ -141,6 +141,8 @@ typedef enum FRIDGE_IRCODE {
 
     // back buffer instructions
     VFSA,  // store A as byte on the back buffer at address HL
+    VFSI,  // store two bytes (arg0, arg1) on the back buffer at address HL,
+           // then increase HL by 2
     VFSAC, // store A as color on the back buffer at position HL
     VFLA,  // load to A a byte on the back buffer at address HL
     VFLAC, // load to A a color on the back buffer at position HL
@@ -150,6 +152,8 @@ typedef enum FRIDGE_IRCODE {
 
     // sprite memory instructions
     VSSA,  // store A as byte in sprite memory at address HL
+    VSSI,  // store two bytes (arg0, arg1) in sprite memory at address HL,
+           // then increase HL by 2
     VSLA,  // load to A a byte in sprite memory at address HL
 
 
@@ -166,8 +170,6 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
-    IR244,
-    IR245,
     IR246,
     IR247,
     IR248,
