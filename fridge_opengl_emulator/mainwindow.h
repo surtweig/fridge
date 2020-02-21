@@ -8,6 +8,7 @@ extern "C" {
 #include <iostream>
 #include <fstream>
 #include <streambuf>
+#include <map>
 #include <qplaintextedit.h>
 #include "PixBufferRenderer.h"
 #include "EmulatorThread.h"
@@ -62,15 +63,15 @@ private slots:
     void on_ramScrollToSP_clicked();
     void on_asmCompileBtn_clicked();
     void on_emuThread_framePresented();
-
     void on_sysRunBtn_clicked();
-
     void on_sysPauseBtn_clicked();
+    void on_cpuClockComboBox_currentIndexChanged(int index);
 
 private:
     Ui::MainWindow *ui;
     FRIDGE_SYSTEM *sys;
     MessagesLogBuf *logbuf;
+    map<QString, int> cpuFreqsList;
 
     int ramViewPosition;
     int ramSelectedAddress;

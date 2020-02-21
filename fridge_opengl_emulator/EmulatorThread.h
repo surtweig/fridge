@@ -31,7 +31,7 @@ class EmulatorThread : public QThread
 public:
     EmulatorThread(FRIDGE_SYSTEM* sys, int targetFrequency, int tickSeriesLength);
 
-    void SetTargetFrequncy(int targetFrequency);
+    void SetTargetFrequncy(int targetFrequency, int tickSeriesLength = -1);
     void SetActive(bool active);
     bool IsActive() {return isActive;}
     void Stop();

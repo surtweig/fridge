@@ -89,9 +89,13 @@ void EmulatorThread::ReleaseLock()
     }
 }
 
-void EmulatorThread::SetTargetFrequncy(int targetFrequency)
+void EmulatorThread::SetTargetFrequncy(int targetFrequency, int tickSeriesLength)
 {
+    SetLock();
     this->targetFrequency = targetFrequency;
+    if (tickSeriesLength > 0)
+        this->tickSeriesLength = tickSeriesLength;
+    ReleaseLock();
 }
 
 void EmulatorThread::SetActive(bool active)

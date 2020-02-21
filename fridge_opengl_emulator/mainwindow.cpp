@@ -9,6 +9,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     initFridge();
 
+
+
     ui->setupUi(this);
 
     pixBufferRenderer = new PixBufferRenderer(ui->VisibleBufferWidget);
@@ -24,6 +26,20 @@ MainWindow::MainWindow(QWidget *parent)
     logbuf = new MessagesLogBuf(ui->messagesLogView);
     updateRegistersView();
     updateRAMView();
+
+    cpuFreqsList = {{"1 Hz", 1},
+                    {"2 Hz", 2},
+                    {"10 Hz", 10},
+                    {"1 KHz", 1000},
+                    {"1 MHz", 1000000},
+                    {"2 MHz", 3000000},
+                    {"5 MHz", 5000000},
+                    {"10 MHz", 10000000},
+                   };
+    ui->cpuClockComboBox->clear();
+    for (auto i = cpuFreqsList.begin(); i != cpuFreqsList.end(); ++i)
+        ui->cpuClockComboBox->addItem(i->first, i->second);
+    ui->cpuClockComboBox->setCurrentIndex(ui->cpuClockComboBox->count()-1);
 }
 
 void MainWindow::initFridge()
@@ -295,4 +311,13 @@ void MainWindow::on_sysPauseBtn_clicked()
     ui->sysTickBtn->setEnabled(true);
     ui->asmCompileBtn->setEnabled(true);
     updateAll();
+}
+
+void MainWindow::on_cpuClockComboBox_currentIndexChanged(int index)
+{
+    int freq = ui->cpuClockComboBox->itemData(index).toInt();
+    int series = freq/100;
+    if (freq < 1000)
+        series = 1;
+    emuThread->SetTargetFrequncy(freq, series);
 }

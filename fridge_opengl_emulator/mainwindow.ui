@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>872</width>
     <height>600</height>
    </rect>
   </property>
@@ -109,43 +109,7 @@
         </spacer>
        </item>
        <item>
-        <widget class="QComboBox" name="cpuClockComboBox">
-         <item>
-          <property name="text">
-           <string>1 Hz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>2 Hz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>1 KHz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>1 MHz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>2 MHz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>5 MHz</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>10 MHz</string>
-          </property>
-         </item>
-        </widget>
+        <widget class="QComboBox" name="cpuClockComboBox"/>
        </item>
       </layout>
      </widget>
@@ -998,7 +962,7 @@
                   <x>0</x>
                   <y>0</y>
                   <width>244</width>
-                  <height>308</height>
+                  <height>362</height>
                  </rect>
                 </property>
                 <property name="sizePolicy">
@@ -1066,7 +1030,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>872</width>
      <height>20</height>
     </rect>
    </property>
