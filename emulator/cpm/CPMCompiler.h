@@ -177,8 +177,6 @@ namespace CPM
         CPMDataType registerStructDataType(CPMStructSymbol* structSymbol);
         void readStructFields(CPMStructSymbol* structSymbol);
         void computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs);
-        int sizeOfType(CPMDataType type);
-        int sizeOfData(CPMDataSymbol* dataSymbol);
         void buildStructLayout(CPMStructSymbol* structSymbol);
 
         void readStatics(bool isConst);
@@ -209,6 +207,9 @@ namespace CPM
         inline Logger* CompilerLog() { return &compilerLog; }
         void PrintStaticData();
         ~CPMCompiler();
+
+        int sizeOfType(CPMDataType type);
+        int sizeOfData(CPMDataSymbol* dataSymbol);
 
         CPMSourceFile* getSourceFile(const string& sourceFileName) { return &sources[sourceFileName]; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);

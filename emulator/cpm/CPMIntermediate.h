@@ -16,8 +16,12 @@ namespace CPM
         map<int, CPMFunctionSymbol*> functionReferences;
 
         CPMRelativeCodeChunk();
+        CPMRelativeCodeChunk(size_t size);
+        CPMRelativeCodeChunk(vector<FRIDGE_WORD> buffer);
         CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge);
         ~CPMRelativeCodeChunk();
+
+        void write(vector<FRIDGE_WORD> buffer, size_t offset = 0);
     };
 
    /* class CPMOperator
@@ -46,7 +50,7 @@ namespace CPM
         virtual void procreate() {};
     public:
         CPMExecutableSemanticNode(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
-        virtual void GenerateCode(CPMRelativeCodeChunk& code) {};
+        virtual CPMRelativeCodeChunk* GenerateCode() { return nullptr; }
         inline CPMFunctionSymbol* OwnerFunction() { return ownerFunction; }
         inline CPMSyntaxTreeNode* SyntaxNode() { return syntaxNode; }
         inline CPMExecutableSemanticNode* Parent() { return parent; }
@@ -75,7 +79,7 @@ namespace CPM
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
         virtual void procreate();
-        virtual void GenerateCode(CPMRelativeCodeChunk& code);
+        virtual CPMRelativeCodeChunk* GenerateCode();
 
         friend class CPMOperator_Alloc;
     public:
@@ -93,7 +97,7 @@ namespace CPM
     {
     public:
         CPMOperator_Alloc(CPMDataType dataType, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
-        virtual void GenerateCode(CPMRelativeCodeChunk& code);
+        virtual CPMRelativeCodeChunk* GenerateCode();
         virtual void procreate() {};
     };
 

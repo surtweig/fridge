@@ -11,6 +11,24 @@ namespace CPM
         size = 0;
     }
 
+    CPMRelativeCodeChunk::CPMRelativeCodeChunk(size_t size)
+    {
+        this->size = size;
+        code = (FRIDGE_WORD*)malloc(size);
+        assert(code);
+        for (size_t i = 0; i < size; ++i)
+            code[i] = 0;
+    }
+
+    CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<FRIDGE_WORD> buffer)
+    {
+        size = buffer.size();
+        code = (FRIDGE_WORD*)malloc(size);
+        assert(code);
+        for (size_t i = 0; i < size; ++i)
+            code[i] = buffer[i];
+    }
+
     CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge)
     {
         size = 0;
@@ -28,6 +46,9 @@ namespace CPM
         
         for (int i = 0; i < merge.size(); ++i)
         {
+            if (merge[i]->code == nullptr)
+                continue;
+
             for (map<int, CPMStaticSymbol*>::iterator ssi = merge[i]->staticReferences.begin(); ssi != merge[i]->staticReferences.end(); ++ssi)
                 staticReferences[ssi->first + offset] = ssi->second;
 
@@ -53,6 +74,13 @@ namespace CPM
     CPMRelativeCodeChunk::~CPMRelativeCodeChunk()
     {
         free(code);
+    }
+
+    void CPMRelativeCodeChunk::write(vector<FRIDGE_WORD> buffer, size_t offset)
+    {
+        assert(offset + buffer.size() < size);
+        for (size_t i = 0; i < buffer.size(); ++i)
+            code[i + offset] = buffer[i];
     }
 
     CPMExecutableSemanticNode::CPMExecutableSemanticNode(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction)
@@ -137,9 +165,53 @@ namespace CPM
         }
     }
 
-    void CPMSemanticBlock::GenerateCode(CPMRelativeCodeChunk& code)
+    CPMRelativeCodeChunk* CPMSemanticBlock::GenerateCode()
     {
-        
+        FRIDGE_SIZE_T localsSize = 0;
+        for (auto i = locals.begin(); i != locals.end(); ++i)
+            localsSize += OwnerFunction()->compiler->sizeOfData(i->second);
+        if (localsSize <= DataMaxSize)
+        {
+            FRIDGE_DWORD stackSize = localsSize;
+#ifdef FRIDGE_ASCENDING_STACK
+            FRIDGE_DWORD pushOffset = stackSize;
+            FRIDGE_DWORD popOffset = ~stackSize + 1;
+#else
+            FRIDGE_DWORD pushOffset = ~stackSize + 1; 
+            FRIDGE_DWORD popOffset = stackSize;
+#endif
+            vector<CPMRelativeCodeChunk*> ccs;
+
+            CPMRelativeCodeChunk* ccReserveLocals = new CPMRelativeCodeChunk(
+                {
+                    LXI_HL, FRIDGE_HIGH_WORD(pushOffset), FRIDGE_LOW_WORD(pushOffset),
+                    DAD_SP
+                }
+            );
+            ccs.push_back(ccReserveLocals);
+
+            for (int i = 0; i < children.size(); ++i)
+                ccs.push_back(children[i]->GenerateCode());
+
+            CPMRelativeCodeChunk* ccFlushLocals = new CPMRelativeCodeChunk(
+                {
+                    LXI_HL, FRIDGE_HIGH_WORD(popOffset), FRIDGE_LOW_WORD(popOffset),
+                    DAD_SP
+                }
+            );
+            ccs.push_back(ccFlushLocals);
+
+            CPMRelativeCodeChunk* cc = new CPMRelativeCodeChunk(ccs);
+            for (int i = 0; i < ccs.size(); ++i)
+                delete ccs[i];
+
+            return cc;
+        }
+        else
+        {
+            CompilerLog()->Add(LOG_ERROR, "Block local data size exceeds MaxDataSize.", SyntaxNode()->sourceFileName, SyntaxNode()->lineNumber);
+            return nullptr;
+        }
     }
 
     CPMFunctionSemanticBlock::CPMFunctionSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) : CPMSemanticBlock(syntaxNode, ownerFunction)
@@ -220,9 +292,9 @@ namespace CPM
             CompilerLog()->Add(LOG_ERROR, "Invalid local symbol declaration syntax.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
     }
 
-    void CPMOperator_Alloc::GenerateCode(CPMRelativeCodeChunk& code)
+    CPMRelativeCodeChunk* CPMOperator_Alloc::GenerateCode()
     {
-
+        return nullptr;
     }
 
     CPMIntermediate::CPMIntermediate()
