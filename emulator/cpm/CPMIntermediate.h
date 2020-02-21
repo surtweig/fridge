@@ -1,6 +1,7 @@
 #pragma once
 #include "CPMCompiler.h"
 #include "CPMParser.h"
+#include <cassert>
 
 using namespace CPM;
 
@@ -9,7 +10,7 @@ namespace CPM
     struct CPMRelativeCodeChunk
     {
         FRIDGE_WORD* code;
-        int size;
+        size_t size;
         vector<int> internalReferences;
         map<int, CPMStaticSymbol*> staticReferences;
         map<int, CPMFunctionSymbol*> functionReferences;
@@ -70,10 +71,11 @@ namespace CPM
     class CPMSemanticBlock : public CPMExecutableSemanticNode
     {
     protected:
-        map<string, CPMDataSymbol> locals;
+        map<string, CPMDataSymbol*> locals;
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
         virtual void procreate();
+        virtual void GenerateCode(CPMRelativeCodeChunk& code);
 
         friend class CPMOperator_Alloc;
     public:

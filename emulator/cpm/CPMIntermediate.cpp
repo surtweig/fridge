@@ -13,16 +13,18 @@ namespace CPM
 
     CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge)
     {
-        size_t totalSize = size;
+        size = 0;
 
         for (int i = 0; i < merge.size(); ++i)
-            totalSize += merge[i]->size;
+            size += merge[i]->size;
 
-        FRIDGE_WORD* mergedCode = (FRIDGE_WORD*)malloc(totalSize);
-        int offset = 0;
+        code = (FRIDGE_WORD*)malloc(size);
+        assert(code);
 
-        memcpy(mergedCode, code, size);
-        offset += size;
+        size_t offset = 0;
+
+        //memcpy(mergedCode, code, size);
+        //offset += size;
         
         for (int i = 0; i < merge.size(); ++i)
         {
@@ -32,7 +34,7 @@ namespace CPM
             for (map<int, CPMFunctionSymbol*>::iterator fsi = merge[i]->functionReferences.begin(); fsi != merge[i]->functionReferences.end(); ++fsi)
                 functionReferences[fsi->first + offset] = fsi->second;
 
-            memcpy(mergedCode+offset, merge[i]->code, merge[i]->size);
+            memcpy(code + offset, merge[i]->code, merge[i]->size);
 
             for (int ir = 0; ir < merge[i]->internalReferences.size(); ++ir)
             {
@@ -40,20 +42,17 @@ namespace CPM
                 FRIDGE_DWORD ref = FRIDGE_DWORD_HL(merge[i]->code[relPos], merge[i]->code[relPos + 1]);
                 internalReferences.push_back(offset + relPos);
                 ref += offset;
-                mergedCode[offset + relPos] = FRIDGE_HIGH_WORD(ref);
-                mergedCode[offset + relPos + 1] = FRIDGE_LOW_WORD(ref);
+                code[offset + relPos] = FRIDGE_HIGH_WORD(ref);
+                code[offset + relPos + 1] = FRIDGE_LOW_WORD(ref);
             }
 
             offset += merge[i]->size;
         }
-
-        delete code;
-        code = mergedCode;
     }
 
     CPMRelativeCodeChunk::~CPMRelativeCodeChunk()
     {
-        delete code;
+        free(code);
     }
 
     CPMExecutableSemanticNode::CPMExecutableSemanticNode(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction)
@@ -75,6 +74,12 @@ namespace CPM
 
     CPMSemanticBlock::CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) : CPMExecutableSemanticNode(NULL, syntaxNode, ownerFunction)
     {
+    }
+
+    CPMSemanticBlock::~CPMSemanticBlock()
+    {
+        for (auto i = locals.begin(); i != locals.end(); ++i)
+            delete i->second;
     }
 
     void CPMSemanticBlock::procreate()
@@ -132,8 +137,15 @@ namespace CPM
         }
     }
 
+    void CPMSemanticBlock::GenerateCode(CPMRelativeCodeChunk& code)
+    {
+        
+    }
+
     CPMFunctionSemanticBlock::CPMFunctionSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) : CPMSemanticBlock(syntaxNode, ownerFunction)
     {
+        for (int i = 0; i < ownerFunction->arguments.size(); ++i)
+            locals[ownerFunction->arguments[i].name] = &ownerFunction->arguments[i];
     }
 
     // Semantic tree constructor
@@ -179,17 +191,24 @@ namespace CPM
                 vector<string> parsedName = CPMCompiler::ParseSymbolName(nameNode->text);
                 if (parsedName.size() == 1)
                 {
-                    blockParent->locals[nameNode->text].name = nameNode->text;
-                    CPMDataSymbol* symbol = &blockParent->locals[nameNode->text];
-                    symbol->type = dataType;
-                    if (arraySizeNode)
-                        symbol->count = OwnerFunction()->compiler->parseArraySizeDecl(arraySizeNode, OwnerFunction()->owner);
-                    else
-                        symbol->count = 1;
-                    if (valueNode)
+                    auto i = blockParent->locals.find(nameNode->text);
+                    if (i == blockParent->locals.end())
                     {
-                        OwnerFunction()->compiler->parseLiteralValue(symbol, valueNode);
+                        CPMDataSymbol* symbol = new CPMDataSymbol();
+                        blockParent->locals[nameNode->text] = symbol;
+                        symbol->name = nameNode->text;
+                        symbol->type = dataType;
+                        if (arraySizeNode)
+                            symbol->count = OwnerFunction()->compiler->parseArraySizeDecl(arraySizeNode, OwnerFunction()->owner);
+                        else
+                            symbol->count = 1;
+                        if (valueNode)
+                        {
+                            OwnerFunction()->compiler->parseLiteralValue(symbol, valueNode);
+                        }
                     }
+                    else
+                        CompilerLog()->Add(LOG_ERROR, "Local symbol '" + nameNode->text + "' is already declared.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
                 }
                 else
                     CompilerLog()->Add(LOG_ERROR, "Local symbol name cannot contain namespace references.", syntaxNode->sourceFileName, syntaxNode->lineNumber);

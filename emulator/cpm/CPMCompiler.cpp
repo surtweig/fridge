@@ -14,6 +14,8 @@ namespace CPM
         count = 1;
         isPtr = false;
         offset = 0;
+        data = {};
+        owner = nullptr;
     }
 
     CPMDataSymbol::~CPMDataSymbol()
