@@ -5,6 +5,8 @@ output_files/
 fridge_graphics_de0cv_backup/
 motonesfpga-de0_cv_nes-a226f5b/
 */cmake-build-debug/
+*/cmake-build-release/
+build-fridge*/
 */db/
 */incremental_db/
 */simulation/
