@@ -235,6 +235,24 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     {
         aliases[IRCodeAliasPrefix + iir->first] = to_string(iir->second);
     }
+    aliases["FRIDGE_ROM_SEGMENT_SIZE"]           = int_to_hex((FRIDGE_DWORD)FRIDGE_ROM_SEGMENT_SIZE);
+    aliases["FRIDGE_MAX_IO_DEVICES"]             = int_to_hex((FRIDGE_WORD)FRIDGE_MAX_IO_DEVICES);
+    aliases["FRIDGE_GPU_BUS_SIZE"]               = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_BUS_SIZE);
+    aliases["FRIDGE_GPU_FRAME_EGA_WIDTH"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_FRAME_EGA_WIDTH);
+    aliases["FRIDGE_GPU_FRAME_EGA_HEIGHT"]       = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_FRAME_EGA_HEIGHT);
+    aliases["FRIDGE_GPU_MAX_SPRITES"]            = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_MAX_SPRITES);
+    aliases["FRIDGE_GPU_MAX_SPRITES_PER_PIXEL"]  = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_MAX_SPRITES_PER_PIXEL);
+    aliases["FRIDGE_GPU_FRAME_BUFFER_SIZE"]      = int_to_hex((FRIDGE_DWORD)FRIDGE_GPU_FRAME_BUFFER_SIZE);
+    aliases["FRIDGE_BOOT_SECTION_INDEX_ADDRESS"] = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
+    aliases["FRIDGE_EXECUTABLE_OFFSET"]          = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_EXECUTABLE_OFFSET);
+    aliases["FRIDGE_IRQ_SYS_TIMER"]              = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_SYS_TIMER);
+    aliases["FRIDGE_IRQ_KEYBOARD_PRESS"]         = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_KEYBOARD_PRESS);
+    aliases["FRIDGE_IRQ_KEYBOARD_RELEASE"]       = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_KEYBOARD_RELEASE);
+    aliases["FRIDGE_KEYBOARD_KEY_STATE_MASK"]    = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_STATE_MASK);
+    aliases["FRIDGE_KEYBOARD_KEY_CODE_MASK"]     = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_CODE_MASK);
+    aliases["FRIDGE_DEV_ROM_RESET_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_RESET_ID);
+    aliases["FRIDGE_DEV_ROM_ID"]                 = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_ID);
+    aliases["FRIDGE_DEV_KEYBOARD_ID"]            = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_KEYBOARD_ID);
 }
 
 bool FridgeAssemblyLanguageCompiler::readResources()
