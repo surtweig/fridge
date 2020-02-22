@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "CPMIntermediate.h"
 #include "CPMCompiler.h"
+#include <iostream>
+#include <fstream>
 
 namespace CPM
 {
@@ -29,7 +31,7 @@ namespace CPM
             code[i] = buffer[i];
     }
 
-    CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge, size_t initOffset = 0)
+    CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge)
     {
         size = 0;
 
@@ -39,7 +41,7 @@ namespace CPM
         code = (FRIDGE_WORD*)malloc(size);
         assert(code);
 
-        size_t offset = initOffset;
+        size_t offset = 0;
 
         //memcpy(mergedCode, code, size);
         //offset += size;
@@ -110,8 +112,8 @@ namespace CPM
 
     CPMSemanticBlock::~CPMSemanticBlock()
     {
-        for (auto i = locals.begin(); i != locals.end(); ++i)
-            delete i->second;
+        //for (auto i = locals.begin(); i != locals.end(); ++i)
+        //    delete i->second;
     }
 
     void CPMSemanticBlock::procreate()
@@ -195,7 +197,11 @@ namespace CPM
             ccs.push_back(ccReserveLocals);
 
             for (int i = 0; i < children.size(); ++i)
-                ccs.push_back(children[i]->GenerateCode());
+            {
+                CPMRelativeCodeChunk* childcc = children[i]->GenerateCode();
+                if (childcc)
+                    ccs.push_back(childcc);
+            }
 
             CPMRelativeCodeChunk* ccFlushLocals = new CPMRelativeCodeChunk(
                 {
@@ -223,6 +229,11 @@ namespace CPM
     {
         for (int i = 0; i < ownerFunction->arguments.size(); ++i)
             locals[ownerFunction->arguments[i].name] = &ownerFunction->arguments[i];
+
+        ownerFunction->compiler->AsmDebugOutput()->Add(ownerFunction->signature.name)->Add(" at ")->AddHex(ownerFunction->globalAddress)->Add(" ( ");
+        for (int argi = 0; argi < ownerFunction->signature.arguments.size(); ++argi)
+            ownerFunction->compiler->AsmDebugOutput()->Add(ownerFunction->signature.arguments[argi].name)->Add(" ");
+        ownerFunction->compiler->AsmDebugOutput()->Add(")\n");
     }
 
     // Semantic tree constructor
@@ -309,22 +320,53 @@ namespace CPM
 
         vector<CPMRelativeCodeChunk*> ccs;
 
+        FRIDGE_RAM_ADDR offset = compiler->getGlobalOffset();
+        compiler->AsmDebugOutput()->Add("globalOffset = ")->AddHex(offset)->Add("\n");
+
         for (int nsi = 0; nsi < nslist.size(); ++nsi)
         {
-            for (auto fi = nslist[nsi]->functions.begin(); fi != nslist[nsi]->functions.end; ++fi)
+            compiler->AsmDebugOutput()->Add("\n")->Add(nslist[nsi]->name)->Add(":\n\n");
+            for (auto fi = nslist[nsi]->functions.begin(); fi != nslist[nsi]->functions.end(); ++fi)
             {
-                CPMFunctionSemanticBlock* funcblock = new CPMFunctionSemanticBlock(&fi->second);
-                ccs.push_back(funcblock->GenerateCode());
-                delete funcblock;
+                CPMFunctionSymbol* funsym = &fi->second;
+                funsym->globalAddress = offset;
+                
+                CPMFunctionSemanticBlock* funblock = new CPMFunctionSemanticBlock(funsym);
+                CPMRelativeCodeChunk* funcode = funblock->GenerateCode();
+                ccs.push_back(funcode);
+                delete funblock;
+                offset += funcode->size;
             }
         }
+        compiler->AsmDebugOutput()->Add("\nStatic data:\n");
+        vector<FRIDGE_WORD> staticData;
+        for (int nsi = 0; nsi < nslist.size(); ++nsi)
+        {
+            for (auto si = nslist[nsi]->statics.begin(); si != nslist[nsi]->statics.end(); ++si)
+            {
+                if (si->second.importSource < 0 && !si->second.isconst)
+                {
+                    si->second.field.globalAddress = offset;
+                    offset += si->second.field.serialize(staticData);
+                    compiler->AsmDebugOutput()->Add(nslist[nsi]->name)->Add(".")->Add(si->second.field.name)->
+                        Add(" ")->Add(offset - si->second.field.globalAddress)->Add(" bytes at ")->AddHex(si->second.field.globalAddress)->Add("\n");
+                }
+            }
+        }
+        CPMRelativeCodeChunk* staticscc = new CPMRelativeCodeChunk(staticData);
+        ccs.push_back(staticscc);
+        objectCode = new CPMRelativeCodeChunk(ccs);
 
-        CPMRelativeCodeChunk* cc = new CPMRelativeCodeChunk(ccs, compiler->getGlobalOffset());
+        ofstream myfile(compiler->getOutputFileName(), ios::out | ios::binary);
+        myfile.write((char*)objectCode->code, objectCode->size * sizeof(FRIDGE_WORD));
+        myfile.close();
+        compiler->CompilerLog()->Add(LOG_MESSAGE, "Compiled program is saved to " + compiler->getOutputFileName());
     }
 
 
     CPMIntermediate::~CPMIntermediate()
     {
+        delete objectCode;
     }
 
 }

@@ -18,7 +18,7 @@ namespace CPM
         CPMRelativeCodeChunk();
         CPMRelativeCodeChunk(size_t size);
         CPMRelativeCodeChunk(vector<FRIDGE_WORD> buffer);
-        CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge, size_t initOffset = 0);
+        CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge);
         ~CPMRelativeCodeChunk();
 
         void write(vector<FRIDGE_WORD> buffer, size_t offset = 0);
@@ -103,6 +103,8 @@ namespace CPM
 
     class CPMIntermediate
     {
+    private:
+        CPMRelativeCodeChunk* objectCode;
     public:
         CPMIntermediate(CPMCompiler* compiler);
         ~CPMIntermediate();

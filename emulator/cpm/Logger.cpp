@@ -51,6 +51,14 @@ namespace CPM
         return this;
     }
 
+    Logger* Logger::AddHex(int n)
+    {
+        sstream << "0x"
+            << setfill('0') << setw(4)
+            << hex << n;
+        return this;
+    }
+
     string Logger::GetText()
     {
         return sstream.str();

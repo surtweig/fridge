@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "CPMCompiler.h"
+#include "CPMIntermediate.h"
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
@@ -20,10 +21,61 @@ namespace CPM
 
     CPMDataSymbol::~CPMDataSymbol()
     {
-        if (type != CPM_DATATYPE_STRING && type < CPM_DATATYPE_USER)
+        if (type < CPM_DATATYPE_USER)
             return;
-        for (int i = 0; i < data.size(); ++i)
-            delete data[i];
+        if (type == CPM_DATATYPE_STRING)
+        {
+
+        }
+        else
+        {
+            for (int i = 0; i < data.size(); ++i)
+                delete (CPMStructSymbol*)data[i];
+        }
+    }
+
+    FRIDGE_RAM_ADDR CPMDataSymbol::serialize(vector<FRIDGE_WORD>& output)
+    {
+        if (type == CPM_DATATYPE_BOOL || type == CPM_DATATYPE_CHAR || type == CPM_DATATYPE_INT8 || type == CPM_DATATYPE_UINT8)
+        {
+            for (int i = 0; i < count; ++i)
+                output.push_back(FRIDGE_WORD(data[i]));
+            return count;
+        }
+        else if (type == CPM_DATATYPE_INT16 || type == CPM_DATATYPE_UINT16)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                FRIDGE_DWORD dw = FRIDGE_DWORD(data[i]);
+                output.push_back(FRIDGE_HIGH_WORD(dw));
+                output.push_back(FRIDGE_LOW_WORD(dw));
+            }
+            return count * 2;
+        }
+        else if (type == CPM_DATATYPE_STRING)
+        {
+            FRIDGE_RAM_ADDR size = 0;
+            for (int i = 0; i < count; ++i)
+            {
+                string s((char*)data[i]);
+                for (int ci = 0; ci < s.size(); ++ci)
+                    output.push_back(s[ci]);
+                output.push_back(0);
+                size += s.size() + 1;
+            }
+            return size;
+        }
+        else if (type >= CPM_DATATYPE_USER)
+        {
+            FRIDGE_RAM_ADDR size = 0;
+            for (int i = 0; i < count; ++i)
+            {
+                CPMStructSymbol* ss = (CPMStructSymbol*)data[i];
+                for (auto fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
+                    size += fi->second.serialize(output); 
+            }
+            return size;
+        }
     }
 
     CPMStaticSymbol::CPMStaticSymbol()
@@ -61,7 +113,7 @@ namespace CPM
         return false;
     }
 
-    CPMCompiler::CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders) : compilerLog()
+    CPMCompiler::CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders) : compilerLog(), asmDebugOutput()
     {
         noErrors = true;
         outputFileName = outputFile;
@@ -84,12 +136,32 @@ namespace CPM
         addStatic("null", global, true, CPM_DATATYPE_UINT16, 0);
         addStatic("false", global, true, CPM_DATATYPE_BOOL, 0);
         addStatic("true", global, true, CPM_DATATYPE_BOOL, 1);
+        addStatic("FRIDGE_ROM_SEGMENT_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_ROM_SEGMENT_SIZE);
+        addStatic("FRIDGE_MAX_IO_DEVICES", global, true, CPM_DATATYPE_UINT8, FRIDGE_MAX_IO_DEVICES);
+        addStatic("FRIDGE_GPU_BUS_SIZE", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_BUS_SIZE);
+        addStatic("FRIDGE_GPU_FRAME_EGA_WIDTH", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_WIDTH);
+        addStatic("FRIDGE_GPU_FRAME_EGA_HEIGHT", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_HEIGHT);
+        addStatic("FRIDGE_GPU_MAX_SPRITES", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES);
+        addStatic("FRIDGE_GPU_MAX_SPRITES_PER_PIXEL", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES_PER_PIXEL);
+        addStatic("FRIDGE_GPU_FRAME_BUFFER_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_GPU_FRAME_BUFFER_SIZE);
+        addStatic("FRIDGE_BOOT_SECTION_INDEX_ADDRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
+        addStatic("FRIDGE_EXECUTABLE_OFFSET", global, true, CPM_DATATYPE_UINT16, FRIDGE_EXECUTABLE_OFFSET);
+        addStatic("FRIDGE_IRQ_SYS_TIMER", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_SYS_TIMER);
+        addStatic("FRIDGE_IRQ_KEYBOARD_PRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_PRESS);
+        addStatic("FRIDGE_IRQ_KEYBOARD_RELEASE", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_RELEASE);
+        addStatic("FRIDGE_KEYBOARD_KEY_STATE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_STATE_MASK);
+        addStatic("FRIDGE_KEYBOARD_KEY_CODE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_CODE_MASK);
+        addStatic("FRIDGE_DEV_ROM_RESET_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_RESET_ID);
+        addStatic("FRIDGE_DEV_ROM_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_ID);
+        addStatic("FRIDGE_DEV_KEYBOARD_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_KEYBOARD_ID);
 
         readNamespaces();
         readStatics(true);
         readStructs();
         readStatics(false);
         readFunctions();
+
+        CPMIntermediate im(this);
 
         if (!noErrors)
             compilerLog.Add(LOG_ERROR, "Compilation failed due to errors.");

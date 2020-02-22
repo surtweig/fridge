@@ -2,6 +2,7 @@
 #include <string>
 #include <ostream>
 #include <sstream>
+#include <iomanip>
 
 #define CPM_ASSERT(EXPRESSION) if (!(EXPRESSION)) { compilerLog.Add(LOG_INTERNAL, #EXPRESSION, __FILE__, __LINE__); noErrors = false; return false; }
 #define CPM_ASSERT_MESSAGE(EXPRESSION, MESSAGE) if (!(EXPRESSION)) { compilerLog.Add(LOG_INTERNAL, MESSAGE, __FILE__, __LINE__); noErrors = false; return false; }
@@ -35,6 +36,7 @@ namespace CPM
         Logger* Add(const char* s);
         Logger* Add(const char c);
         Logger* Add(const int n);
+        Logger* AddHex(const int n);
         string GetText();
     };
 

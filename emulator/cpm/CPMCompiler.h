@@ -85,6 +85,7 @@ namespace CPM
         FRIDGE_RAM_ADDR globalAddress;
 
         CPMDataSymbol();
+        FRIDGE_RAM_ADDR serialize(vector<FRIDGE_WORD>& output);
         ~CPMDataSymbol();
     };
 
@@ -169,6 +170,7 @@ namespace CPM
         vector<string> includeFolders;
         bool noErrors;
         Logger compilerLog;
+        Logger asmDebugOutput;
         CPMDataType dataTypeCounter;
         FRIDGE_RAM_ADDR globalOffset;
 
@@ -209,6 +211,7 @@ namespace CPM
     public:
         CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders);
         inline Logger* CompilerLog() { return &compilerLog; }
+        inline Logger* AsmDebugOutput() { return &asmDebugOutput; }
         void PrintStaticData();
         ~CPMCompiler();
 
@@ -218,6 +221,7 @@ namespace CPM
         CPMSourceFile* getSourceFile(const string& sourceFileName) { return &sources[sourceFileName]; }
         void getNamespaces(vector<CPMNamespace*>& nslist);
         FRIDGE_RAM_ADDR getGlobalOffset() { return globalOffset; }
+        string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
         CPMDataType resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);

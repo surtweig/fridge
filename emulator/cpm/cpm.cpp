@@ -4,8 +4,8 @@
 #include <sstream>
 #include "CPMParser.h"
 #include "CPMCompiler.h"
-//#define COMPILE
-#define PARSE
+#define COMPILE
+//#define PARSE
 using namespace std;
 using namespace CPM;
 
@@ -49,6 +49,9 @@ int _tmain(int argc, _TCHAR* argv[])
     ofstream fout("test.log");
     fout << comp->CompilerLog()->GetText();
     fout.close();
+    ofstream asmout("testasm.log");
+    asmout << comp->AsmDebugOutput()->GetText();
+    asmout.close();
     delete comp;
 #endif    
 
