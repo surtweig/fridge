@@ -29,7 +29,7 @@ namespace CPM
             code[i] = buffer[i];
     }
 
-    CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge)
+    CPMRelativeCodeChunk::CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge, size_t initOffset = 0)
     {
         size = 0;
 
@@ -39,7 +39,7 @@ namespace CPM
         code = (FRIDGE_WORD*)malloc(size);
         assert(code);
 
-        size_t offset = 0;
+        size_t offset = initOffset;
 
         //memcpy(mergedCode, code, size);
         //offset += size;
@@ -96,12 +96,16 @@ namespace CPM
             delete children[i];
     }
 
-    CPMSemanticBlock::CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode) : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
+    CPMSemanticBlock::CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode) :
+        CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
+        procreate();
     }
 
-    CPMSemanticBlock::CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) : CPMExecutableSemanticNode(NULL, syntaxNode, ownerFunction)
+    CPMSemanticBlock::CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) :
+        CPMExecutableSemanticNode(NULL, syntaxNode, ownerFunction)
     {
+        procreate();
     }
 
     CPMSemanticBlock::~CPMSemanticBlock()
@@ -214,7 +218,8 @@ namespace CPM
         }
     }
 
-    CPMFunctionSemanticBlock::CPMFunctionSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) : CPMSemanticBlock(syntaxNode, ownerFunction)
+    CPMFunctionSemanticBlock::CPMFunctionSemanticBlock(CPMFunctionSymbol* ownerFunction)
+        : CPMSemanticBlock(ownerFunction->bodyNode, ownerFunction)
     {
         for (int i = 0; i < ownerFunction->arguments.size(); ++i)
             locals[ownerFunction->arguments[i].name] = &ownerFunction->arguments[i];
@@ -297,8 +302,24 @@ namespace CPM
         return nullptr;
     }
 
-    CPMIntermediate::CPMIntermediate()
+    CPMIntermediate::CPMIntermediate(CPMCompiler* compiler)
     {
+        vector<CPMNamespace*> nslist;
+        compiler->getNamespaces(nslist);
+
+        vector<CPMRelativeCodeChunk*> ccs;
+
+        for (int nsi = 0; nsi < nslist.size(); ++nsi)
+        {
+            for (auto fi = nslist[nsi]->functions.begin(); fi != nslist[nsi]->functions.end; ++fi)
+            {
+                CPMFunctionSemanticBlock* funcblock = new CPMFunctionSemanticBlock(&fi->second);
+                ccs.push_back(funcblock->GenerateCode());
+                delete funcblock;
+            }
+        }
+
+        CPMRelativeCodeChunk* cc = new CPMRelativeCodeChunk(ccs, compiler->getGlobalOffset());
     }
 
 

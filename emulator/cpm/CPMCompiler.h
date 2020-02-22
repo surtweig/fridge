@@ -82,6 +82,7 @@ namespace CPM
         FRIDGE_DWORD offset;
         vector<FRIDGE_WORD*> data;
         CPMNamespace* owner;
+        FRIDGE_RAM_ADDR globalAddress;
 
         CPMDataSymbol();
         ~CPMDataSymbol();
@@ -137,6 +138,8 @@ namespace CPM
         CPMDataType type;
         CPMNamespace* owner;
         CPMCompiler* compiler;
+        FRIDGE_RAM_ADDR globalAddress;
+        CPMSyntaxTreeNode* bodyNode;
     };
 
     struct CPMNamespace
@@ -167,6 +170,7 @@ namespace CPM
         bool noErrors;
         Logger compilerLog;
         CPMDataType dataTypeCounter;
+        FRIDGE_RAM_ADDR globalOffset;
 
         void preprocessSourceFile(string rootFolder, string filename);
         void readNamespaces();
@@ -212,6 +216,8 @@ namespace CPM
         int sizeOfData(CPMDataSymbol* dataSymbol);
 
         CPMSourceFile* getSourceFile(const string& sourceFileName) { return &sources[sourceFileName]; }
+        void getNamespaces(vector<CPMNamespace*>& nslist);
+        FRIDGE_RAM_ADDR getGlobalOffset() { return globalOffset; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
         CPMDataType resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);

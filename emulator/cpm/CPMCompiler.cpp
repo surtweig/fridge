@@ -68,6 +68,7 @@ namespace CPM
         this->includeFolders = includeFolders;
         preprocessSourceFile(sourceRootFolder, sourceFileName);
         dataTypeCounter = CPM_DATATYPE_USER;
+        globalOffset = FRIDGE_EXECUTABLE_OFFSET;
 
         namespaces[GlobalNamespace].name = GlobalNamespace;
         CPMNamespace* global = &namespaces[GlobalNamespace];
@@ -777,6 +778,7 @@ namespace CPM
                     func->type = type;
                     func->isPtr = isPtr;
                     func->compiler = this;
+                    func->bodyNode = bodyNode;
                     func->arguments.resize(signature.arguments.size());
                     compilerLog.Add(LOG_MESSAGE, "Function '" + nameNode->text + "' : " + typeName + " (", node->sourceFileName, node->lineNumber);
                     for (int i = 0; i < signature.arguments.size(); ++i)
@@ -1492,6 +1494,13 @@ namespace CPM
 
     }
     */
+
+    void CPMCompiler::getNamespaces(vector<CPMNamespace*>& nslist)
+    {
+        nslist.clear();
+        for (auto i = namespaces.begin(); i != namespaces.end(); ++i)
+            nslist.push_back(&i->second);
+    }
 
     string CPMCompiler::printStaticValue(CPMDataSymbol* symbol)
     {

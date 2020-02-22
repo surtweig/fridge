@@ -18,7 +18,7 @@ namespace CPM
         CPMRelativeCodeChunk();
         CPMRelativeCodeChunk(size_t size);
         CPMRelativeCodeChunk(vector<FRIDGE_WORD> buffer);
-        CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge);
+        CPMRelativeCodeChunk(vector<CPMRelativeCodeChunk*> merge, size_t initOffset = 0);
         ~CPMRelativeCodeChunk();
 
         void write(vector<FRIDGE_WORD> buffer, size_t offset = 0);
@@ -79,18 +79,18 @@ namespace CPM
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
         virtual void procreate();
-        virtual CPMRelativeCodeChunk* GenerateCode();
 
         friend class CPMOperator_Alloc;
     public:
         CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         ~CPMSemanticBlock();
+        virtual CPMRelativeCodeChunk* GenerateCode();
     };
 
     class CPMFunctionSemanticBlock : public CPMSemanticBlock
     {
     public:
-        CPMFunctionSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
+        CPMFunctionSemanticBlock(CPMFunctionSymbol* ownerFunction);
     };
 
     class CPMOperator_Alloc : public CPMExecutableSemanticNode
@@ -104,7 +104,7 @@ namespace CPM
     class CPMIntermediate
     {
     public:
-        CPMIntermediate();
+        CPMIntermediate(CPMCompiler* compiler);
         ~CPMIntermediate();
     };
 
