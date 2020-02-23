@@ -1,0 +1,25 @@
+{
+    "name": "frion",
+    "displayName": "Frion",
+    "description": "Fridge Frion Language",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.42.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "frion",
+            "aliases": ["Frion", "frion"],
+            "extensions": [".cpm",".cinc",".fri"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "frion",
+            "scopeName": "source.cpm",
+            "path": "./syntaxes/frion.tmLanguage.json"
+        }]
+    }
+}

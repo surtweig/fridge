@@ -1,0 +1,81 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Frion",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#intrinsics"
+		},	
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#comments"
+		}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.frion",
+				"match": "\\b(using|include|imports|namespace|struct|static|const|array|union|if|else|while|for|return)\\b"
+			}]
+		},
+		"intrinsics": {
+			"patterns": [{
+				"name": "constant.language",
+				"match": "\\b(true|false|void|null|bool|char|uint8|uint16|string|int8|int16)\\b",
+				"settings": {
+					"foreground":"#0f0"
+			   }
+			}]
+		},
+		"strings": {
+			"name": "string.quoted.double.frion",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.frion",
+					"match": "\\\\."
+				}
+			]
+		},
+		"comments": {
+			"patterns": [
+				{
+					"begin": "/\\*\\*(?!/)",
+					"captures": {
+						"0": {
+							"name": "punctuation.definition.comment.json"
+						}
+					},
+					"end": "\\*/",
+					"name": "comment.block.documentation.json"
+				},
+				{
+					"begin": "/\\*",
+					"captures": {
+						"0": {
+							"name": "punctuation.definition.comment.json"
+						}
+					},
+					"end": "\\*/",
+					"name": "comment.block.json"
+				},
+				{
+					"captures": {
+						"1": {
+							"name": "punctuation.definition.comment.json"
+						}
+					},
+					"match": "(//).*$\\n?",
+					"name": "comment.line.double-slash.js"
+				}
+			]
+		}
+
+	},
+	"scopeName": "source.cpm"
+}
