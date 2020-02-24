@@ -114,7 +114,9 @@ FRIDGE_WORD pcRead(FRIDGE_CPU* cpu)
 
 FRIDGE_DWORD pcReadDouble(FRIDGE_CPU* cpu)
 {
-    return FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu));
+    FRIDGE_WORD h = pcRead(cpu);
+    FRIDGE_WORD l = pcRead(cpu);
+    return FRIDGE_DWORD_HL(h, l);
 }
 
 void ir_LHLD(FRIDGE_CPU* cpu)
@@ -703,14 +705,15 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case MVI_E: cpu->rE = pcRead(cpu); break;
         case MVI_H: cpu->rH = pcRead(cpu); break;
         case MVI_L: cpu->rL = pcRead(cpu); break;
+        case MVI_M: cpu->ram[FRIDGE_cpu_pair_HL(cpu)] = pcRead(cpu); break;
 
         case LXI_BC: cpu->rB = pcRead(cpu); cpu->rC = pcRead(cpu); break;
         case LXI_DE: cpu->rD = pcRead(cpu); cpu->rE = pcRead(cpu); break;
         case LXI_HL: cpu->rH = pcRead(cpu); cpu->rL = pcRead(cpu); break;
         case LXI_SP: cpu->SP = FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu)); break;
 
-        case LDA: cpu->rA = cpu->ram[FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu))]; break;
-        case STA: cpu->ram[FRIDGE_DWORD_HL(pcRead(cpu), pcRead(cpu))] = cpu->rA; break;
+        case LDA: cpu->rA = cpu->ram[pcReadDouble(cpu)]; break;
+        case STA: cpu->ram[pcReadDouble(cpu)] = cpu->rA; break;
 
         case LHLD: ir_LHLD(cpu); break;
         case SHLD: ir_SHLD(cpu); break;
@@ -800,6 +803,7 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case DAD_DE: doubleAdd(&cpu->rH, &cpu->rL, FRIDGE_cpu_pair_DE(cpu)); break;
         case DAD_HL: doubleAdd(&cpu->rH, &cpu->rL, FRIDGE_cpu_pair_HL(cpu)); break;
         case DAD_SP: doubleAdd(&cpu->rH, &cpu->rL, cpu->SP); break;
+        case DAI:    doubleAdd(&cpu->rH, &cpu->rL, pcReadDouble(cpu)); break;
 
         case ANA_A: ir_ANA(cpu, cpu->rA); break;
         case ANA_B: ir_ANA(cpu, cpu->rB); break;

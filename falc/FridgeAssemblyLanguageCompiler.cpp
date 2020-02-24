@@ -995,6 +995,7 @@ map<string, FRIDGE_WORD> FridgeAssemblyLanguageCompiler::IRIDs = {
     {"INX",   INX_BC},
     {"DCX",   DCX_BC},
     {"DAD",   DAD_BC},
+    {"DAI",   DAI},
     {"ANA",   ANA_A},
     {"ANI",   ANI},
     {"ORA",   ORA_A},
@@ -1147,6 +1148,7 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
             {REG_E, IM_WORD},
             {REG_H, IM_WORD},
             {REG_L, IM_WORD},
+            {REG_M, IM_WORD},
         },
         1
     } },
@@ -1266,6 +1268,7 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
         },
         0
     } },
+    { DAI     , { { {IM_DOUBLE_WORD, NONE} }, 2 } },
     { ANA_A   , { {
             {REG_A, NONE},
             {REG_B, NONE},
@@ -1542,6 +1545,7 @@ map<FRIDGE_WORD, string> FridgeAssemblyLanguageCompiler::IRNames =
         {DAD_DE,  "DAD_DE"},
         {DAD_HL,  "DAD_HL"},
         {DAD_SP,  "DAD_SP"},
+        {DAI,     "DAI"},
         {ANA_A,   "ANA_A"},
         {ANA_B,   "ANA_B"},
         {ANA_C,   "ANA_C"},

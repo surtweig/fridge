@@ -59,28 +59,28 @@ typedef enum FRIDGE_IRCODE {
 
     NOP,
 
-    MOV_AB, MOV_AC, MOV_AD, MOV_AE, MOV_AH, MOV_AL, MOV_AM,
-    MOV_BA, MOV_BC, MOV_BD, MOV_BE, MOV_BH, MOV_BL, MOV_BM,
-    MOV_CA, MOV_CB, MOV_CD, MOV_CE, MOV_CH, MOV_CL, MOV_CM,
-    MOV_DA, MOV_DB, MOV_DC, MOV_DE, MOV_DH, MOV_DL, MOV_DM,
-    MOV_EA, MOV_EB, MOV_EC, MOV_ED, MOV_EH, MOV_EL, MOV_EM,
-    MOV_HA, MOV_HB, MOV_HC, MOV_HD, MOV_HE, MOV_HL, MOV_HM,
-    MOV_LA, MOV_LB, MOV_LC, MOV_LD, MOV_LE, MOV_LH, MOV_LM,
+    MOV_AB, MOV_AC, MOV_AD, MOV_AE, MOV_AH, MOV_AL, MOV_AM, // MOV <Destination>, <Source> copies data from source to destination
+    MOV_BA, MOV_BC, MOV_BD, MOV_BE, MOV_BH, MOV_BL, MOV_BM, // where:
+    MOV_CA, MOV_CB, MOV_CD, MOV_CE, MOV_CH, MOV_CL, MOV_CM, // <Destination> is register (except F)
+    MOV_DA, MOV_DB, MOV_DC, MOV_DE, MOV_DH, MOV_DL, MOV_DM, // <Source> is another register (except F), or memory[HL]
+    MOV_EA, MOV_EB, MOV_EC, MOV_ED, MOV_EH, MOV_EL, MOV_EM, // or:
+    MOV_HA, MOV_HB, MOV_HC, MOV_HD, MOV_HE, MOV_HL, MOV_HM, // <Destination> is register (except F), or memory[HL]
+    MOV_LA, MOV_LB, MOV_LC, MOV_LD, MOV_LE, MOV_LH, MOV_LM, // <Source> is another register (except F)
     MOV_MA, MOV_MB, MOV_MC, MOV_MD, MOV_ME, MOV_MH, MOV_ML,
 
-    MVI_A, MVI_B, MVI_C, MVI_D, MVI_E, MVI_H, MVI_L,
+    MVI_A, MVI_B, MVI_C, MVI_D, MVI_E, MVI_H, MVI_L, MVI_M, // MVI <Destination>, W writes W to a register or memory[HL]
 
-    LXI_BC, LXI_DE, LXI_HL, LXI_SP,
+    LXI_BC, LXI_DE, LXI_HL, LXI_SP,                         // LXI <Destination>, DW writes DW to a register pair
 
-    LDA,
-    STA,
-    LHLD,
-    SHLD,
+    LDA,                                                    // LDA DW loads memory[DW] to A
+    STA,                                                    // STA DW stores A in memory[DW]
+    LHLD,                                                   // LHLD DW loads memory[DW, DW+1] to HL
+    SHLD,                                                   // SHLD DW stores HL in memory[DW, DW+1]
 
-    LDAX_BC, LDAX_DE, LDAX_HL,
-    STAX_BC, STAX_DE, STAX_HL,
+    LDAX_BC, LDAX_DE, LDAX_HL,                              // LDAX <Src> loads memory[<Src>] to A
+    STAX_BC, STAX_DE, STAX_HL,                              // STAX <Dest> stores A in memory[<Dest>]
 
-    XCNG,
+    XCNG,                                                   // Swaps HL and DE
 
     ADD_A, ADD_B, ADD_C, ADD_D, ADD_E, ADD_H, ADD_L, ADD_M,
     ADI,
@@ -99,6 +99,7 @@ typedef enum FRIDGE_IRCODE {
     DCX_BC, DCX_DE, DCX_HL, DCX_SP,
 
     DAD_BC, DAD_DE, DAD_HL, DAD_SP,
+    DAI,
 
     ANA_A, ANA_B, ANA_C, ANA_D, ANA_E, ANA_H, ANA_L, ANA_M,
     ANI,
@@ -129,7 +130,7 @@ typedef enum FRIDGE_IRCODE {
 
     XTHL, SPHL, HLSP,
 
-    IIN, IOUT, HLT, EI, DI, // 231 instructions
+    IIN, IOUT, HLT, EI, DI, // 233 instructions
 
     // video controller instructions
     VPRE,  // swaps back and visible buffers and sets buffer offset (position HL)
@@ -167,8 +168,6 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
-    IR246,
-    IR247,
     IR248,
     IR249,
     IR250,

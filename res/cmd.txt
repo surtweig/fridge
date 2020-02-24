@@ -1,0 +1,214 @@
+    NOP,
+
+    MOV_AB, MOV_AC, MOV_AD, MOV_AE, MOV_AH, MOV_AL, MOV_AM,
+    MOV_BA, MOV_BC, MOV_BD, MOV_BE, MOV_BH, MOV_BL, MOV_BM,
+    MOV_CA, MOV_CB, MOV_CD, MOV_CE, MOV_CH, MOV_CL, MOV_CM,
+    MOV_DA, MOV_DB, MOV_DC, MOV_DE, MOV_DH, MOV_DL, MOV_DM,
+    MOV_EA, MOV_EB, MOV_EC, MOV_ED, MOV_EH, MOV_EL, MOV_EM,
+    MOV_HA, MOV_HB, MOV_HC,	MOV_HD,	MOV_HE,	MOV_HL, MOV_HM,
+    MOV_LA,	MOV_LB,	MOV_LC,	MOV_LD,	MOV_LE,	MOV_LH, MOV_LM,
+    MOV_MA, MOV_MB, MOV_MC, MOV_MD, MOV_ME, MOV_MH, MOV_ML,
+
+    MVI_A, MVI_B, MVI_C, MVI_D, MVI_E, MVI_H, MVI_L,
+
+    LXI_BC, LXI_DE, LXI_HL, LXI_SP,
+
+    LDA,
+    STA,
+    LHLD,
+    SHLD,
+
+    LDAX_BC, LDAX_DE, LDAX_HL,
+    STAX_BC, STAX_DE, STAX_HL,
+
+    XCNG,
+
+    ADD_A, ADD_B, ADD_C, ADD_D, ADD_E, ADD_H, ADD_L, ADD_M,
+    ADI,
+    ADC_A, ADC_B, ADC_C, ADC_D, ADC_E, ADC_H, ADC_L, ADC_M,
+    ACI,
+
+    SUB_A, SUB_B, SUB_C, SUB_D, SUB_E, SUB_H, SUB_L, SUB_M,
+    SUI,
+    SBB_A, SBB_B, SBB_C, SBB_D, SBB_E, SBB_H, SBB_L, SBB_M,
+    SBI,
+
+    INR_A, INR_B, INR_C, INR_D, INR_E, INR_H, INR_L, INR_M,
+    DCR_A, DCR_B, DCR_C, DCR_D, DCR_E, DCR_H, DCR_L, DCR_M,
+
+    INX_BC, INX_DE, INX_HL, INX_SP,
+    DCX_BC, DCX_DE, DCX_HL, DCX_SP,
+
+    DAD_BC, DAD_DE, DAD_HL, DAD_SP,
+
+    
+    ANA_A, ANA_B, ANA_C, ANA_D, ANA_E, ANA_H, ANA_L, ANA_M,
+    ANI,
+    ORA_A, ORA_B, ORA_C, ORA_D, ORA_E, ORA_H, ORA_L, ORA_M,
+    ORI,
+    XRA_A, XRA_B, XRA_C, XRA_D, XRA_E, XRA_H, XRA_L, XRA_M,
+    XRI,
+    CMP_A, CMP_B, CMP_C, CMP_D, CMP_E, CMP_H, CMP_L, CMP_M,
+    CPI,
+
+    RLC,
+    RRC,
+    RAL,
+    RAR,
+    CMA,
+    CMC,
+    STC,
+    RTC,
+
+    JMP, JNZ, JZ, JNC, JC, JPO, JPE, JP, JM,
+    CALL, CNZ, CZ, CNC, CC, CPO, CPE, CP, CM,
+    RET, RNZ, RZ, RNC, RC, RPO, RPE, RP, RM,
+
+    PCHL,
+
+    PUSH_AF, PUSH_BC, PUSH_DE, PUSH_HL,
+    POP_AF, POP_BC, POP_DE, POP_HL,
+
+    XTHL, SPHL, HLSP,
+
+    IIN, IOUT, HLT, EI, DI,
+
+    // video memory instructions
+    VFSA,  // store A as byte on the back buffer at address HL
+    VFSAC, // store A as color on the back buffer at position HL
+    VFLA,  // load to A a byte on the back buffer at address HL
+    VFLAC, // load to A a color on the back buffer at position HL
+    VFCLR, // fill back buffer with byte A
+
+    VSSA,  // store A as byte in sprite memory at address HL
+    VSSAC, // store A as color in sprite memory at position HL
+    VSLA,  // load to A a byte in sprite memory at address HL
+    VSLAC, // load to A a color in sprite memory at position HL
+
+    // video controller instructions
+    VPRE,  // swaps back and visible buffers
+    VMODE, // switches video mode (0 for EGA and 1 for TEXT)
+    VPAL,  // updates EGA pallette from the sprite memory at HL address as 16 triples of RGB bytes
+
+    // sprites
+    VSS,  // set sprite (HL = address)
+    VSDQ, // draw sprite opaque (HL = position)
+    VSDT, // draw sprite transparent-0 (HL = position)
+    VSDA, // draw sprite additive (HL = position)
+    VSBA, // bitblit sprite AND (HL = position)
+    VSBO, // bitblit sprite OR (HL = position)
+    VSBX, // bitblit sprite XOR (HL = position)
+
+    IR250,
+    IR251,
+    IR252,
+    IR253,
+    IR254,
+    IR255
+
+    
+
+
+    sprite:
+        write: VSSA(byte A, address HL)
+        read: VSLA(byte A, address HL)
+        set: VSS(index A, width B, height C, address HL)
+        draw: VSD(index A, mode B, position HL)
+            mode: 0 - invisible
+                  1 - opaque
+                  2 - transparent0
+                  3 - additive
+                  4 - subtractive
+                  5 - bitwise and
+                  6 - bitwise or
+                  7 - bitwise xor
+
+    backbuf:
+        write: VFSA(byte A, address HL)
+               VFSAC(color A, position HL)
+        read: VFLA(byte A, address HL)
+              VFLAC(color A, position HL)
+        draw: VS2F(mode A, position BC, address HL)
+            draws two pixels from sprite memory at address HL
+            to backbuffer with mode A at position BC
+
+    pallette:
+        VPAL(color A, rgb B, C, D)
+
+
+MVI A, 0
+LXI HL, 0x0000
+entry loop
+  INR A
+  VFSA
+  PUSH HL
+  LXI HL, 0x0000
+  VPRE
+  POP HL
+  VFSA
+  INX HL
+  MOV B, A
+  MOV A, H
+  CPI 0x4b
+  MOV A, B
+  JNZ loop
+  INR A
+  LXI HL, 0x0000
+  JMP loop
+
+main():
+  y       @ 0  (SP-13) uint16
+  myArray @ 2  (SP-11) 5x uint8
+  ttt     @ 7  (SP-6)  3x uint8
+  x       @ 10 (SP-3)  uint16
+  z       @ 12 (SP-1)  uint8
+
+  ReserveLocals:
+    LXI HL, localsSize (12)
+    DAD SP
+
+  = z 15
+    HLSP
+    DAI, ~1 + 1
+    MVI M, 15
+
+  = x 15:
+    HLSP
+    DAI, ~3 + 1
+    MVI M, 0
+    INX HL
+    MVI M, 15
+
+  = y x:
+    HLSP
+    DAI, ~13 + 1 // HL = #y
+    XCNG         // DE = #y
+    HLSP
+    DAI, ~3 + 1 // HL = #x
+    MOV A, M
+    STAX DE     // mem[DE] = mem[HL]
+    INX HL
+    MOV A, M
+    INX DE
+    STAX DE     // mem[DE+1] = mem[HL+1]
+
+  = z x:
+    HLSP
+    DAI, ~1 + 1 // HL = #z
+    XCNG        // DE = #z
+    HLSP
+    DAI, ~3 + 1 // HL = #x+1 (low byte of x)
+    MOV A, M
+    STAX DE     // mem[DE] = mem[HL]
+
+  = x z:
+    HLSP
+    DAI, ~3 + 1 // HL = #x
+    MVI A, 0
+    MOV M, A    // zeroing high byte
+    INX HL
+    XCNG        // DE = #x+1 (low byte of x)
+    HLSP
+    DAI, ~1 + 1 // HL = #z
+    MOV A, M
+    STAX DE     // mem[DE] = mem[HL]
