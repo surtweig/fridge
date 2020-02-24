@@ -316,24 +316,26 @@ namespace CPM
                 {
                     CPMStaticSymbol* ss = addStatic(nameNode->text, owner, isConst);
 
+                    /*
                     string typeName = typeNode->text;
                     if (typeName[0] == PtrPrefix)
                     {
                         ss->field.isPtr = true;
                         typeName = typeName.substr(1, typeName.size() - 1);
                     }
-                    ss->field.type = resolveDataTypeName(typeName, &sources[node->sourceFileName], owner);
+                    */
+                    ss->field.type = resolveDataTypeName(typeNode->text, ss->field.isPtr, &sources[node->sourceFileName], owner);
                     ss->field.owner = owner;
 
                     if (ss->field.type == CPM_DATATYPE_UNDEFINED)
                     {
-                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeName + "'.", node->sourceFileName, node->children[0]->lineNumber);
+                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
                         noErrors = false;
                         return;
                     }
                     if (ss->field.type == CPM_DATATYPE_AMBIGUOUS)
                     {
-                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeName + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
+                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
                         noErrors = false;
                         return;
                     }
@@ -387,7 +389,7 @@ namespace CPM
                             ss->importSource = parseNum(importSourceNode->text);
                         else
                         {
-                            compilerLog.Add(LOG_ERROR, "Static symbol '" + countNode->text + "' import address must be an integer.", node->sourceFileName, importSourceNode->lineNumber);
+                            compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' import address must be an integer.", node->sourceFileName, importSourceNode->lineNumber);
                             noErrors = false;
                             return;
                         }
@@ -541,12 +543,14 @@ namespace CPM
                     sfield->owner = structSymbol->owner;
                     string typeName = typeNode->text;
 
+                    /*
                     if (typeName[0] == PtrPrefix)
                     {
                         sfield->isPtr = true;
                         typeName = typeName.substr(1, typeName.size() - 1);
                     }
-                    sfield->type = resolveDataTypeName(typeName, &sources[node->sourceFileName], structSymbol->owner);
+                    */
+                    sfield->type = resolveDataTypeName(typeName, sfield->isPtr, &sources[node->sourceFileName], structSymbol->owner);
 
                     if (sfield->type == CPM_DATATYPE_UNDEFINED)
                     {
@@ -742,13 +746,16 @@ namespace CPM
             if (typeNode->type == CPM_ID && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
             {
                 string typeName = typeNode->text;
+                
                 bool isPtr = false;
+                /*
                 if (typeName[0] == PtrPrefix)
                 {
                     isPtr = true;
                     typeName = typeName.substr(1, typeName.size() - 1);
                 }
-                CPMDataType type = resolveDataTypeName(typeName, &sources[node->sourceFileName], owner);
+                */
+                CPMDataType type = resolveDataTypeName(typeName, isPtr, &sources[node->sourceFileName], owner);
                 if (type == CPM_DATATYPE_UNDEFINED)
                 {
                     compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
@@ -771,7 +778,7 @@ namespace CPM
                     for (int i = 1; i < argsNode->children.size() - 1; ++i)
                     {
                         CPMArgumentSignature argSign;
-                        argSign.isRef = false;
+                        //argSign.isRef = false;
                         argSign.isPtr = false;
                         argSign.count = 1;
                         if (argNode->children.size() < 2 || argNode->children.size() > 5)
@@ -782,12 +789,14 @@ namespace CPM
                         }
 
                         string argType = argNode->children[0]->text;
+                        /*
                         if (argType[0] == PtrPrefix)
                         {
                             argSign.isPtr = true;
                             argType = argType.substr(1, argType.size() - 1);
                         }
-                        argSign.type = resolveDataTypeName(argType, &sources[node->sourceFileName], owner);
+                        */
+                        argSign.type = resolveDataTypeName(argType, argSign.isPtr, &sources[node->sourceFileName], owner);
                         if (argSign.type == CPM_DATATYPE_UNDEFINED)
                         {
                             compilerLog.Add(LOG_ERROR, "Undefined type '" + argType + "'.", argNode->sourceFileName, argNode->lineNumber);
@@ -820,12 +829,13 @@ namespace CPM
                                     return;
                                 }
                             }
-
+                            /*
                             if (argNode->children[argNode->children.size()-1]->text == R_REF)
                             {
                                 argSign.isRef = true;
                             }
-                            else if (argNode->children.size() != 4)
+                            
+                            else*/ if (argNode->children.size() != 4)
                             {
                                 compilerLog.Add(LOG_ERROR, "Invalid symbol attribute '" + argNode->children[argNode->children.size() - 1]->text + "' for argument " + argSign.name + " .", argNode->sourceFileName, argNode->lineNumber);
                                 noErrors = false;
@@ -864,9 +874,9 @@ namespace CPM
                         compilerLog.Add(to_string(func->arguments[i].type));
                         func->arguments[i].isPtr = signature.arguments[i].isPtr;
                         if (signature.arguments[i].isPtr)
-                            compilerLog.Add("*");
-                        if (signature.arguments[i].isRef)
-                            compilerLog.Add("&");
+                            compilerLog.Add(PtrPrefix);
+                        //if (signature.arguments[i].isRef)
+                        //    compilerLog.Add("&");
                     }
                     compilerLog.Add(" )");
                 }
@@ -955,6 +965,8 @@ namespace CPM
 
     int CPMCompiler::sizeOfType(CPMDataType type)
     {
+        CPM_ASSERT(type >= CPM_DATATYPE_VOID);
+
         if (type == CPM_DATATYPE_VOID)
             return 0;
         if (type == CPM_DATATYPE_BOOL || type == CPM_DATATYPE_CHAR || type == CPM_DATATYPE_INT8 || type == CPM_DATATYPE_UINT8)
@@ -1005,9 +1017,41 @@ namespace CPM
         return parsedName;
     }
 
-    CPMDataType CPMCompiler::resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    string CPMCompiler::GetTypeName(CPMDataType typeId, CPMNamespace* ns)
     {
-        vector<string> parsedName = CPMCompiler::ParseSymbolName(name);
+        if (ns)
+        {
+            for (auto i = ns->datatypes.begin(); i != ns->datatypes.end(); ++i)
+            {
+                if (i->second == typeId)
+                    return i->first;
+            }
+        }
+        else
+        {
+            for (auto nsi = namespaces.begin(); nsi != namespaces.end(); ++nsi)
+            {
+                for (auto i = nsi->second.datatypes.begin(); i != nsi->second.datatypes.end(); ++i)
+                {
+                    if (i->second == typeId)
+                        return i->first;
+                }
+            }
+        }
+        return "<undefined>";
+    }
+
+    CPMDataType CPMCompiler::resolveDataTypeName(const string &name, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    {
+        string typeName = name;
+        isPtr = false;
+        if (typeName[0] == PtrPrefix)
+        {
+            isPtr = true;
+            typeName = typeName.substr(1, typeName.size() - 1);
+        }
+
+        vector<string> parsedName = CPMCompiler::ParseSymbolName(typeName);
 
         CPMDataType result = CPM_DATATYPE_UNDEFINED;
 
@@ -1029,11 +1073,11 @@ namespace CPM
             map<string, CPMDataType>::iterator idt;
             if (currentNS)
             {
-                idt = currentNS->datatypes.find(name);
+                idt = currentNS->datatypes.find(typeName);
                 if (idt != currentNS->datatypes.end())
                     return idt->second;
             }
-            idt = namespaces[GlobalNamespace].datatypes.find(name);
+            idt = namespaces[GlobalNamespace].datatypes.find(typeName);
             if (idt != namespaces[GlobalNamespace].datatypes.end())
             {
                 result = idt->second;
@@ -1043,7 +1087,7 @@ namespace CPM
             for (int i = 0; i < sourceFile->usingNamespaces.size(); i++)
             {
                 string ns = sourceFile->usingNamespaces[i];
-                idt = namespaces[ns].datatypes.find(name);
+                idt = namespaces[ns].datatypes.find(typeName);
                 if (idt != namespaces[ns].datatypes.end())
                 {
                     result = idt->second;
@@ -1053,10 +1097,10 @@ namespace CPM
 
             if (candidatesNamespaces.size() > 1)
             {
-                compilerLog.Add(LOG_ERROR, "Ambiguous type reference '" + name + "'. Candidates are: ", sourceFile->name);
+                compilerLog.Add(LOG_ERROR, "Ambiguous type reference '" + typeName + "'. Candidates are: ", sourceFile->name);
                 for (int i = 0; i < candidatesNamespaces.size(); i++)
                 {
-                    compilerLog.Add(candidatesNamespaces[i] + NameSeparator + name);
+                    compilerLog.Add(candidatesNamespaces[i] + NameSeparator + typeName);
                     if (i < candidatesNamespaces.size() - 1)
                         compilerLog.Add(", ");
                 }
@@ -1167,8 +1211,9 @@ namespace CPM
         return true;
     }
     
-    int CPMCompiler::evalNum(vector<CPMUnfoldedExpressionNode> &unfolded, CPMNamespace* currentNS)
+    int CPMCompiler::evalNum(vector<CPMUnfoldedExpressionNode> &unfolded, bool& ok, CPMNamespace* currentNS, bool silent)
     {
+        ok = true;
         stack<int> evalStack;
         for (int i = unfolded.size() - 1; i >= 0; --i)
         {
@@ -1187,22 +1232,34 @@ namespace CPM
                         }
                         else
                         {
-                            compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
-                            noErrors = false;
+                            ok = false;
+                            if (!silent)
+                            {
+                                compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                                noErrors = false;
+                            }
                             return 0;
                         }
                     }
                     else
                     {
-                        compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not declared or ambiguous in this context.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
-                        noErrors = false;
+                        ok = false;
+                        if (!silent)
+                        {
+                            compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not declared or ambiguous in this context.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                            noErrors = false;
+                        }
                         return 0;
                     }
                 }
                 else
                 {
-                    compilerLog.Add(LOG_ERROR, "Cannot evaluate '" + unfolded[i].syntaxNode->text + "' as an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
-                    noErrors = false;
+                    ok = false;
+                    if (!silent)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Cannot evaluate '" + unfolded[i].syntaxNode->text + "' as an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                        noErrors = false;
+                    }
                     return 0;
                 }
             }
@@ -1292,8 +1349,12 @@ namespace CPM
                 }
                 else
                 {
-                    compilerLog.Add(LOG_ERROR, "Operator '" + op + "' cannot be evaluated at compile time.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
-                    noErrors = false;
+                    ok = false;
+                    if (!silent)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Operator '" + op + "' cannot be evaluated at compile time.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                        noErrors = false;
+                    }
                     return 0;
                 }
                 evalStack.push(result);
@@ -1411,9 +1472,10 @@ namespace CPM
         return true;
     }
 
-    bool CPMCompiler::parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index)
+    bool CPMCompiler::parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index, bool autoType)
     {
-        CPM_ASSERT(IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
+        if (!autoType)
+            CPM_ASSERT(IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
 
         if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
         {
@@ -1424,7 +1486,32 @@ namespace CPM
             {
                 vector<CPMUnfoldedExpressionNode> unfolded;
                 parseExpression(valueNode, unfolded);
-                val = evalNum(unfolded, symbol->owner);
+                bool ok;
+                val = evalNum(unfolded, ok, symbol->owner);
+                if (!ok)
+                {
+                    compilerLog.Add(LOG_ERROR, "Cannot evaluate number value.", valueNode->sourceFileName, valueNode->lineNumber);
+                    noErrors = false;
+                    return false;
+                }
+            }
+
+            if (autoType)
+            {
+                if (val >= UINT8_Min)
+                {
+                    if (val < UINT8_Max)
+                        symbol->type = CPM_DATATYPE_UINT8;
+                    else
+                        symbol->type = CPM_DATATYPE_UINT16;
+                }
+                else
+                {
+                    if (val >= INT8_Min)
+                        symbol->type = CPM_DATATYPE_INT8;
+                    else
+                        symbol->type = CPM_DATATYPE_INT16;
+                }
             }
 
             if (symbol->type == CPM_DATATYPE_BOOL)

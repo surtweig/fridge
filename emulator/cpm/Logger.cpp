@@ -41,21 +41,42 @@ namespace CPM
 
     Logger* Logger::Add(const char c)
     {
-        sstream << "'" << c << "' (" << (int)c << ")";
+        sstream << "'" << c << "' (" << hex << (int)c << ")" << dec;
         return this;
     }
 
     Logger* Logger::Add(int n)
     {
-        sstream << n;
+        sstream << dec << n;
         return this;
     }
 
-    Logger* Logger::AddHex(int n)
+    Logger* Logger::AddHex(FRIDGE_DWORD n)
     {
         sstream << "0x"
-            << setfill('0') << setw(4)
-            << hex << n;
+            << setfill('0') << setw(sizeof(FRIDGE_DWORD))
+            << hex << n << dec;
+        return this;
+    }
+
+    Logger* Logger::AddHex(FRIDGE_WORD n)
+    {
+        sstream << "0x"
+            << setfill('0') << setw(sizeof(FRIDGE_WORD))
+            << hex << n << dec;
+        return this;
+    }
+
+
+    Logger* Logger::Endl()
+    {
+        sstream << "\n";
+        return this;
+    }
+
+    Logger* Logger::Tab()
+    {
+        sstream << "   ";
         return this;
     }
 

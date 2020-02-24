@@ -1,8 +1,8 @@
-//#include "vtext.binc";
-//#include "stdapp.cinc";
+//include "vtext.binc";
+//include "stdapp.cinc";
  
-#using VTEXT;
-#using X2AL;
+using VTEXT;
+using X2AL;
 
 namespace X2AL // zuzu123
 (
@@ -98,19 +98,23 @@ struct cs1
     complexStruct _cS;
 );
 */
-uint8 func(uint8 a ref; uint8 b)
+uint8 func(#uint8 a; #uint8 b)
 (
-    return (+ a b);
+    return (+ ^a ^b);
 );
 
-uint8 func(*uint8 b ref; uint8 x) ( ; );
+uint8 func(#uint8 b; uint8 x) ( ; );
 
 void main()
 (
     //intArray myArray 0;
+    uint16 y;
     uint8 myArray array intArraySize;
-    = (myArray 0) 1;
-    = (myArray 1) (myArray.data (- (myArray.data 0) 1));
+    uint8 ttt array 3 (1;2;3);
+    uint16 x;
+    uint8 z (+ 54 12);
+    //= (myArray 0) 1;
+    //= (myArray 1) (myArray.data (- (myArray.data 0) 1));
     if (== (myArray.data 0) 1)    
         (putstr 0 0 "Hello, World!")
     else if (0)
@@ -123,14 +127,15 @@ void main()
         if (== i 2)
         (
             putstr 0 0 "i == 2";
-            = (myArray.data i) i;
+            //= (myArray.data i) i;
         );
-        = (myArray.data i) i;
+        //= (myArray.data i) i;
     );
-    
-    uint16 x;
-    *uint16 px;
-    = px null;
-    = px *x;
-    = >px 10;
+
+    //= (myArray.data i) i;
+    = x 15;
+    = z x;
+    = x z;
+    //= x (+ 5 z);
+    //= #x 10;
 );

@@ -46,8 +46,8 @@ namespace CPM
 
     bool IsIntDataType(CPMDataType dtype);
 
-    const string R_INCLUDE = "#include";
-    const string R_USING = "#using";
+    const string R_INCLUDE = "include";
+    const string R_USING = "using";
     const string R_IMPORT = "imports";
     const string R_NAMESPACE = "namespace";
     const string R_STRUCT = "struct";
@@ -58,10 +58,11 @@ namespace CPM
     const string R_NULL = "null";
     const string R_REF = "ref";
     const string GlobalNamespace = "global";
-    const char PtrPrefix = '*';
+    const char PtrPrefix = '#';
     const char RefPrefix = '&';
     const char NameSeparator = '.';
     const char ServiceSymbol = '$';
+    const string OP_ASSIGN = "=";
 
     struct CPMSourceFile
     {
@@ -105,7 +106,7 @@ namespace CPM
         CPMSyntaxTreeNode* node;
         bool isUnion;
         int size;
-        map<string, CPMDataSymbol> fields;    
+        map<string, CPMDataSymbol> fields;
         CPMNamespace* owner;
 
         CPMStructSymbol();
@@ -117,7 +118,7 @@ namespace CPM
         CPMDataType type;
         int count;
         bool isPtr;
-        bool isRef;
+        //bool isRef;
     };
 
     struct CPMFunctionSignature
@@ -191,15 +192,6 @@ namespace CPM
         void readFunctions();
         void detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner);
 
-        int parseNum(const string &num);
-        bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode> &unfolded);
-        int evalNum(vector<CPMUnfoldedExpressionNode> &unfolded, CPMNamespace* currentNS = NULL);
-
-        
-        bool parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralChar  (CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralStruct(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         //void writeStaticNum(CPMStaticSymbol* symbol, int value);
         //int readStaticNum(CPMStaticSymbol* symbol);
 
@@ -211,6 +203,8 @@ namespace CPM
     public:
         CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders);
         inline Logger* CompilerLog() { return &compilerLog; }
+        inline void Error() { noErrors = false; }
+        inline bool NoErrors() { return noErrors; }
         inline Logger* AsmDebugOutput() { return &asmDebugOutput; }
         void PrintStaticData();
         ~CPMCompiler();
@@ -224,11 +218,18 @@ namespace CPM
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
-        CPMDataType resolveDataTypeName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        CPMDataType resolveDataTypeName(const string &name, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         CPMStaticSymbol* resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
-
+        int parseNum(const string& num);
+        bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode>& unfolded);
+        int evalNum(vector<CPMUnfoldedExpressionNode>& unfolded, bool& ok, CPMNamespace* currentNS = NULL, bool silent = false);
+        bool parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0, bool autoType = false);
+        bool parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
+        bool parseLiteralChar(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
+        bool parseLiteralStruct(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         static vector<string> ParseSymbolName(const string& name);
+        string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
     };
 
 }

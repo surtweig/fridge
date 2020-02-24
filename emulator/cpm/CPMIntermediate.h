@@ -36,6 +36,7 @@ namespace CPM
         inline virtual CPMDataType ReturnType() { return CPM_DATATYPE_VOID; }
         virtual void GenerateCode(CPMRelativeCodeChunk& code) = 0;
     };*/
+    class CPMSemanticBlock;
 
     class CPMExecutableSemanticNode
     {
@@ -46,6 +47,7 @@ namespace CPM
 
     protected:
         vector<CPMExecutableSemanticNode*> children;
+        CPMSemanticBlock* blockParent;
 
         virtual void procreate() {};
     public:
@@ -54,7 +56,9 @@ namespace CPM
         inline CPMFunctionSymbol* OwnerFunction() { return ownerFunction; }
         inline CPMSyntaxTreeNode* SyntaxNode() { return syntaxNode; }
         inline CPMExecutableSemanticNode* Parent() { return parent; }
+        inline void Error() { OwnerFunction()->compiler->Error(); }
         inline Logger* CompilerLog() { return OwnerFunction()->compiler->CompilerLog(); }
+        inline Logger* AsmLog() { return OwnerFunction()->compiler->AsmDebugOutput(); }
         ~CPMExecutableSemanticNode();
     };
 
@@ -76,6 +80,8 @@ namespace CPM
     {
     protected:
         map<string, CPMDataSymbol*> locals;
+        vector<CPMDataSymbol*> literals;
+        FRIDGE_DWORD stackOffset;
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
         virtual void procreate();
@@ -85,6 +91,9 @@ namespace CPM
         CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         ~CPMSemanticBlock();
         virtual CPMRelativeCodeChunk* GenerateCode();
+        CPMDataSymbol* resolveLocalSymbolName(const string &name);
+        FRIDGE_DWORD StackOffset() { return stackOffset; }
+        void addLiteral(CPMDataSymbol* symbol) { literals.push_back(symbol); }
     };
 
     class CPMFunctionSemanticBlock : public CPMSemanticBlock
@@ -96,9 +105,43 @@ namespace CPM
     class CPMOperator_Alloc : public CPMExecutableSemanticNode
     {
     public:
-        CPMOperator_Alloc(CPMDataType dataType, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        CPMOperator_Alloc(CPMDataType dataType, bool isPtr, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         virtual CPMRelativeCodeChunk* GenerateCode();
         virtual void procreate() {};
+    };
+
+    class CPMSematicExpression : public CPMExecutableSemanticNode
+    {
+    private:
+        CPMDataType resultType;
+        bool resultIsPtr;
+        CPMDataSymbol* resultSymbol;
+        int resultIndex;
+    public:
+        CPMSematicExpression(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        virtual CPMRelativeCodeChunk* GenerateCode();
+        virtual void procreate();
+
+        CPMDataType ResultType() { return resultType; }
+        bool ResultIsPtr() { return resultIsPtr; }
+        CPMDataSymbol* ResultSymbol() { return resultSymbol; }
+        int ResultIndex() { return resultIndex; }
+    };
+
+    class CPMOperator_Assign : public CPMExecutableSemanticNode
+    {
+    private:
+        CPMDataSymbol* destination;
+        CPMSematicExpression* destExpr;
+        CPMDataSymbol* source;
+        CPMSematicExpression* srcExpr;
+        bool staticDest;
+        bool literalSource;
+        
+    public:
+        CPMOperator_Assign(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        virtual CPMRelativeCodeChunk* GenerateCode();
+        virtual void procreate();
     };
 
     class CPMIntermediate

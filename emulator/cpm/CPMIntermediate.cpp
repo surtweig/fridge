@@ -36,7 +36,11 @@ namespace CPM
         size = 0;
 
         for (int i = 0; i < merge.size(); ++i)
+        {
+            if (merge[i] == nullptr)
+                continue;
             size += merge[i]->size;
+        }
 
         code = (FRIDGE_WORD*)malloc(size);
         assert(code);
@@ -48,6 +52,8 @@ namespace CPM
         
         for (int i = 0; i < merge.size(); ++i)
         {
+            if (merge[i] == nullptr)
+                continue;
             if (merge[i]->code == nullptr)
                 continue;
 
@@ -90,6 +96,7 @@ namespace CPM
         this->parent = parent;
         this->syntaxNode = syntaxNode;
         this->ownerFunction = ownerFunction;
+        blockParent = dynamic_cast<CPMSemanticBlock*>(parent);
     }
 
     CPMExecutableSemanticNode::~CPMExecutableSemanticNode()
@@ -101,12 +108,14 @@ namespace CPM
     CPMSemanticBlock::CPMSemanticBlock(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode) :
         CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
+        stackOffset = 0;
         procreate();
     }
 
     CPMSemanticBlock::CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction) :
         CPMExecutableSemanticNode(NULL, syntaxNode, ownerFunction)
     {
+        stackOffset = 0;
         procreate();
     }
 
@@ -137,33 +146,41 @@ namespace CPM
                         //
                         // node->procreate
 
+                        bool isPtr = false;
                         CPMDataType dataType = OwnerFunction()->compiler->resolveDataTypeName(
                             opname->text,
+                            isPtr,
                             OwnerFunction()->compiler->getSourceFile(line->sourceFileName),
                             OwnerFunction()->owner);
 
                         if (dataType > 0)
                         {
-                            children.push_back(new CPMOperator_Alloc(dataType, this, line));
+                            children.push_back(new CPMOperator_Alloc(dataType, isPtr, this, line));
                         }
                         else if (dataType == CPM_DATATYPE_AMBIGUOUS)
                         {
                             CompilerLog()->Add(LOG_ERROR, "Type reference '" + opname->text + "' is ambiguous in this context. See the message above.", opname->sourceFileName, opname->lineNumber);
+                            Error();
                             return;
                         }
                         else if (dataType == CPM_DATATYPE_VOID)
                         {
                             CompilerLog()->Add(LOG_ERROR, "Void type is not allowed for local symbols.", opname->sourceFileName, opname->lineNumber);
+                            Error();
                             return;
                         }
                         else
                         {
-
+                            if (opname->text == OP_ASSIGN)
+                            {
+                                children.push_back(new CPMOperator_Assign(this, line));
+                            }
                         }
                     }
                     else
                     {
                         CompilerLog()->Add(LOG_ERROR, "Operator line must start with an operator identifier.", line->sourceFileName, line->lineNumber);
+                        Error();
                         return;
                     }
                 }
@@ -196,6 +213,8 @@ namespace CPM
             );
             ccs.push_back(ccReserveLocals);
 
+            AsmLog()->Tab()->Add("ReserveLocals ")->Add(pushOffset)->Endl();
+
             for (int i = 0; i < children.size(); ++i)
             {
                 CPMRelativeCodeChunk* childcc = children[i]->GenerateCode();
@@ -211,6 +230,8 @@ namespace CPM
             );
             ccs.push_back(ccFlushLocals);
 
+            AsmLog()->Tab()->Add("FlushLocals ")->Add(popOffset)->Endl();
+
             CPMRelativeCodeChunk* cc = new CPMRelativeCodeChunk(ccs);
             for (int i = 0; i < ccs.size(); ++i)
                 delete ccs[i];
@@ -220,8 +241,23 @@ namespace CPM
         else
         {
             CompilerLog()->Add(LOG_ERROR, "Block local data size exceeds MaxDataSize.", SyntaxNode()->sourceFileName, SyntaxNode()->lineNumber);
+            Error();
             return nullptr;
         }
+    }
+
+    CPMDataSymbol* CPMSemanticBlock::resolveLocalSymbolName(const string& name)
+    {
+        auto i = locals.find(name);
+        CPMDataSymbol* symbol = nullptr;
+        if (i == locals.end())
+        {
+            if (blockParent != nullptr)
+                symbol = blockParent->resolveLocalSymbolName(name);
+        }
+        else
+            symbol = i->second;
+        return symbol;
     }
 
     CPMFunctionSemanticBlock::CPMFunctionSemanticBlock(CPMFunctionSymbol* ownerFunction)
@@ -230,10 +266,10 @@ namespace CPM
         for (int i = 0; i < ownerFunction->arguments.size(); ++i)
             locals[ownerFunction->arguments[i].name] = &ownerFunction->arguments[i];
 
-        ownerFunction->compiler->AsmDebugOutput()->Add(ownerFunction->signature.name)->Add(" at ")->AddHex(ownerFunction->globalAddress)->Add(" ( ");
+        AsmLog()->Endl()->Add(ownerFunction->signature.name)->Add(" at ")->AddHex(ownerFunction->globalAddress)->Add(" ( ");
         for (int argi = 0; argi < ownerFunction->signature.arguments.size(); ++argi)
-            ownerFunction->compiler->AsmDebugOutput()->Add(ownerFunction->signature.arguments[argi].name)->Add(" ");
-        ownerFunction->compiler->AsmDebugOutput()->Add(")\n");
+            AsmLog()->Add(ownerFunction->signature.arguments[argi].name)->Add(" ");
+        AsmLog()->Add(")\n");
     }
 
     // Semantic tree constructor
@@ -244,7 +280,7 @@ namespace CPM
         ns = proto->owner;
     }
 
-    CPMOperator_Alloc::CPMOperator_Alloc(CPMDataType dataType, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+    CPMOperator_Alloc::CPMOperator_Alloc(CPMDataType dataType, bool isPtr, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
         : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
         CPM_SEMANTIC_ASSERT(parent->SyntaxNode()->type == CPM_BLOCK);
@@ -270,6 +306,7 @@ namespace CPM
                 else
                 {
                     CompilerLog()->Add(LOG_ERROR, "Missing array keyword for local array symbol declaration.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+                    Error();
                     return;
                 }
             }
@@ -286,6 +323,8 @@ namespace CPM
                         blockParent->locals[nameNode->text] = symbol;
                         symbol->name = nameNode->text;
                         symbol->type = dataType;
+                        symbol->isPtr = isPtr;
+                        symbol->offset = blockParent->stackOffset;
                         if (arraySizeNode)
                             symbol->count = OwnerFunction()->compiler->parseArraySizeDecl(arraySizeNode, OwnerFunction()->owner);
                         else
@@ -294,23 +333,249 @@ namespace CPM
                         {
                             OwnerFunction()->compiler->parseLiteralValue(symbol, valueNode);
                         }
+                        blockParent->stackOffset += OwnerFunction()->compiler->sizeOfData(symbol);
                     }
                     else
+                    {
                         CompilerLog()->Add(LOG_ERROR, "Local symbol '" + nameNode->text + "' is already declared.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+                        Error();
+                        return;
+                    }
                 }
                 else
+                {
                     CompilerLog()->Add(LOG_ERROR, "Local symbol name cannot contain namespace references.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+                    Error();
+                    return;
+                }
             }
             else
+            {
                 CompilerLog()->Add(LOG_ERROR, "Local symbol name must be an identificator.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+                Error();
+                return;
+            }
         }
         else
+        {
             CompilerLog()->Add(LOG_ERROR, "Invalid local symbol declaration syntax.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
+            Error();
+            return;
+        }
     }
 
     CPMRelativeCodeChunk* CPMOperator_Alloc::GenerateCode()
     {
         return nullptr;
+    }
+
+    CPMOperator_Assign::CPMOperator_Assign(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+        : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
+    {
+        source = nullptr;
+        destination = nullptr;
+        srcExpr = nullptr;
+        destExpr = nullptr;
+        literalSource = false;
+        staticDest = false;
+        procreate();
+    }
+
+    CPMRelativeCodeChunk* CPMOperator_Assign::GenerateCode()
+    {
+        CPM_SEMANTIC_ASSERT(destination || destExpr);
+        CPM_SEMANTIC_ASSERT(source || srcExpr);
+        vector<CPMRelativeCodeChunk*> ccs;
+
+        for (int i = 0; i < children.size(); ++i)
+            ccs.push_back(children[i]->GenerateCode());
+
+        CPMRelativeCodeChunk* ccAssign = nullptr;
+        if ((destination->type >= CPM_DATATYPE_BOOL &&
+            destination->type <= CPM_DATATYPE_STRING) || destination->isPtr)
+        {
+            int destSize = OwnerFunction()->compiler->sizeOfData(destination);
+            CPM_SEMANTIC_ASSERT_MESSAGE(destSize == 1 || destSize == 2, "Simple type invalid data size");
+            AsmLog()->Tab()->Add("Assign simple type");
+            if (!staticDest)
+            {
+                AsmLog()->Add(" local ")->Add(OwnerFunction()->compiler->GetTypeName(destination->type))->Add(" ")->Add(destination->name);
+                if (literalSource)
+                {
+                    AsmLog()->Add(" to literal ");
+                    if (destSize == 1)
+                    {
+                        FRIDGE_WORD literalVal = (FRIDGE_WORD)source->data[0];
+                        AsmLog()->Add(literalVal);
+                        FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
+                        ccAssign = new CPMRelativeCodeChunk(
+                            {
+                                HLSP,
+                                DAI, FRIDGE_HIGH_WORD(offset), FRIDGE_LOW_WORD(offset),
+                                MVI_M, literalVal
+                            }
+                        );
+                    }
+                    else if (destSize == 2)
+                    {
+                        FRIDGE_DWORD literalVal = (FRIDGE_DWORD)source->data[0];
+                        AsmLog()->Add(literalVal);
+                        FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
+                        ccAssign = new CPMRelativeCodeChunk(
+                            {
+                                HLSP,
+                                DAI, FRIDGE_HIGH_WORD(offset), FRIDGE_LOW_WORD(offset),
+                                MVI_M, FRIDGE_HIGH_WORD(literalVal),
+                                INX_HL,
+                                MVI_M, FRIDGE_LOW_WORD(literalVal)
+                            }
+                        );
+                    }
+                    
+                }
+            }
+        }
+        ccs.push_back(ccAssign);
+        AsmLog()->Endl();
+
+        CPMRelativeCodeChunk* cc = new CPMRelativeCodeChunk(ccs);
+        for (int i = 0; i < ccs.size(); ++i)
+            delete ccs[i];
+
+        return cc;
+    }
+
+    void CPMOperator_Assign::procreate()
+    {
+        CPM_SEMANTIC_ASSERT(blockParent);
+        staticDest = false;
+        literalSource = false;
+        CPMSyntaxTreeNode* node = SyntaxNode();
+        if (node->children.size() == 3)
+        {
+            CPMSyntaxTreeNode* destNode = node->children[1];
+            CPMSyntaxTreeNode* sourceNode = node->children[2];
+
+            if (destNode->type == CPM_ID)
+            {
+                destination = blockParent->resolveLocalSymbolName(destNode->text);
+                if (destination == nullptr)
+                {
+                    CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
+                        destNode->text,
+                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName),
+                        OwnerFunction()->owner);
+                    if (ss != nullptr)
+                    {
+                        if (!ss->isconst)
+                        {
+                            destination = &ss->field;
+                            staticDest = true;
+                        }
+                        else
+                        {
+                            CompilerLog()->Add(LOG_ERROR, "Symbol '"+destNode->text+"' is constant.", destNode->sourceFileName, destNode->lineNumber);
+                            Error();
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        CompilerLog()->Add(LOG_ERROR, "Symbol '" + destNode->text + "' is not declared or ambiguous in this context.", destNode->sourceFileName, destNode->lineNumber);
+                        Error();
+                        return;
+                    }
+                }
+                if (destination == nullptr)
+                {
+                    CompilerLog()->Add(LOG_ERROR, "Undefined symbol '" + destNode->text + "'.", destNode->sourceFileName, destNode->lineNumber);
+                    Error();
+                    return;
+                }
+                else if (destination->count > 1)
+                {
+                    CompilerLog()->Add(LOG_ERROR, "Implicit array assignment is not implemented.", destNode->sourceFileName, destNode->lineNumber);
+                    Error();
+                    return;
+                }
+            }
+            else
+            {
+                CompilerLog()->Add(LOG_ERROR, "Assign destination must be an identifier.", destNode->sourceFileName, destNode->lineNumber);
+                Error();
+                return;
+            }
+
+            if (sourceNode->type == CPM_ID)
+            {
+                source = blockParent->resolveLocalSymbolName(sourceNode->text);
+                if (source == nullptr)
+                {
+                    CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
+                        sourceNode->text,
+                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName),
+                        OwnerFunction()->owner);
+                    if (ss != nullptr)
+                    {
+                        source = &ss->field;
+                    }
+                    else
+                    {
+                        CompilerLog()->Add(LOG_ERROR, "Symbol '" + sourceNode->text + "' is not declared or ambiguous in this context.", sourceNode->sourceFileName, sourceNode->lineNumber);
+                        Error();
+                        return;
+                    }
+                }
+                if (source == nullptr)
+                {
+                    CompilerLog()->Add(LOG_ERROR, "Undefined symbol '" + sourceNode->text + "'.", sourceNode->sourceFileName, sourceNode->lineNumber);
+                    Error();
+                    return;
+                }
+            }
+            else if (sourceNode->type == CPM_NUM)
+            {
+                source = new CPMDataSymbol();
+                source->count = 1;
+                source->data.resize(1);
+                blockParent->addLiteral(source);
+                if (OwnerFunction()->compiler->parseLiteralNumber(source, sourceNode, 0, true))
+                {
+                    literalSource = true;
+                }
+                else
+                {
+                    CompilerLog()->Add(LOG_ERROR, "Cannot parse number literal '" + sourceNode->text + "'.", sourceNode->sourceFileName, sourceNode->lineNumber);
+                    Error();
+                    return;
+                }
+            }
+            else if (sourceNode->type == CPM_EXPR)
+            {
+                source = new CPMDataSymbol();
+                blockParent->addLiteral(source);
+                if (OwnerFunction()->compiler->parseLiteralNumber(source, sourceNode, 0, true))
+                {
+                    literalSource = true;
+                }
+                else
+                {
+
+                }
+            }
+            else
+            {
+                CompilerLog()->Add(LOG_ERROR, "Assign source must be an identifier, number literal or an expression.", sourceNode->sourceFileName, sourceNode->lineNumber);
+                Error();
+                return;
+            }
+            
+        }
+        else
+        {
+            CompilerLog()->Add(LOG_ERROR, "Invalid '=' operator syntax.", node->sourceFileName, node->lineNumber);
+            Error();
+        }
     }
 
     CPMIntermediate::CPMIntermediate(CPMCompiler* compiler)
@@ -325,20 +590,24 @@ namespace CPM
 
         for (int nsi = 0; nsi < nslist.size(); ++nsi)
         {
-            compiler->AsmDebugOutput()->Add("\n")->Add(nslist[nsi]->name)->Add(":\n\n");
+            compiler->AsmDebugOutput()->Add("\n----- ")->Add(nslist[nsi]->name)->Add(":\n");
             for (auto fi = nslist[nsi]->functions.begin(); fi != nslist[nsi]->functions.end(); ++fi)
             {
                 CPMFunctionSymbol* funsym = &fi->second;
                 funsym->globalAddress = offset;
                 
                 CPMFunctionSemanticBlock* funblock = new CPMFunctionSemanticBlock(funsym);
+                if (!compiler->NoErrors())
+                    break;
                 CPMRelativeCodeChunk* funcode = funblock->GenerateCode();
                 ccs.push_back(funcode);
                 delete funblock;
                 offset += funcode->size;
             }
+            if (!compiler->NoErrors())
+                break;
         }
-        compiler->AsmDebugOutput()->Add("\nStatic data:\n");
+        compiler->AsmDebugOutput()->Add("\n----- Static data:\n");
         vector<FRIDGE_WORD> staticData;
         for (int nsi = 0; nsi < nslist.size(); ++nsi)
         {
@@ -348,7 +617,7 @@ namespace CPM
                 {
                     si->second.field.globalAddress = offset;
                     offset += si->second.field.serialize(staticData);
-                    compiler->AsmDebugOutput()->Add(nslist[nsi]->name)->Add(".")->Add(si->second.field.name)->
+                    compiler->AsmDebugOutput()->Tab()->Add(nslist[nsi]->name)->Add(".")->Add(si->second.field.name)->
                         Add(" ")->Add(offset - si->second.field.globalAddress)->Add(" bytes at ")->AddHex(si->second.field.globalAddress)->Add("\n");
                 }
             }
@@ -357,10 +626,13 @@ namespace CPM
         ccs.push_back(staticscc);
         objectCode = new CPMRelativeCodeChunk(ccs);
 
-        ofstream myfile(compiler->getOutputFileName(), ios::out | ios::binary);
-        myfile.write((char*)objectCode->code, objectCode->size * sizeof(FRIDGE_WORD));
-        myfile.close();
-        compiler->CompilerLog()->Add(LOG_MESSAGE, "Compiled program is saved to " + compiler->getOutputFileName());
+        if (compiler->NoErrors())
+        {
+            ofstream myfile(compiler->getOutputFileName(), ios::out | ios::binary);
+            myfile.write((char*)objectCode->code, objectCode->size * sizeof(FRIDGE_WORD));
+            myfile.close();
+            compiler->CompilerLog()->Add(LOG_MESSAGE, "Compiled program is saved to " + compiler->getOutputFileName());
+        }
     }
 
 
