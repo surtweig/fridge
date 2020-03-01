@@ -463,7 +463,7 @@ namespace CPM
                 {
                     CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
                         destNode->text,
-                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName),
+                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName), destNode,
                         OwnerFunction()->owner);
                     if (ss != nullptr)
                     {
@@ -513,7 +513,7 @@ namespace CPM
                 {
                     CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
                         sourceNode->text,
-                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName),
+                        OwnerFunction()->compiler->getSourceFile(node->sourceFileName), sourceNode,
                         OwnerFunction()->owner);
                     if (ss != nullptr)
                     {

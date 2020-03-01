@@ -624,7 +624,7 @@ namespace CPM
         }
         else if (countNode->type == CPM_ID)
         {
-            CPMStaticSymbol* sizeConst = resolveStaticSymbolName(countNode->text, &sources[countNode->sourceFileName], currentNS);
+            CPMStaticSymbol* sizeConst = resolveStaticSymbolName(countNode->text, &sources[countNode->sourceFileName], countNode, currentNS);
             if (sizeConst)
             {
                 if (sizeConst->isconst)
@@ -1012,7 +1012,7 @@ namespace CPM
         stringstream sname;
         sname.str(name);
         string subname;
-        while (getline(sname, subname, NameSeparator))
+        while (getline(sname, subname, CPM_SUBSCRIPT_DELIM))
             parsedName.push_back(subname);
         return parsedName;
     }
@@ -1100,7 +1100,7 @@ namespace CPM
                 compilerLog.Add(LOG_ERROR, "Ambiguous type reference '" + typeName + "'. Candidates are: ", sourceFile->name);
                 for (int i = 0; i < candidatesNamespaces.size(); i++)
                 {
-                    compilerLog.Add(candidatesNamespaces[i] + NameSeparator + typeName);
+                    compilerLog.Add(candidatesNamespaces[i] + CPM_SUBSCRIPT_DELIM + typeName);
                     if (i < candidatesNamespaces.size() - 1)
                         compilerLog.Add(", ");
                 }
@@ -1111,20 +1111,56 @@ namespace CPM
         return result;
     }
 
-    CPMStaticSymbol* CPMCompiler::resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    CPMStaticSymbol* CPMCompiler::resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS)
     {
         vector<string> parsedName;
         stringstream sname;
         sname.str(name);
         string subname;
-        while (getline(sname, subname, NameSeparator))
+        while (getline(sname, subname, CPM_SUBSCRIPT_DELIM))
             parsedName.push_back(subname);
 
         CPMStaticSymbol* result = NULL;
 
-        if (parsedName.size() == 2)
+        if (parsedName.size() > 1)
         {
-            map<string, CPMNamespace>::iterator ins = namespaces.find(parsedName[0]);
+            CPMNamespace* ns = &namespaces[GlobalNamespace];
+            int nameCounter = 0;
+            map<string, CPMNamespace>::iterator ins = namespaces.find(parsedName[nameCounter]);
+            if (ins != namespaces.end())
+            {
+                ns = &ins->second;
+                nameCounter++;
+            }
+            map<string, CPMStaticSymbol>::iterator iss = ins->second.statics.find(parsedName[nameCounter]);
+            if (iss != ins->second.statics.end())
+            {
+                result = &iss->second;
+                nameCounter++;
+            }
+            else
+            {
+                return nullptr;
+            }
+            /*
+            if (parsedName.size() >= nameCounter)
+            {
+                for (; nameCounter < parsedName.size(); ++nameCounter)
+                {
+                    if (result->field.type >= CPM_DATATYPE_USER)
+                    {
+                        result->field
+                    }
+                    else
+                    {
+                        compilerLog.Add(LOG_ERROR, "Cannot subscript non-struct symbol '" + result->field.name + "'.", sourceFile->name, syntaxNode->lineNumber);
+                        Error();
+                        return nullptr;
+                    }
+                }
+            }
+            */
+            /*map<string, CPMNamespace>::iterator ins = namespaces.find(parsedName[0]);
             if (ins != namespaces.end())
             {
                 map<string, CPMStaticSymbol>::iterator iss = ins->second.statics.find(parsedName[1]);
@@ -1132,7 +1168,7 @@ namespace CPM
                 {
                     return &iss->second;
                 }
-            }
+            }*/
         }
         else if (parsedName.size() == 1)
         {
@@ -1167,7 +1203,7 @@ namespace CPM
                 compilerLog.Add(LOG_ERROR, "Ambiguous static symbol reference '" + name + "'. Candidates are: ", sourceFile->name);
                 for (int i = 0; i < candidatesNamespaces.size(); i++)
                 {
-                    compilerLog.Add(candidatesNamespaces[i] + NameSeparator + name);
+                    compilerLog.Add(candidatesNamespaces[i] + CPM_SUBSCRIPT_DELIM + name);
                     if (i < candidatesNamespaces.size() - 1)
                         compilerLog.Add(", ");
                 }
@@ -1223,7 +1259,7 @@ namespace CPM
                     evalStack.push(parseNum(unfolded[i].syntaxNode->text));
                 else if (unfolded[i].syntaxNode->type == CPM_ID)
                 {
-                    CPMStaticSymbol* sym = resolveStaticSymbolName(unfolded[i].syntaxNode->text, &sources[unfolded[i].syntaxNode->sourceFileName], currentNS);
+                    CPMStaticSymbol* sym = resolveStaticSymbolName(unfolded[i].syntaxNode->text, &sources[unfolded[i].syntaxNode->sourceFileName], unfolded[i].syntaxNode, currentNS);
                     if (sym)
                     {
                         if (IsIntDataType(sym->field.type) && sym->field.count == 1)

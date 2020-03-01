@@ -15,6 +15,8 @@ namespace CPM
         CPM_NUM,
         CPM_STR,
         CPM_ID,
+        CPM_REF,
+        CPM_INDEX,
         CPM_EXPR,
         CPM_LINE,
         CPM_BLOCK,
@@ -28,7 +30,11 @@ namespace CPM
 
     const char CPM_BLOCK_OPEN = '(';
     const char CPM_BLOCK_CLOSE = ')';
+    const char CPM_INDEX_OPEN = '[';
+    const char CPM_INDEX_CLOSE = ']';
     const char CPM_LINE_END = ';';
+    const char CPM_OPERAND_DELIM = ',';
+    const char CPM_SUBSCRIPT_DELIM = '.';
     const char CPM_STR_DELIM = '"';
     const string CPM_COMMENT_LINE = "//";
     const string CPM_COMMENT_BLOCK_OPEN = "/*";
@@ -101,6 +107,16 @@ namespace CPM
         CPMSyntaxNodeType Type() override { return CPM_ID; }
     };
 
+    class CPMSD_REF : public CPMSyntaxDetector
+    {
+    private:
+    public:
+        CPMSD_REF();
+        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
+        //bool Complete() override;
+        CPMSyntaxNodeType Type() override { return CPM_REF; }
+    };
+
     class CPMSD_EXPR : public CPMSyntaxDetector
     {
     private:
@@ -113,6 +129,20 @@ namespace CPM
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
         //bool Complete() override;
         CPMSyntaxNodeType Type() override { return CPM_EXPR; }
+    };
+
+    class CPMSD_INDEX : public CPMSyntaxDetector
+    {
+    private:
+        //bool closed;
+        int pcounter;
+        int itemsCount;
+        bool opened;
+    public:
+        CPMSD_INDEX();
+        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
+        //bool Complete() override;
+        CPMSyntaxNodeType Type() override { return CPM_INDEX; }
     };
 
     class CPMSD_LINE : public CPMSyntaxDetector
@@ -130,7 +160,6 @@ namespace CPM
     {
     private:
         int pcounter;
-        bool opened;
     public:
         CPMSD_BLOCK();
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
@@ -141,7 +170,16 @@ namespace CPM
     inline bool CharIsDigit(char c) { return c >= '0' && c <= '9'; }
     inline bool CharIsHexDigit(char c) { return CharIsDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
     inline bool CharIsWhiteSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
-    inline bool CharIsDelimiter(char c) { return c == CPM_LINE_END || c == ',' || c == CPM_BLOCK_OPEN || c == CPM_BLOCK_CLOSE || c == CPM_STR_DELIM || c == '\''; }
+    inline bool CharIsDelimiter(char c) { 
+        return c == CPM_LINE_END ||
+               c == CPM_OPERAND_DELIM ||
+               c == CPM_SUBSCRIPT_DELIM ||
+               c == CPM_BLOCK_OPEN ||
+               c == CPM_BLOCK_CLOSE ||
+               c == CPM_INDEX_OPEN ||
+               c == CPM_INDEX_CLOSE ||
+               c == CPM_STR_DELIM ||
+               c == '\''; }
     string CPMSyntaxTreeNodeToString(CPMSyntaxTreeNode* node);
     string CPMSyntaxTreeNodeToStringRecoursive(CPMSyntaxTreeNode* node, string indent = "");
     string CPMSTRContent(CPMSyntaxTreeNode* node);
@@ -172,7 +210,7 @@ namespace CPM
         void GetLayer(vector<CPMSyntaxTreeNode*>& layerCopy);
         inline bool NoErrors() { return noErrors; }
         void Clear();
-        string LayerToString();
+        string LayerToString(bool recursive = true);
         ~CPMParser();
     };
 

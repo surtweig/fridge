@@ -130,6 +130,71 @@ namespace CPM
             return true;
     }
 
+    CPMSD_REF::CPMSD_REF() : CPMSyntaxDetector()
+    {
+
+    }
+
+    bool CPMSD_REF::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
+    {
+        if (complete)
+            return false;
+
+        bool valid = false;
+        if (cur->type == CPM_ID)
+        {
+            compilerLog->Add("ID " + cur->text)->Endl();
+            valid = true;
+        }
+
+        if (seq.size() > 0 && cur->type == CPM_INDEX)
+        {
+            compilerLog->Add("INDEX " + cur->text)->Endl();
+            valid = seq[seq.size() - 1]->type == CPM_ID;
+        }
+
+        if (next)
+        {
+            if (next->type == CPM_CHAR)
+            {
+                if (next->text[0] == CPM_BLOCK_OPEN || next->text[0] == CPM_INDEX_OPEN)
+                    return false;
+            }
+            if (seq.size() > 0 &&
+                (next->type == CPM_ID || next->type == CPM_INDEX) &&
+                cur->type == CPM_CHAR)
+            {
+                if (cur->text[0] == CPM_SUBSCRIPT_DELIM)
+                    valid = true;
+            }
+        }
+
+        if (valid)
+        {
+            if (cur->type != CPM_CHAR)
+                seq.push_back(cur);
+            if (next)
+            {
+                if (next->type == CPM_CHAR)
+                {
+                    char c = next->text[0];
+                    if (c == CPM_OPERAND_DELIM || c == CPM_LINE_END || c == CPM_BLOCK_CLOSE || c == CPM_INDEX_CLOSE || CharIsWhiteSpace(c))
+                    {
+                        compilerLog->Add("complete " + next->text)->Endl();
+                        complete = seq.size() > 1;
+                        if (seq.size() == 1)
+                            seq.clear();
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (!valid)
+            compilerLog->Add("not valid " + CPMSyntaxTreeNodeToString(cur))->Endl();
+        return valid;
+    }
+
     CPMSD_EXPR::CPMSD_EXPR() : CPMSyntaxDetector()
     {
         pcounter = 0;
@@ -164,7 +229,7 @@ namespace CPM
 
             if (!CharIsDelimiter(c) && !CharIsWhiteSpace(c))
             {
-                compilerLog->Add(LOG_ERROR, "Invalid character in the expression: ")->Add(c);
+                compilerLog->Add(LOG_ERROR, "Invalid character in the expression: ", cur->sourceFileName, cur->lineNumber)->Add(c);
                 return false;
             }
 
@@ -208,7 +273,74 @@ namespace CPM
 
         if (next != NULL)
         {
-            if (next->type == CPM_CHAR && next->text[0] == CPM_BLOCK_OPEN)
+            if (next->type == CPM_CHAR && 
+                (next->text[0] == CPM_BLOCK_OPEN || next->text[0] == CPM_INDEX_OPEN))
+                return false;
+        }
+
+        return true;
+    }
+
+    CPMSD_INDEX::CPMSD_INDEX() : CPMSyntaxDetector()
+    {
+        pcounter = 0;
+        itemsCount = 0;
+        opened = false;
+    }
+
+    bool CPMSD_INDEX::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
+    {
+        if (complete)
+            return false;
+
+        if (cur->type == CPM_CHAR)
+        {
+            char c = cur->text[0];
+            if (c == CPM_INDEX_OPEN)
+            {
+                if (!opened)
+                {
+                    opened = true;
+                    compilerLog->Add("Index opened " + CPMSyntaxTreeNodeToString(cur))->Endl();
+                    return true;
+                }
+            }
+
+            if (!opened && c != CPM_INDEX_OPEN)
+                return false;
+
+            if (c == CPM_LINE_END)
+                return false;
+
+            if (!CharIsDelimiter(c) && !CharIsWhiteSpace(c))
+            {
+                compilerLog->Add(LOG_ERROR, "Invalid character in the index: ", cur->sourceFileName, cur->lineNumber)->Add(c);
+                return false;
+            }
+
+            if (opened && c == CPM_INDEX_CLOSE)
+            {
+                compilerLog->Add("Index complete " + CPMSyntaxTreeNodeToString(cur))->Endl();
+                complete = true;
+                opened = false;
+                return false;
+            }
+        }
+        else
+        {
+            /*if (pcounter > 0)
+                itemsCount++;
+                else
+                return false;*/
+        }
+
+        if (opened && !(cur->type == CPM_CHAR && CharIsWhiteSpace(cur->text[0])))
+            seq.push_back(cur);
+
+        if (next != NULL)
+        {
+            if (next->type == CPM_CHAR &&
+                (next->text[0] == CPM_BLOCK_OPEN || next->text[0] == CPM_INDEX_OPEN))
                 return false;
         }
 
@@ -217,6 +349,7 @@ namespace CPM
 
     CPMSD_LINE::CPMSD_LINE() : CPMSyntaxDetector()
     {
+        itemsCount = 0;
     }
 
     bool CPMSD_LINE::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
@@ -375,7 +508,15 @@ namespace CPM
         pass_Detector<CPMSD_ID>(CPM_ID);
         pass_Detector<CPMSD_NUM>(CPM_NUM);
 
-        while (pass_Detector<CPMSD_EXPR>(CPM_EXPR)) {}
+        //while (pass_Detector<CPMSD_EXPR>(CPM_EXPR)) {}
+        bool continueDetect = true;
+        while (continueDetect)
+        {
+            continueDetect = false;
+            continueDetect |= pass_Detector<CPMSD_REF>(CPM_REF);
+            continueDetect |= pass_Detector<CPMSD_EXPR>(CPM_EXPR);
+            continueDetect |= pass_Detector<CPMSD_INDEX>(CPM_INDEX);
+        }
 
         //pass_Detector<CPMSD_LINE>(CPM_LINE);
         //pass_Detector<CPMSD_BLOCK>(CPM_BLOCK);
@@ -459,6 +600,7 @@ namespace CPM
                 node->lineNumber = (*seqFinish)->lineNumber;
                 node->sourceFileName = (*seqStart)->sourceFileName;
                 pushSyntaxTreeNode(node, seqStart, seqFinish, dynamic_cast<CPMSyntaxDetector*>(detector));
+                //compilerLog->Add(">>> " + LayerToString())->Endl();
                 layerWasChanged = true;
             }
 
@@ -567,12 +709,15 @@ namespace CPM
         layerCopy.insert(layerCopy.end(), layer.begin(), layer.end());
     }
 
-    string CPMParser::LayerToString()
+    string CPMParser::LayerToString(bool recursive)
     {
         string s = "";
         for (list<CPMSyntaxTreeNode*>::iterator li = layer.begin(); li != layer.end(); ++li)
         {
-            s += CPMSyntaxTreeNodeToStringRecoursive(*li);// + "\n";
+            if (recursive)
+                s += CPMSyntaxTreeNodeToStringRecoursive(*li);// + "\n";
+            else
+                s += CPMSyntaxTreeNodeToString(*li);// + "\n";
         }
         return s;
     }
@@ -610,8 +755,12 @@ namespace CPM
             s += "STR"; break;
         case CPM_ID:
             s += "ID"; break;
+        case CPM_REF:
+            s += "REF"; break;
         case CPM_EXPR:
             s += "EXPR"; break;
+        case CPM_INDEX:
+            s += "INDEX"; break;
         case CPM_LINE:
             s += "LINE"; break;
         case CPM_BLOCK:

@@ -60,7 +60,6 @@ namespace CPM
     const string GlobalNamespace = "global";
     const char PtrPrefix = '#';
     const char RefPrefix = '&';
-    const char NameSeparator = '.';
     const char ServiceSymbol = '$';
     const string OP_ASSIGN = "=";
 
@@ -219,7 +218,7 @@ namespace CPM
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
         CPMDataType resolveDataTypeName(const string &name, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
-        CPMStaticSymbol* resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        CPMStaticSymbol* resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         int parseNum(const string& num);
         bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode>& unfolded);
