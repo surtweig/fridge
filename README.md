@@ -1,14 +1,15 @@
 # XCM2 Fridge
 
-Fridge is a 8-bit computer based on extended Intel 8080 instruction set with graphics acceleration. Current implementation consists of an emulator (Windows x64 + DirectX 11) and VHDL design for FPGA development board Terasic DE0-CV (Altera Cyclone V), as well as various tools such as - assembly compiler, custom simplistic language compiler and an IDE.
+Fridge is a 8-bit computer based on extended Intel 8080 instruction set with graphics acceleration. Current implementation consists of an emulator and VHDL design for FPGA development board Terasic DE0-CV (Altera Cyclone V), as well as various tools such as - assembly compiler, custom simplistic language compiler and an IDE.
 
 ## Current progress
 | Component | State |
 | - | - |
-| Win64 emulator | Almost (no sprites acceleration)
+| Win64 emulator | Done
+| WebAssembly emulator | To do
 | VHDL design | On hold
 | Assembly compiler | Done
-| Freon compiler | In progress
+| Frion compiler | In progress
 | Fridge IDE | On hold
 
 ## Block diagram
