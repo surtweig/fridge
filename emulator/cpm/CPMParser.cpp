@@ -143,13 +143,13 @@ namespace CPM
         bool valid = false;
         if (cur->type == CPM_ID)
         {
-            compilerLog->Add("ID " + cur->text)->Endl();
+            //compilerLog->Add("ID " + cur->text)->Endl();
             valid = true;
         }
 
         if (seq.size() > 0 && cur->type == CPM_INDEX)
         {
-            compilerLog->Add("INDEX " + cur->text)->Endl();
+            //compilerLog->Add("INDEX " + cur->text)->Endl();
             valid = seq[seq.size() - 1]->type == CPM_ID;
         }
 
@@ -180,7 +180,7 @@ namespace CPM
                     char c = next->text[0];
                     if (c == CPM_OPERAND_DELIM || c == CPM_LINE_END || c == CPM_BLOCK_CLOSE || c == CPM_INDEX_CLOSE || CharIsWhiteSpace(c))
                     {
-                        compilerLog->Add("complete " + next->text)->Endl();
+                        //compilerLog->Add("complete " + next->text)->Endl();
                         complete = seq.size() > 1;
                         if (seq.size() == 1)
                             seq.clear();
@@ -190,8 +190,8 @@ namespace CPM
             }
         }
 
-        if (!valid)
-            compilerLog->Add("not valid " + CPMSyntaxTreeNodeToString(cur))->Endl();
+        //if (!valid)
+        //    compilerLog->Add("not valid " + CPMSyntaxTreeNodeToString(cur))->Endl();
         return valid;
     }
 
@@ -301,7 +301,7 @@ namespace CPM
                 if (!opened)
                 {
                     opened = true;
-                    compilerLog->Add("Index opened " + CPMSyntaxTreeNodeToString(cur))->Endl();
+                    //compilerLog->Add("Index opened " + CPMSyntaxTreeNodeToString(cur))->Endl();
                     return true;
                 }
             }
@@ -320,7 +320,7 @@ namespace CPM
 
             if (opened && c == CPM_INDEX_CLOSE)
             {
-                compilerLog->Add("Index complete " + CPMSyntaxTreeNodeToString(cur))->Endl();
+                //compilerLog->Add("Index complete " + CPMSyntaxTreeNodeToString(cur))->Endl();
                 complete = true;
                 opened = false;
                 return false;
@@ -432,7 +432,7 @@ namespace CPM
 
             if (seq.size() > 0 && !CharIsDelimiter(c) && !CharIsWhiteSpace(c))
             {
-                compilerLog->Add(LOG_ERROR, "Invalid character in the block: ")->Add(c);                
+                compilerLog->Add(LOG_ERROR, "Invalid character in the block: ")->Add(c);
                 return false;
             }
             /*

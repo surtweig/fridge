@@ -309,7 +309,7 @@ namespace CPM
             CPMSyntaxTreeNode* countNode = NULL;
             CPMSyntaxTreeNode* valueNode = NULL;
             CPMSyntaxTreeNode* importSourceNode = NULL;
-            if (nameNode->type == CPM_ID && typeNode->type == CPM_ID)
+            if (nameNode->type == CPM_ID && (typeNode->type == CPM_ID || typeNode->type == CPM_REF))
             {
                 map<string, CPMStaticSymbol>::iterator iss = owner->statics.find(nameNode->text);
                 if (iss == owner->statics.end())
@@ -324,7 +324,7 @@ namespace CPM
                         typeName = typeName.substr(1, typeName.size() - 1);
                     }
                     */
-                    ss->field.type = resolveDataTypeName(typeNode->text, ss->field.isPtr, &sources[node->sourceFileName], owner);
+                    ss->field.type = resolveDataTypeName(typeNode, ss->field.isPtr, &sources[node->sourceFileName], owner);
                     ss->field.owner = owner;
 
                     if (ss->field.type == CPM_DATATYPE_UNDEFINED)
@@ -520,7 +520,7 @@ namespace CPM
                 if (fi == structSymbol->fields.end())
                 {
 
-                    if (typeNode->type != CPM_ID || nameNode->type != CPM_ID)
+                    if ((typeNode->type != CPM_ID && typeNode->type != CPM_REF) || nameNode->type != CPM_ID)
                     {
                         compilerLog.Add(LOG_ERROR, "Invalid struct field declaration.", node->sourceFileName, node->lineNumber);
                         noErrors = false;
@@ -550,7 +550,7 @@ namespace CPM
                         typeName = typeName.substr(1, typeName.size() - 1);
                     }
                     */
-                    sfield->type = resolveDataTypeName(typeName, sfield->isPtr, &sources[node->sourceFileName], structSymbol->owner);
+                    sfield->type = resolveDataTypeName(typeNode, sfield->isPtr, &sources[node->sourceFileName], structSymbol->owner);
 
                     if (sfield->type == CPM_DATATYPE_UNDEFINED)
                     {
@@ -622,9 +622,9 @@ namespace CPM
                 return 0;
             }
         }
-        else if (countNode->type == CPM_ID)
+        else if (countNode->type == CPM_ID || countNode->type == CPM_REF)
         {
-            CPMStaticSymbol* sizeConst = resolveStaticSymbolName(countNode->text, &sources[countNode->sourceFileName], countNode, currentNS);
+            CPMStaticSymbol* sizeConst = resolveStaticSymbolName(countNode, &sources[countNode->sourceFileName], countNode, currentNS);
             if (sizeConst)
             {
                 if (sizeConst->isconst)
@@ -743,7 +743,7 @@ namespace CPM
             CPMSyntaxTreeNode* argsNode = node->children[2];
             CPMSyntaxTreeNode* bodyNode = node->children[3];
 
-            if (typeNode->type == CPM_ID && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
+            if ((typeNode->type == CPM_ID || typeNode->type == CPM_REF) && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
             {
                 string typeName = typeNode->text;
                 
@@ -755,7 +755,7 @@ namespace CPM
                     typeName = typeName.substr(1, typeName.size() - 1);
                 }
                 */
-                CPMDataType type = resolveDataTypeName(typeName, isPtr, &sources[node->sourceFileName], owner);
+                CPMDataType type = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
                 if (type == CPM_DATATYPE_UNDEFINED)
                 {
                     compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
@@ -796,7 +796,7 @@ namespace CPM
                             argType = argType.substr(1, argType.size() - 1);
                         }
                         */
-                        argSign.type = resolveDataTypeName(argType, argSign.isPtr, &sources[node->sourceFileName], owner);
+                        argSign.type = resolveDataTypeName(argNode->children[0], argSign.isPtr, &sources[node->sourceFileName], owner);
                         if (argSign.type == CPM_DATATYPE_UNDEFINED)
                         {
                             compilerLog.Add(LOG_ERROR, "Undefined type '" + argType + "'.", argNode->sourceFileName, argNode->lineNumber);
@@ -1006,6 +1006,7 @@ namespace CPM
         }
     }
 
+    /*
     vector<string> CPMCompiler::ParseSymbolName(const string& name)
     {
         vector<string> parsedName;
@@ -1016,6 +1017,7 @@ namespace CPM
             parsedName.push_back(subname);
         return parsedName;
     }
+    */
 
     string CPMCompiler::GetTypeName(CPMDataType typeId, CPMNamespace* ns)
     {
@@ -1041,34 +1043,42 @@ namespace CPM
         return "<undefined>";
     }
 
-    CPMDataType CPMCompiler::resolveDataTypeName(const string &name, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    CPMDataType CPMCompiler::resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
     {
-        string typeName = name;
-        isPtr = false;
-        if (typeName[0] == PtrPrefix)
-        {
-            isPtr = true;
-            typeName = typeName.substr(1, typeName.size() - 1);
-        }
-
-        vector<string> parsedName = CPMCompiler::ParseSymbolName(typeName);
+        //vector<string> parsedName = CPMCompiler::ParseSymbolName(typeName);
 
         CPMDataType result = CPM_DATATYPE_UNDEFINED;
 
-        if (parsedName.size() == 2)
+        if (nameNode->type == CPM_REF && nameNode->children.size() == 2)
         {
-            map<string, CPMNamespace>::iterator ins = namespaces.find(parsedName[0]);
+            string nsName = nameNode->children[0]->text;
+            isPtr = false;
+            if (nsName[0] == PtrPrefix)
+            {
+                isPtr = true;
+                nsName = nsName.substr(1, nsName.size() - 1);
+            }
+
+            map<string, CPMNamespace>::iterator ins = namespaces.find(nsName);
             if (ins != namespaces.end())
             {
-                map<string, CPMDataType>::iterator idt = ins->second.datatypes.find(parsedName[1]);
+                map<string, CPMDataType>::iterator idt = ins->second.datatypes.find(nameNode->children[1]->text);
                 if (idt != ins->second.datatypes.end())
                 {
                     return idt->second;
                 }
             }
         }
-        else if (parsedName.size() == 1)
+        else if (nameNode->type == CPM_ID)
         {
+            string typeName = nameNode->text;
+            isPtr = false;
+            if (typeName[0] == PtrPrefix)
+            {
+                isPtr = true;
+                typeName = typeName.substr(1, typeName.size() - 1);
+            }
+
             vector<string> candidatesNamespaces;
             map<string, CPMDataType>::iterator idt;
             if (currentNS)
@@ -1111,28 +1121,21 @@ namespace CPM
         return result;
     }
 
-    CPMStaticSymbol* CPMCompiler::resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS)
+    CPMStaticSymbol* CPMCompiler::resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS)
     {
-        vector<string> parsedName;
-        stringstream sname;
-        sname.str(name);
-        string subname;
-        while (getline(sname, subname, CPM_SUBSCRIPT_DELIM))
-            parsedName.push_back(subname);
-
         CPMStaticSymbol* result = NULL;
 
-        if (parsedName.size() > 1)
+        if (nameNode->type == CPM_REF && nameNode->children.size() > 1)
         {
             CPMNamespace* ns = &namespaces[GlobalNamespace];
             int nameCounter = 0;
-            map<string, CPMNamespace>::iterator ins = namespaces.find(parsedName[nameCounter]);
+            map<string, CPMNamespace>::iterator ins = namespaces.find(nameNode->children[nameCounter]->text);
             if (ins != namespaces.end())
             {
                 ns = &ins->second;
                 nameCounter++;
             }
-            map<string, CPMStaticSymbol>::iterator iss = ins->second.statics.find(parsedName[nameCounter]);
+            map<string, CPMStaticSymbol>::iterator iss = ins->second.statics.find(nameNode->children[nameCounter]->text);
             if (iss != ins->second.statics.end())
             {
                 result = &iss->second;
@@ -1170,17 +1173,17 @@ namespace CPM
                 }
             }*/
         }
-        else if (parsedName.size() == 1)
+        else if (nameNode->type == CPM_ID)
         {
             vector<string> candidatesNamespaces;
             map<string, CPMStaticSymbol>::iterator iss;
             if (currentNS)
             {
-                iss = currentNS->statics.find(name);
+                iss = currentNS->statics.find(nameNode->text);
                 if (iss != currentNS->statics.end())
                     return &iss->second;
             }
-            iss = namespaces[GlobalNamespace].statics.find(name);
+            iss = namespaces[GlobalNamespace].statics.find(nameNode->text);
             if (iss != namespaces[GlobalNamespace].statics.end())
             {
                 result = &iss->second;
@@ -1190,7 +1193,7 @@ namespace CPM
             for (int i = 0; i < sourceFile->usingNamespaces.size(); i++)
             {
                 string ns = sourceFile->usingNamespaces[i];
-                iss = namespaces[ns].statics.find(name);
+                iss = namespaces[ns].statics.find(nameNode->text);
                 if (iss != namespaces[ns].statics.end())
                 {
                     result = &iss->second;
@@ -1200,10 +1203,10 @@ namespace CPM
 
             if (candidatesNamespaces.size() > 1)
             {
-                compilerLog.Add(LOG_ERROR, "Ambiguous static symbol reference '" + name + "'. Candidates are: ", sourceFile->name);
+                compilerLog.Add(LOG_ERROR, "Ambiguous static symbol reference '" + nameNode->text + "'. Candidates are: ", sourceFile->name);
                 for (int i = 0; i < candidatesNamespaces.size(); i++)
                 {
-                    compilerLog.Add(candidatesNamespaces[i] + CPM_SUBSCRIPT_DELIM + name);
+                    compilerLog.Add(candidatesNamespaces[i] + CPM_SUBSCRIPT_DELIM + nameNode->text);
                     if (i < candidatesNamespaces.size() - 1)
                         compilerLog.Add(", ");
                 }
@@ -1230,7 +1233,7 @@ namespace CPM
 
     bool CPMCompiler::parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode> &unfolded)
     {
-        CPM_ASSERT(root->type == CPM_EXPR || root->type == CPM_LINE || root->type == CPM_ID || root->type == CPM_NUM);
+        CPM_ASSERT(root->type == CPM_EXPR || root->type == CPM_LINE || root->type == CPM_ID || root->type == CPM_NUM || root->type == CPM_REF);
 
         if (root->type == CPM_EXPR || root->type == CPM_LINE)
         {
@@ -1257,9 +1260,9 @@ namespace CPM
             {
                 if (unfolded[i].syntaxNode->type == CPM_NUM)
                     evalStack.push(parseNum(unfolded[i].syntaxNode->text));
-                else if (unfolded[i].syntaxNode->type == CPM_ID)
+                else if (unfolded[i].syntaxNode->type == CPM_ID || unfolded[i].syntaxNode->type == CPM_REF)
                 {
-                    CPMStaticSymbol* sym = resolveStaticSymbolName(unfolded[i].syntaxNode->text, &sources[unfolded[i].syntaxNode->sourceFileName], unfolded[i].syntaxNode, currentNS);
+                    CPMStaticSymbol* sym = resolveStaticSymbolName(unfolded[i].syntaxNode, &sources[unfolded[i].syntaxNode->sourceFileName], unfolded[i].syntaxNode, currentNS);
                     if (sym)
                     {
                         if (IsIntDataType(sym->field.type) && sym->field.count == 1)
@@ -1513,7 +1516,7 @@ namespace CPM
         if (!autoType)
             CPM_ASSERT(IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
 
-        if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
+        if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_REF || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
         {
             int val;
             if (valueNode->type == CPM_NUM)

@@ -148,7 +148,7 @@ namespace CPM
 
                         bool isPtr = false;
                         CPMDataType dataType = OwnerFunction()->compiler->resolveDataTypeName(
-                            opname->text,
+                            opname,
                             isPtr,
                             OwnerFunction()->compiler->getSourceFile(line->sourceFileName),
                             OwnerFunction()->owner);
@@ -313,6 +313,7 @@ namespace CPM
 
             if (nameNode->type == CPM_ID)
             {
+                /*
                 vector<string> parsedName = CPMCompiler::ParseSymbolName(nameNode->text);
                 if (parsedName.size() == 1)
                 {
@@ -348,6 +349,7 @@ namespace CPM
                     Error();
                     return;
                 }
+                    */
             }
             else
             {
@@ -462,7 +464,7 @@ namespace CPM
                 if (destination == nullptr)
                 {
                     CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
-                        destNode->text,
+                        destNode,
                         OwnerFunction()->compiler->getSourceFile(node->sourceFileName), destNode,
                         OwnerFunction()->owner);
                     if (ss != nullptr)
@@ -512,7 +514,7 @@ namespace CPM
                 if (source == nullptr)
                 {
                     CPMStaticSymbol* ss = OwnerFunction()->compiler->resolveStaticSymbolName(
-                        sourceNode->text,
+                        sourceNode,
                         OwnerFunction()->compiler->getSourceFile(node->sourceFileName), sourceNode,
                         OwnerFunction()->owner);
                     if (ss != nullptr)

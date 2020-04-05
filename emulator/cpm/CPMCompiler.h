@@ -152,6 +152,7 @@ namespace CPM
         map<string, CPMStructSymbol> structs;
         map<CPMFunctionSignature, CPMFunctionSymbol> functions;
         map<string, CPMDataType> datatypes;
+        FRIDGE_WORD* staticBuffer;
     };
 
     struct CPMUnfoldedExpressionNode
@@ -217,8 +218,8 @@ namespace CPM
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
-        CPMDataType resolveDataTypeName(const string &name, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
-        CPMStaticSymbol* resolveStaticSymbolName(const string &name, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
+        CPMDataType resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        CPMStaticSymbol* resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         int parseNum(const string& num);
         bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode>& unfolded);
@@ -227,7 +228,7 @@ namespace CPM
         bool parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralChar(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralStruct(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        static vector<string> ParseSymbolName(const string& name);
+        //static vector<string> ParseSymbolName(const string& name);
         string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
     };
 
