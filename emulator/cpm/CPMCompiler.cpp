@@ -15,25 +15,14 @@ namespace CPM
         count = 1;
         isPtr = false;
         offset = 0;
-        data = {};
         owner = nullptr;
     }
 
     CPMDataSymbol::~CPMDataSymbol()
     {
-        if (type < CPM_DATATYPE_USER)
-            return;
-        if (type == CPM_DATATYPE_STRING)
-        {
-
-        }
-        else
-        {
-            for (int i = 0; i < data.size(); ++i)
-                delete (CPMStructSymbol*)data[i];
-        }
     }
 
+    /*
     FRIDGE_RAM_ADDR CPMDataSymbol::serialize(vector<FRIDGE_WORD>& output)
     {
         if (type == CPM_DATATYPE_BOOL || type == CPM_DATATYPE_CHAR || type == CPM_DATATYPE_INT8 || type == CPM_DATATYPE_UINT8)
@@ -77,11 +66,14 @@ namespace CPM
             return size;
         }
     }
+    */
 
     CPMStaticSymbol::CPMStaticSymbol()
     {        
         isconst = false;
         importSource = -1;
+        staticData = nullptr;
+        immediateData = 0;
     }
 
     CPMStructSymbol::CPMStructSymbol()
@@ -122,8 +114,8 @@ namespace CPM
         dataTypeCounter = CPM_DATATYPE_USER;
         globalOffset = FRIDGE_EXECUTABLE_OFFSET;
 
-        namespaces[GlobalNamespace].name = GlobalNamespace;
-        CPMNamespace* global = &namespaces[GlobalNamespace];
+        namespaces[GlobalNamespace] = new CPMNamespace(GlobalNamespace);
+        CPMNamespace* global = namespaces[GlobalNamespace];
         global->datatypes["void"] = CPM_DATATYPE_VOID;
         global->datatypes["bool"] = CPM_DATATYPE_BOOL;
         global->datatypes["char"] = CPM_DATATYPE_CHAR;
@@ -133,27 +125,27 @@ namespace CPM
         global->datatypes["int16"] = CPM_DATATYPE_INT16;
         global->datatypes["string"] = CPM_DATATYPE_STRING;
 
-        addStatic("null", global, true, CPM_DATATYPE_UINT16, 0);
-        addStatic("false", global, true, CPM_DATATYPE_BOOL, 0);
-        addStatic("true", global, true, CPM_DATATYPE_BOOL, 1);
-        addStatic("FRIDGE_ROM_SEGMENT_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_ROM_SEGMENT_SIZE);
-        addStatic("FRIDGE_MAX_IO_DEVICES", global, true, CPM_DATATYPE_UINT8, FRIDGE_MAX_IO_DEVICES);
-        addStatic("FRIDGE_GPU_BUS_SIZE", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_BUS_SIZE);
-        addStatic("FRIDGE_GPU_FRAME_EGA_WIDTH", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_WIDTH);
-        addStatic("FRIDGE_GPU_FRAME_EGA_HEIGHT", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_HEIGHT);
-        addStatic("FRIDGE_GPU_MAX_SPRITES", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES);
-        addStatic("FRIDGE_GPU_MAX_SPRITES_PER_PIXEL", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES_PER_PIXEL);
-        addStatic("FRIDGE_GPU_FRAME_BUFFER_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_GPU_FRAME_BUFFER_SIZE);
-        addStatic("FRIDGE_BOOT_SECTION_INDEX_ADDRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
-        addStatic("FRIDGE_EXECUTABLE_OFFSET", global, true, CPM_DATATYPE_UINT16, FRIDGE_EXECUTABLE_OFFSET);
-        addStatic("FRIDGE_IRQ_SYS_TIMER", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_SYS_TIMER);
-        addStatic("FRIDGE_IRQ_KEYBOARD_PRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_PRESS);
-        addStatic("FRIDGE_IRQ_KEYBOARD_RELEASE", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_RELEASE);
-        addStatic("FRIDGE_KEYBOARD_KEY_STATE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_STATE_MASK);
-        addStatic("FRIDGE_KEYBOARD_KEY_CODE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_CODE_MASK);
-        addStatic("FRIDGE_DEV_ROM_RESET_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_RESET_ID);
-        addStatic("FRIDGE_DEV_ROM_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_ID);
-        addStatic("FRIDGE_DEV_KEYBOARD_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_KEYBOARD_ID);
+        addNumStatic("null", global, true, CPM_DATATYPE_UINT16, 0);
+        addNumStatic("false", global, true, CPM_DATATYPE_BOOL, 0);
+        addNumStatic("true", global, true, CPM_DATATYPE_BOOL, 1);
+        addNumStatic("FRIDGE_ROM_SEGMENT_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_ROM_SEGMENT_SIZE);
+        addNumStatic("FRIDGE_MAX_IO_DEVICES", global, true, CPM_DATATYPE_UINT8, FRIDGE_MAX_IO_DEVICES);
+        addNumStatic("FRIDGE_GPU_BUS_SIZE", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_BUS_SIZE);
+        addNumStatic("FRIDGE_GPU_FRAME_EGA_WIDTH", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_WIDTH);
+        addNumStatic("FRIDGE_GPU_FRAME_EGA_HEIGHT", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_FRAME_EGA_HEIGHT);
+        addNumStatic("FRIDGE_GPU_MAX_SPRITES", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES);
+        addNumStatic("FRIDGE_GPU_MAX_SPRITES_PER_PIXEL", global, true, CPM_DATATYPE_UINT8, FRIDGE_GPU_MAX_SPRITES_PER_PIXEL);
+        addNumStatic("FRIDGE_GPU_FRAME_BUFFER_SIZE", global, true, CPM_DATATYPE_UINT16, FRIDGE_GPU_FRAME_BUFFER_SIZE);
+        addNumStatic("FRIDGE_BOOT_SECTION_INDEX_ADDRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
+        addNumStatic("FRIDGE_EXECUTABLE_OFFSET", global, true, CPM_DATATYPE_UINT16, FRIDGE_EXECUTABLE_OFFSET);
+        addNumStatic("FRIDGE_IRQ_SYS_TIMER", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_SYS_TIMER);
+        addNumStatic("FRIDGE_IRQ_KEYBOARD_PRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_PRESS);
+        addNumStatic("FRIDGE_IRQ_KEYBOARD_RELEASE", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_RELEASE);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_STATE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_STATE_MASK);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_CODE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_CODE_MASK);
+        addNumStatic("FRIDGE_DEV_ROM_RESET_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_RESET_ID);
+        addNumStatic("FRIDGE_DEV_ROM_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_ID);
+        addNumStatic("FRIDGE_DEV_KEYBOARD_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_KEYBOARD_ID);
 
         readNamespaces();
         readStatics(true);
@@ -266,21 +258,100 @@ namespace CPM
             compilerLog.Add(LOG_WARNING, "File '")->Add(filename)->Add("' has already been included.");
     }
 
-    CPMStaticSymbol* CPMCompiler::addStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type, int data)
+    CPMStaticSymbol* CPMCompiler::addNumStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type, int data)
     {
         ns->statics[name].field.name = name;
         CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
         ss->isconst = isConst;
         ss->field.type = type;
-        ss->field.data.push_back((FRIDGE_WORD*)data);
+        ss->field.owner = ns;
+        ss->field.count = 1;
+        if (!isConst)
+        {
+            if (type == CPM_DATATYPE_INT16 || type == CPM_DATATYPE_UINT16)
+                ss->staticData = ns->staticAllocate((FRIDGE_DWORD)data);
+            else if (type == CPM_DATATYPE_INT8 || type == CPM_DATATYPE_UINT8 || type == CPM_DATATYPE_BOOL || type == CPM_DATATYPE_CHAR)
+                ss->staticData = ns->staticAllocate((FRIDGE_WORD)data);
+            else
+            {
+                CPM_ASSERT_MESSAGE(false, "Invalid data type '" + GetTypeName(type) + "' for numeric static '" + name + "'.");
+            }
+            if (ss->staticData == nullptr)
+            {
+                compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
+                Error();
+            }
+        }
+        else
+        {
+            ss->immediateData = data;
+            ss->staticData = nullptr;
+        }
+        return ss;
+    }
+
+    CPMStaticSymbol* CPMCompiler::addStrStatic(string name, CPMNamespace* ns, bool isConst, string data)
+    {
+        ns->statics[name].field.name = name;
+        CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
+        ss->isconst = isConst;
+        ss->field.type = CPM_DATATYPE_STRING;
+        ss->field.owner = ns;
+        ss->staticData = ns->staticAllocate(data);
+        ss->field.count = 1;
+        if (ss->staticData == nullptr)
+        {
+            compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
+            Error();
+        }
+        return ss;
+    }
+
+    CPMStaticSymbol* CPMCompiler::addStatic(string name, CPMNamespace* ns, bool isConst, bool isPtr, CPMDataType type, FRIDGE_DWORD count, int importSource)
+    {
+        ns->statics[name].field.name = name;
+        CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
+        ss->isconst = isConst;
+        ss->field.isPtr = isPtr;
+        ss->field.type = type;
+        ss->field.owner = ns;
+        ss->field.count = count;
+        ss->field.offset = 0;
+        if (ss->isconst && IsImmediateDataType(ss->field.type))
+        {
+            ss->staticData = nullptr;
+            ss->immediateData = 0;
+        }
+        else
+        {
+            if (importSource < 0)
+            {
+                if (!isPtr)
+                    ss->staticData = ns->staticAllocate(nullptr, sizeOfType(type), count);
+                else
+                    ss->staticData = ns->staticAllocate(nullptr, sizeOfType(CPM_DATATYPE_POINTER), count);
+
+                if (ss->staticData == nullptr)
+                {
+                    compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
+                    Error();
+                }
+            }
+            else
+            {
+                ss->staticData = nullptr;
+                ss->importSource = importSource;
+            }
+        }
+
         return ss;
     }
 
     void CPMCompiler::readStatics(bool isConst)
     {
-        for (map<string, CPMNamespace>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
+        for (map<string, CPMNamespace*>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
         {
-            CPMNamespace* ns = &(*ins).second;
+            CPMNamespace* ns = ins->second;
             for (int i = 0; i < ns->nodes.size(); i++)
                 detectStatic(ns->nodes[i], ns, isConst);
         }
@@ -314,40 +385,10 @@ namespace CPM
                 map<string, CPMStaticSymbol>::iterator iss = owner->statics.find(nameNode->text);
                 if (iss == owner->statics.end())
                 {
-                    CPMStaticSymbol* ss = addStatic(nameNode->text, owner, isConst);
-
-                    /*
-                    string typeName = typeNode->text;
-                    if (typeName[0] == PtrPrefix)
-                    {
-                        ss->field.isPtr = true;
-                        typeName = typeName.substr(1, typeName.size() - 1);
-                    }
-                    */
-                    ss->field.type = resolveDataTypeName(typeNode, ss->field.isPtr, &sources[node->sourceFileName], owner);
-                    ss->field.owner = owner;
-
-                    if (ss->field.type == CPM_DATATYPE_UNDEFINED)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    if (ss->field.type == CPM_DATATYPE_AMBIGUOUS)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    if (ss->field.type == CPM_DATATYPE_VOID)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-
                     bool isArray = false;
                     bool isImported = false;
+                    int count = 1;
+                    int importSource = 0;
 
                     if (node->children.size() >= 4)
                     {
@@ -357,13 +398,13 @@ namespace CPM
                             countNode = node->children[4];
                         }
                         else
-                        if (node->children[3]->text == R_IMPORT)
-                        {
-                            isImported = true;
-                            importSourceNode = node->children[4];
-                        }
-                        else
-                            valueNode = node->children[3];
+                            if (node->children[3]->text == R_IMPORT)
+                            {
+                                isImported = true;
+                                importSourceNode = node->children[4];
+                            }
+                            else
+                                valueNode = node->children[3];
                     }
                     if (node->children.size() == 7)
                     {
@@ -377,16 +418,16 @@ namespace CPM
                     }
                     if (node->children.size() == 6)
                         valueNode = node->children[5];
-                        
+
                     if (isArray)
                     {
-                        ss->field.count = parseArraySizeDecl(countNode, owner);
+                        count = parseArraySizeDecl(countNode, owner);
                     }
 
                     if (isImported)
                     {
                         if (importSourceNode->type == CPM_NUM)
-                            ss->importSource = parseNum(importSourceNode->text);
+                            importSource = parseNum(importSourceNode->text);
                         else
                         {
                             compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' import address must be an integer.", node->sourceFileName, importSourceNode->lineNumber);
@@ -395,7 +436,41 @@ namespace CPM
                         }
                     }
                     else
-                        ss->importSource = -1;
+                        importSource = -1;
+
+                    bool isPtr = false;
+                    CPMDataType stype = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
+                    CPMStaticSymbol* ss = addStatic(nameNode->text, owner, isConst, isPtr, stype, count, importSource);
+
+                    /*
+                    string typeName = typeNode->text;
+                    if (typeName[0] == PtrPrefix)
+                    {
+                        ss->field.isPtr = true;
+                        typeName = typeName.substr(1, typeName.size() - 1);
+                    }
+                    */
+                    //ss->field.type = resolveDataTypeName(typeNode, ss->field.isPtr, &sources[node->sourceFileName], owner);
+                    //ss->field.owner = owner;
+
+                    if (ss->field.type == CPM_DATATYPE_UNDEFINED)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    } 
+                    else if (ss->field.type == CPM_DATATYPE_AMBIGUOUS)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    }
+                    else if (ss->field.type == CPM_DATATYPE_VOID)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    }
 
                     if (sizeOfData(&ss->field) > DataMaxSize)
                     {
@@ -406,12 +481,26 @@ namespace CPM
 
                     if (valueNode)
                     {
-                        parseLiteralValue(&ss->field, valueNode);
+                        // Single basic-type constants use immediate data to store their values
+                        if (!ss->isconst || ss->field.count > 1 || !IsImmediateDataType(ss->field.type))
+                            ss->staticData = ss->field.owner->staticAllocate(nullptr, sizeOfType(ss->field.type), ss->field.count);
+                        
+                        if (ss->staticData)
+                            parseLiteralValue(ss, ss->field, valueNode);
+                        else
+                        {
+                            compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '", node->sourceFileName, node->lineNumber)->Add(ss->field.owner->name)->Add(".")->Add(ss->field.name)->Add("'");
+                            Error();
+                        }
                     }
 
                     compilerLog.Add(LOG_MESSAGE, "Static symbol " + nameNode->text + " in " + owner->name + "; data = ", node->sourceFileName, nameNode->lineNumber);
-                    if (ss->field.data.size() > 0)
-                        compilerLog.Add((int)ss->field.data[0]);
+                    if (ss->staticData != nullptr)
+                        compilerLog.AddHex((FRIDGE_DWORD)(ss->staticData - ss->field.owner->staticBuffer));
+                    else if (ss->importSource >= 0)
+                        compilerLog.Add("imported from ")->AddHex((FRIDGE_DWORD)ss->importSource);
+                    else
+                        compilerLog.Add("<null>");
                 }
                 else
                 {
@@ -433,9 +522,9 @@ namespace CPM
 
     void CPMCompiler::readStructs()
     {
-        for (map<string, CPMNamespace>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
+        for (map<string, CPMNamespace*>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
         {
-            CPMNamespace* ns = &(*ins).second;
+            CPMNamespace* ns = ins->second;
             for (int i = 0; i < ns->nodes.size(); i++)
                 detectStruct(ns->nodes[i], ns);
         }
@@ -631,7 +720,7 @@ namespace CPM
                 {
                     if (IsIntDataType(sizeConst->field.type) && sizeConst->field.count == 1)
                     {
-                        int size = (int)sizeConst->field.data[0];
+                        int size = (int)sizeConst->immediateData;
                         if (size > 0)
                             return size;
                         else
@@ -726,9 +815,9 @@ namespace CPM
 
     void CPMCompiler::readFunctions()
     {
-        for (map<string, CPMNamespace>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
+        for (map<string, CPMNamespace*>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
         {
-            CPMNamespace* ns = &(*ins).second;
+            CPMNamespace* ns = ins->second;
             for (int i = 0; i < ns->nodes.size(); i++)
                 detectFunction(ns->nodes[i], ns);
         }
@@ -910,16 +999,17 @@ namespace CPM
                             {
                                 bool valid = true;
                                 string nsname = node->children[1]->text;
-                                namespaces[nsname].name = nsname;
+                                CPMNamespace *ns = new CPMNamespace(nsname);
+                                namespaces[nsname] = ns;
                                 for (int i = 0; i < node->children[blockChildIndex]->children.size(); i++)
                                     if (node->children[blockChildIndex]->children[i]->type != CPM_CHAR)
-                                        namespaces[nsname].nodes.push_back(node->children[blockChildIndex]->children[i]);
+                                        ns->nodes.push_back(node->children[blockChildIndex]->children[i]);
 
                                 if (node->children.size() == 5)
                                 {
                                     if (node->children[2]->type == CPM_ID && node->children[2]->text == R_IMPORT && node->children[3]->type == CPM_STR)
                                     {
-                                        namespaces[nsname].importSource = CPMSTRContent(node->children[3]);
+                                        ns->importSource = CPMSTRContent(node->children[3]);
                                     }
                                     else
                                         valid = false;
@@ -938,7 +1028,7 @@ namespace CPM
                     }
                     else
                     {
-                        namespaces[GlobalNamespace].nodes.push_back(node);
+                        namespaces[GlobalNamespace]->nodes.push_back(node);
                     }
                 }
                 else if (node->type != CPM_CHAR)
@@ -953,7 +1043,7 @@ namespace CPM
         {
             for (int i = 0; i < isrc->second.usingNamespaces.size(); i++)
             {
-                map<string, CPMNamespace>::iterator ins = namespaces.find(isrc->second.usingNamespaces[i]);
+                map<string, CPMNamespace*>::iterator ins = namespaces.find(isrc->second.usingNamespaces[i]);
                 if (ins == namespaces.end())
                 {
                     compilerLog.Add(LOG_ERROR, "Cannot find namespace '" + isrc->second.usingNamespaces[i] + "'.", isrc->second.name, -1);
@@ -1033,7 +1123,7 @@ namespace CPM
         {
             for (auto nsi = namespaces.begin(); nsi != namespaces.end(); ++nsi)
             {
-                for (auto i = nsi->second.datatypes.begin(); i != nsi->second.datatypes.end(); ++i)
+                for (auto i = nsi->second->datatypes.begin(); i != nsi->second->datatypes.end(); ++i)
                 {
                     if (i->second == typeId)
                         return i->first;
@@ -1059,11 +1149,11 @@ namespace CPM
                 nsName = nsName.substr(1, nsName.size() - 1);
             }
 
-            map<string, CPMNamespace>::iterator ins = namespaces.find(nsName);
+            map<string, CPMNamespace*>::iterator ins = namespaces.find(nsName);
             if (ins != namespaces.end())
             {
-                map<string, CPMDataType>::iterator idt = ins->second.datatypes.find(nameNode->children[1]->text);
-                if (idt != ins->second.datatypes.end())
+                map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(nameNode->children[1]->text);
+                if (idt != ins->second->datatypes.end())
                 {
                     return idt->second;
                 }
@@ -1087,8 +1177,8 @@ namespace CPM
                 if (idt != currentNS->datatypes.end())
                     return idt->second;
             }
-            idt = namespaces[GlobalNamespace].datatypes.find(typeName);
-            if (idt != namespaces[GlobalNamespace].datatypes.end())
+            idt = namespaces[GlobalNamespace]->datatypes.find(typeName);
+            if (idt != namespaces[GlobalNamespace]->datatypes.end())
             {
                 result = idt->second;
                 candidatesNamespaces.push_back(GlobalNamespace);
@@ -1097,8 +1187,8 @@ namespace CPM
             for (int i = 0; i < sourceFile->usingNamespaces.size(); i++)
             {
                 string ns = sourceFile->usingNamespaces[i];
-                idt = namespaces[ns].datatypes.find(typeName);
-                if (idt != namespaces[ns].datatypes.end())
+                idt = namespaces[ns]->datatypes.find(typeName);
+                if (idt != namespaces[ns]->datatypes.end())
                 {
                     result = idt->second;
                     candidatesNamespaces.push_back(ns);
@@ -1127,16 +1217,16 @@ namespace CPM
 
         if (nameNode->type == CPM_REF && nameNode->children.size() > 1)
         {
-            CPMNamespace* ns = &namespaces[GlobalNamespace];
+            CPMNamespace* ns = namespaces[GlobalNamespace];
             int nameCounter = 0;
-            map<string, CPMNamespace>::iterator ins = namespaces.find(nameNode->children[nameCounter]->text);
+            map<string, CPMNamespace*>::iterator ins = namespaces.find(nameNode->children[nameCounter]->text);
             if (ins != namespaces.end())
             {
-                ns = &ins->second;
+                ns = ins->second;
                 nameCounter++;
             }
-            map<string, CPMStaticSymbol>::iterator iss = ins->second.statics.find(nameNode->children[nameCounter]->text);
-            if (iss != ins->second.statics.end())
+            map<string, CPMStaticSymbol>::iterator iss = ins->second->statics.find(nameNode->children[nameCounter]->text);
+            if (iss != ins->second->statics.end())
             {
                 result = &iss->second;
                 nameCounter++;
@@ -1183,8 +1273,8 @@ namespace CPM
                 if (iss != currentNS->statics.end())
                     return &iss->second;
             }
-            iss = namespaces[GlobalNamespace].statics.find(nameNode->text);
-            if (iss != namespaces[GlobalNamespace].statics.end())
+            iss = namespaces[GlobalNamespace]->statics.find(nameNode->text);
+            if (iss != namespaces[GlobalNamespace]->statics.end())
             {
                 result = &iss->second;
                 candidatesNamespaces.push_back(GlobalNamespace);
@@ -1193,8 +1283,8 @@ namespace CPM
             for (int i = 0; i < sourceFile->usingNamespaces.size(); i++)
             {
                 string ns = sourceFile->usingNamespaces[i];
-                iss = namespaces[ns].statics.find(nameNode->text);
-                if (iss != namespaces[ns].statics.end())
+                iss = namespaces[ns]->statics.find(nameNode->text);
+                if (iss != namespaces[ns]->statics.end())
                 {
                     result = &iss->second;
                     candidatesNamespaces.push_back(ns);
@@ -1250,7 +1340,7 @@ namespace CPM
         return true;
     }
     
-    int CPMCompiler::evalNum(vector<CPMUnfoldedExpressionNode> &unfolded, bool& ok, CPMNamespace* currentNS, bool silent)
+    int CPMCompiler::staticEvalNum(vector<CPMUnfoldedExpressionNode> &unfolded, bool& ok, CPMNamespace* currentNS, bool silent)
     {
         ok = true;
         stack<int> evalStack;
@@ -1265,16 +1355,29 @@ namespace CPM
                     CPMStaticSymbol* sym = resolveStaticSymbolName(unfolded[i].syntaxNode, &sources[unfolded[i].syntaxNode->sourceFileName], unfolded[i].syntaxNode, currentNS);
                     if (sym)
                     {
-                        if (IsIntDataType(sym->field.type) && sym->field.count == 1)
+                        if (sym->isconst)
                         {
-                            evalStack.push((int)sym->field.data[0]);
+                            if (IsIntDataType(sym->field.type) && sym->field.count == 1)
+                            {
+                                evalStack.push((int)sym->immediateData);
+                            }
+                            else
+                            {
+                                ok = false;
+                                if (!silent)
+                                {
+                                    compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                                    noErrors = false;
+                                }
+                                return 0;
+                            }
                         }
                         else
                         {
                             ok = false;
                             if (!silent)
                             {
-                                compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not an integer.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                                compilerLog.Add(LOG_ERROR, "Symbol '" + unfolded[i].syntaxNode->text + "' is not a constant.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
                                 noErrors = false;
                             }
                             return 0;
@@ -1402,15 +1505,15 @@ namespace CPM
         return evalStack.top();
     }
 
-    bool CPMCompiler::parseLiteralStruct(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index)
+    bool CPMCompiler::parseLiteralStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
         if (valueNode->type == CPM_BLOCK)
         {
-            CPMStructSymbol* structInstance = new CPMStructSymbol(*structTypes[symbol->type]);//(FRIDGE_WORD*)malloc(structsymbol->size);           
-            symbol->data[index] = (FRIDGE_WORD*)structInstance;
+            CPMStructSymbol* structInstance = structTypes[field.type];//new CPMStructSymbol(*structTypes[field.type]);//(FRIDGE_WORD*)malloc(structsymbol->size);           
+            //field.data[index] = (FRIDGE_WORD*)structInstance;
 
             for (int i = 1; i < valueNode->children.size() - 1; ++i)
-            {                
+            {
                 CPMSyntaxTreeNode* fieldLine = valueNode->children[i];
                 if (fieldLine->type == CPM_LINE && fieldLine->children.size() == 2)
                 {
@@ -1420,7 +1523,9 @@ namespace CPM
                     map<string, CPMDataSymbol>::iterator fi = structInstance->fields.find(fieldName->text);
                     if (fi != structInstance->fields.end())
                     {
-                        parseLiteralValue(&fi->second, fieldValue);
+                        CPMDataSymbol sfield = fi->second;
+                        sfield.offset += field.offset + index * sizeOfType(field.type);
+                        parseLiteralValue(symbol, sfield, fieldValue);
                     }
                     else
                     {
@@ -1446,40 +1551,40 @@ namespace CPM
         return true;
     }
 
-    bool CPMCompiler::parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode)
+    bool CPMCompiler::parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode)
     {
-        if (symbol->count > 1)
+        if (field.count > 1)
         {
-            if (valueNode->type != CPM_BLOCK && !(symbol->type == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR))
+            if (valueNode->type != CPM_BLOCK && !(field.type == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR))
             {
                 compilerLog.Add(LOG_ERROR, "Invalid literal array syntax.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
-            if (valueNode->children.size() != symbol->count + 2)
+            if (valueNode->children.size() != field.count + 2)
             {
-                compilerLog.Add(LOG_ERROR, "Declared items count does not match with the array size.", valueNode->sourceFileName, valueNode->lineNumber);
+                compilerLog.Add(LOG_ERROR, "Declared items count does not match array size.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
         }
 
-        symbol->data.resize(symbol->count);
+        //symbol->data.resize(symbol->count);
 
         CPMSyntaxTreeNode* itemNode = valueNode;
-        for (int index = 0; index < symbol->count; ++index)
+        for (int index = 0; index < field.count; ++index)
         {
-            if (symbol->count > 1)
+            if (field.count > 1)
                 itemNode = valueNode->children[index + 1];
 
-            if (IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
+            if (IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
             {
-                if (!parseLiteralNumber(symbol, itemNode, index))
+                if (!parseLiteralNumber(symbol, field, itemNode, index))
                     return false;
             }
             else
             {
-                if (symbol->count > 1 && valueNode->type == CPM_BLOCK) {
+                if (field.count > 1 && valueNode->type == CPM_BLOCK) {
                     if (itemNode->children.size() == 1)
                         itemNode = itemNode->children[0];
                     else
@@ -1490,19 +1595,19 @@ namespace CPM
                     }
                 }
 
-                if (symbol->type == CPM_DATATYPE_STRING)
+                if (field.type == CPM_DATATYPE_STRING)
                 {
-                    if (!parseLiteralString(symbol, itemNode, index))
+                    if (!parseAndAllocateLiteralString(symbol, field, itemNode, index))
                         return false;
                 }
-                else if (symbol->type == CPM_DATATYPE_CHAR)
+                else if (field.type == CPM_DATATYPE_CHAR)
                 {
-                    if (!parseLiteralChar(symbol, itemNode, index))
+                    if (!parseLiteralChar(symbol, field, itemNode, index))
                         return false;
                 }
-                else if (symbol->type >= CPM_DATATYPE_USER)
+                else if (field.type >= CPM_DATATYPE_USER)
                 {
-                    if (!parseLiteralStruct(symbol, itemNode, index))
+                    if (!parseLiteralStruct(symbol, field, itemNode, index))
                         return false;
                 }
             }
@@ -1511,10 +1616,10 @@ namespace CPM
         return true;
     }
 
-    bool CPMCompiler::parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index, bool autoType)
+    bool CPMCompiler::parseLiteralNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index, bool autoType)
     {
         if (!autoType)
-            CPM_ASSERT(IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
+            CPM_ASSERT(IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
 
         if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_REF || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
         {
@@ -1526,7 +1631,7 @@ namespace CPM
                 vector<CPMUnfoldedExpressionNode> unfolded;
                 parseExpression(valueNode, unfolded);
                 bool ok;
-                val = evalNum(unfolded, ok, symbol->owner);
+                val = staticEvalNum(unfolded, ok, field.owner);
                 if (!ok)
                 {
                     compilerLog.Add(LOG_ERROR, "Cannot evaluate number value.", valueNode->sourceFileName, valueNode->lineNumber);
@@ -1540,26 +1645,26 @@ namespace CPM
                 if (val >= UINT8_Min)
                 {
                     if (val < UINT8_Max)
-                        symbol->type = CPM_DATATYPE_UINT8;
+                        field.type = CPM_DATATYPE_UINT8;
                     else
-                        symbol->type = CPM_DATATYPE_UINT16;
+                        field.type = CPM_DATATYPE_UINT16;
                 }
                 else
                 {
                     if (val >= INT8_Min)
-                        symbol->type = CPM_DATATYPE_INT8;
+                        field.type = CPM_DATATYPE_INT8;
                     else
-                        symbol->type = CPM_DATATYPE_INT16;
+                        field.type = CPM_DATATYPE_INT16;
                 }
             }
 
-            if (symbol->type == CPM_DATATYPE_BOOL)
+            if (field.type == CPM_DATATYPE_BOOL)
                 val = val > 0 ? 1 : 0;
 
             bool outofrange = false;
-            if (!symbol->isPtr)
+            if (!field.isPtr)
             {
-                switch (symbol->type)
+                switch (field.type)
                 {
                 case CPM_DATATYPE_INT8:
                     if (val < INT8_Min || val > INT8_Max)
@@ -1593,7 +1698,20 @@ namespace CPM
             }
             else
             {
-                symbol->data[index] = (FRIDGE_WORD*)val;
+                if (symbol->isconst && IsImmediateDataType(symbol->field.type) && field.count == 1)
+                    symbol->immediateData = val;
+                else
+                {
+                    CPM_ASSERT(symbol->staticData);
+
+                    int typeSize = sizeOfType(field.type);
+
+                    if (typeSize == 1)
+                        field.owner->staticWrite(field.offset + index*typeSize, (FRIDGE_WORD)val);
+                    else
+                        field.owner->staticWrite(field.offset + index*typeSize, (FRIDGE_DWORD)val);
+                }
+                //field.data[index] = (FRIDGE_WORD*)val;
                 return true;
             }
         }
@@ -1605,18 +1723,36 @@ namespace CPM
         }
     }
 
-    bool CPMCompiler::parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index)
+    bool CPMCompiler::parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(symbol->type == CPM_DATATYPE_STRING);
+        CPM_ASSERT(field.type == CPM_DATATYPE_STRING);
 
         if (valueNode->type == CPM_STR)
         {
+            CPMNamespace* ns = symbol->field.owner;
             string s = CPMSTRContent(valueNode);
+            FRIDGE_WORD* sdata = ns->staticAllocate(s);
+            if (sdata)
+            {
+                size_t sdataOffset = sdata - symbol->staticData;
+                CPM_ASSERT(sdataOffset < FRIDGE_MAX_DWORD);
+                ns->staticWrite(field.offset, (FRIDGE_DWORD)sdataOffset);
+                symbol->staticStrings.push_back(field.offset); // Actual string addresses will be resolved at code generation stage
+            }
+            else
+            {
+                compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '", valueNode->sourceFileName, valueNode->lineNumber)->Add(ns->name)->Add(".")->Add(field.name)->Add("'");
+                Error();
+                return false;
+            }
+            /*
             FRIDGE_WORD* s_ptr = (FRIDGE_WORD*)malloc(s.size() + 1);
             memcpy(s_ptr, s.c_str(), s.size());
             s_ptr[s.size()] = 0;
 
-            symbol->data[index] = s_ptr;
+            field.data[index] = s_ptr;*/
+
+
             return true;
         }
         else
@@ -1627,13 +1763,13 @@ namespace CPM
         }
     }
 
-    bool CPMCompiler::parseLiteralChar(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index)
+    bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(symbol->type == CPM_DATATYPE_CHAR);
-
+        CPM_ASSERT(field.type == CPM_DATATYPE_CHAR);
+        FRIDGE_WORD val;
         if (valueNode->type == CPM_STR && valueNode->text.size() == 3)
         {
-            symbol->data[index] = (FRIDGE_WORD*)valueNode->text[1];
+            val = (FRIDGE_WORD)valueNode->text[1];
         }
         else if (valueNode->type == CPM_NUM)
         {
@@ -1644,18 +1780,29 @@ namespace CPM
                 noErrors = false;
                 return false;
             }
-            symbol->data[index] = (FRIDGE_WORD*)ccode;
+            val = (FRIDGE_WORD)ccode;
         }
+        /*
         else if (valueNode->type == CPM_CHAR)
         {
-            symbol->data[index] = (FRIDGE_WORD*)valueNode->text[0];
+            val = (FRIDGE_WORD)valueNode->text[0];
         }
+        */
         else
         {
             compilerLog.Add(LOG_ERROR, "Cannot parse '" + valueNode->text + "' as a char literal.", valueNode->sourceFileName, valueNode->lineNumber);
             noErrors = false;
             return false;
         }
+
+        if (symbol->isconst && IsImmediateDataType(symbol->field.type) && field.count == 1)
+            symbol->immediateData = val;
+        else
+        {
+            CPM_ASSERT(symbol->staticData);
+            field.owner->staticWrite(field.offset + index, val);
+        }
+
         return true;
     }
     
@@ -1697,68 +1844,81 @@ namespace CPM
     {
         nslist.clear();
         for (auto i = namespaces.begin(); i != namespaces.end(); ++i)
-            nslist.push_back(&i->second);
+            nslist.push_back(i->second);
     }
 
-    string CPMCompiler::printStaticValue(CPMDataSymbol* symbol)
-    {
-        string s = symbol->name + " = ";
+    string CPMCompiler::printStaticValue(CPMStaticSymbol* symbol, CPMDataSymbol& field)
+    {        
+        string s = GetTypeName(field.type) + " " + field.name + " = ";
 
-        if (symbol->data.size() == 0)
+        if (symbol->staticData == nullptr)
         {
-            s += "<undefined>";
+            s += to_string(symbol->immediateData);
             return s;
         }
 
-        if (symbol->count > 1)
+        if (field.count > 1)
             s += "(";
 
-        for (int i = 0; i < symbol->count; ++i)
+        for (int i = 0; i < field.count; ++i)
         {
-            if (IsIntDataType(symbol->type) || symbol->isPtr || symbol->type == CPM_DATATYPE_BOOL)
-                s += printStaticNumber(symbol, i);
-            else if (symbol->type == CPM_DATATYPE_STRING)
-                s += printStaticString(symbol, i);
-            else if (symbol->type == CPM_DATATYPE_CHAR)
-                s += printStaticChar(symbol, i);
-            else if (symbol->type >= CPM_DATATYPE_USER)
-                s += printStaticStruct(symbol, i);
+            if (IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
+                s += printStaticNumber(symbol, field, i);
+            else if (symbol->field.type == CPM_DATATYPE_STRING)
+                s += printStaticString(symbol, field, i);
+            else if (symbol->field.type == CPM_DATATYPE_CHAR)
+                s += printStaticChar(symbol, field, i);
+            else if (symbol->field.type >= CPM_DATATYPE_USER)
+                s += printStaticStruct(symbol, field, i);
 
-            if (i < symbol->count-1)
+            if (i < field.count-1)
                 s += "; ";
         }
 
-        if (symbol->count > 1)
+        if (field.count > 1)
             s += ")";
         return s;
     }
 
-    string CPMCompiler::printStaticNumber(CPMDataSymbol* symbol, int index)
+    string CPMCompiler::printStaticNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
-        return to_string((int)symbol->data[index]);
+        int val = 0;
+        size_t typeSize = sizeOfType(field.type);
+        if (typeSize == 1)
+            val = symbol->staticData[field.offset + index];
+        else if (typeSize == 2)
+            val = FRIDGE_DWORD_HL(symbol->staticData[field.offset + 2*index],
+                                  symbol->staticData[field.offset + 2*index + 1]);
+        return to_string(val);
     }
 
-    string CPMCompiler::printStaticString(CPMDataSymbol* symbol, int index)
+    string CPMCompiler::printStaticString(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
-        return (char*)symbol->data[index];
+        //return (char*)symbol->data[index];
+        FRIDGE_DWORD soffset = FRIDGE_DWORD_HL(symbol->staticData[field.offset + 2 * index],
+                                               symbol->staticData[field.offset + 2 * index + 1]);
+        return string((char*)&(symbol->staticData[soffset]));
     }
 
-    string CPMCompiler::printStaticChar(CPMDataSymbol* symbol, int index)
+    string CPMCompiler::printStaticChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
-        if (index < symbol->data.size())
-            return string(1, (char)symbol->data[index]);
-        else
-            return "";
+        return string(1, (char)symbol->staticData[field.offset + index]);
     }
 
-    string CPMCompiler::printStaticStruct(CPMDataSymbol* symbol, int index)
+    string CPMCompiler::printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         string s = "(";
-        CPMStructSymbol* structInstance = (CPMStructSymbol*)symbol->data[index];
-        for (map<string, CPMDataSymbol>::iterator fi = structInstance->fields.begin(); fi != structInstance->fields.end(); ++fi)
+        CPMStructSymbol* ss = structTypes[field.type];
+        
+        //CPMStructSymbol* structInstance = (CPMStructSymbol*)symbol->data[index];
+        FRIDGE_DWORD typeSize = sizeOfType(field.type);
+        for (map<string, CPMDataSymbol>::iterator fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
         {
-            s += printStaticValue(&fi->second) + "; ";
-        }
+            CPMDataSymbol sfield = fi->second;
+            sfield.offset += field.offset + typeSize * index;
+            s += printStaticValue(symbol, sfield) + "; ";
+        }        
+
         s += ")";
         return s;
     }
@@ -1766,22 +1926,32 @@ namespace CPM
     void CPMCompiler::PrintStaticData()
     {
         compilerLog.Add(LOG_MESSAGE, "Static data:\n");
-        for (map<string, CPMNamespace>::iterator nsi = namespaces.begin(); nsi != namespaces.end(); ++nsi)
+        for (map<string, CPMNamespace*>::iterator nsi = namespaces.begin(); nsi != namespaces.end(); ++nsi)
         {
             compilerLog.Add("\n" + nsi->first + ":\n");
-            for (map<string, CPMStaticSymbol>::iterator ssi = nsi->second.statics.begin(); ssi != nsi->second.statics.end(); ++ssi)
+            for (map<string, CPMStaticSymbol>::iterator ssi = nsi->second->statics.begin(); ssi != nsi->second->statics.end(); ++ssi)
             {
-                compilerLog.Add("   " + printStaticValue(&ssi->second.field) + "\n");
+                compilerLog.Add("   " + printStaticValue(&ssi->second, ssi->second.field) + "\n");
             }            
         }
     }
 
     CPMCompiler::~CPMCompiler()
     {
+        for (map<string, CPMNamespace*>::iterator nsi = namespaces.begin(); nsi != namespaces.end(); ++nsi)
+        {
+            delete nsi->second;
+        }
     }
 
     bool IsIntDataType(CPMDataType dtype)
     {
         return dtype == CPM_DATATYPE_UINT8 || dtype == CPM_DATATYPE_UINT16 || dtype == CPM_DATATYPE_INT8 || dtype == CPM_DATATYPE_INT16;
+    }
+
+    // 1-2 byte primitive type
+    bool IsImmediateDataType(CPMDataType dtype)
+    {
+        return IsIntDataType(dtype) || dtype == CPM_DATATYPE_BOOL || dtype == CPM_DATATYPE_CHAR;
     }
 }

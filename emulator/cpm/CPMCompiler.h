@@ -33,6 +33,7 @@ namespace CPM
     const CPMDataType CPM_DATATYPE_INT16 = 6;
     const CPMDataType CPM_DATATYPE_STRING = 7;
     const CPMDataType CPM_DATATYPE_USER = 8;
+    const CPMDataType CPM_DATATYPE_POINTER = CPM_DATATYPE_UINT16;
 
     const int INT8_Min = -128;
     const int INT8_Max = 127;
@@ -80,12 +81,11 @@ namespace CPM
         bool isPtr;
         int count;
         FRIDGE_DWORD offset;
-        vector<FRIDGE_WORD*> data;
-        CPMNamespace* owner;
         FRIDGE_RAM_ADDR globalAddress;
+        CPMNamespace* owner;
 
         CPMDataSymbol();
-        FRIDGE_RAM_ADDR serialize(vector<FRIDGE_WORD>& output);
+        //FRIDGE_RAM_ADDR serialize(vector<FRIDGE_WORD>& output);
         ~CPMDataSymbol();
     };
 
@@ -94,6 +94,9 @@ namespace CPM
         CPMDataSymbol field;
         bool isconst;
         int importSource;
+        FRIDGE_WORD* staticData;
+        int immediateData; // This is used to store value of single basic-type constants
+        vector<FRIDGE_DWORD> staticStrings; // stores relative addresses of all statically allocated string fields (not data)
 
         CPMStaticSymbol();
     };
@@ -152,7 +155,119 @@ namespace CPM
         map<string, CPMStructSymbol> structs;
         map<CPMFunctionSignature, CPMFunctionSymbol> functions;
         map<string, CPMDataType> datatypes;
-        FRIDGE_WORD* staticBuffer;
+        FRIDGE_WORD staticBuffer[DataMaxSize];
+        size_t staticBufferSize;
+
+    public:
+        CPMNamespace(string name)
+        {
+            this->name = name;
+            staticBufferSize = 0;
+            for (int i = 0; i < DataMaxSize; ++i)
+                staticBuffer[i] = 0;
+        }
+
+        size_t getStaticRelativeAddress(FRIDGE_WORD* ptr)
+        {
+            return (size_t)ptr - (size_t)staticBuffer;
+        }
+
+        FRIDGE_WORD* staticAllocate(FRIDGE_WORD* data, size_t typesize, size_t count)
+        {
+            //CPM_ASSERT(count > 0);
+            //CPM_ASSERT(typesize > 0);
+            size_t size = count * typesize;
+            if (staticBufferSize + size <= DataMaxSize)
+            {
+                int pos = staticBufferSize;
+                for (size_t i = 0; i < count; ++i)
+                    if (data)
+                        staticBuffer[staticBufferSize++] = data[i];
+                    else
+                        staticBuffer[staticBufferSize++] = 0;
+
+                return &staticBuffer[pos];
+            }
+            else
+                return nullptr;
+        }
+
+        FRIDGE_WORD* staticAllocate(FRIDGE_WORD data, FRIDGE_DWORD count = 1)
+        {
+            //CPM_ASSERT(count > 0);
+            if (staticBufferSize < DataMaxSize-count+1)
+            {       
+                int pos = staticBufferSize;
+                for (size_t i = 0; i < count; ++i)
+                    staticBuffer[staticBufferSize++] = data;
+                return &staticBuffer[pos];
+            }
+            else
+                return nullptr;
+        }
+
+        FRIDGE_WORD* staticAllocate(FRIDGE_DWORD data, FRIDGE_DWORD count = 1)
+        {
+            //CPM_ASSERT(count > 0);
+            if (staticBufferSize < DataMaxSize-count*sizeof(FRIDGE_DWORD)+1)
+            {
+                int pos = staticBufferSize;
+                for (size_t i = 0; i < count; ++i)
+                {
+                    staticBuffer[staticBufferSize++] = FRIDGE_HIGH_WORD(data);
+                    staticBuffer[staticBufferSize++] = FRIDGE_LOW_WORD(data);
+                }
+                return &staticBuffer[pos];
+            }
+            else
+                return nullptr;
+        }
+
+        FRIDGE_WORD* staticAllocate(string data)
+        {
+            if (staticBufferSize < DataMaxSize - data.size())
+            {
+                int pos = staticBufferSize;
+                for (int i = 0; i < data.size(); ++i)
+                {
+                    staticBuffer[pos + i] = (FRIDGE_WORD)data[i];
+                }
+                staticBuffer[pos + data.size()] = 0;
+                staticBufferSize += data.size() + 1;
+                return &staticBuffer[pos];
+            }
+            else
+                return nullptr;
+        }
+
+        void staticWrite(FRIDGE_DWORD addr, FRIDGE_WORD data)
+        {
+            staticBuffer[addr] = data;
+        }
+
+        void staticWrite(FRIDGE_DWORD addr, FRIDGE_DWORD data)
+        {
+            staticBuffer[addr] = FRIDGE_HIGH_WORD(data);
+            staticBuffer[addr + 1] = FRIDGE_LOW_WORD(data);
+        }
+
+        void staticWrite(FRIDGE_DWORD addr, string data)
+        {
+            for (int i = 0; i < data.size(); ++i)
+                staticBuffer[addr + i] = (FRIDGE_WORD)data[i];
+
+            staticBuffer[addr + data.size()] = 0;
+        }
+
+        CPMNamespace(CPMNamespace& source)
+        {
+            throw logic_error("CPMNamespace copy constructor is not implemented!");
+        }
+
+        CPMNamespace& operator=(const CPMNamespace& other)
+        {
+            throw logic_error("CPMNamespace copy assignment operator is not implemented!");
+        }
     };
 
     struct CPMUnfoldedExpressionNode
@@ -165,7 +280,7 @@ namespace CPM
     {
     private:
         map<string, CPMSourceFile> sources;
-        map<string, CPMNamespace> namespaces;
+        map<string, CPMNamespace*> namespaces;
         map<CPMDataType, CPMStructSymbol*> structTypes;
         string outputFileName;
         vector<string> includeFolders;
@@ -177,7 +292,9 @@ namespace CPM
 
         void preprocessSourceFile(string rootFolder, string filename);
         void readNamespaces();
-        CPMStaticSymbol* addStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type = CPM_DATATYPE_UNDEFINED, int data = NULL);
+        CPMStaticSymbol* addNumStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type, int data);
+        CPMStaticSymbol* addStrStatic(string name, CPMNamespace* ns, bool isConst, string data);
+        CPMStaticSymbol* addStatic(string name, CPMNamespace* ns, bool isConst, bool isPtr, CPMDataType type, FRIDGE_DWORD count = 1, int importSource = -1);
 
         void readStructs();
         void detectStruct(CPMSyntaxTreeNode* node, CPMNamespace* owner);
@@ -195,11 +312,11 @@ namespace CPM
         //void writeStaticNum(CPMStaticSymbol* symbol, int value);
         //int readStaticNum(CPMStaticSymbol* symbol);
 
-        string printStaticValue(CPMDataSymbol* symbol);
-        string printStaticNumber(CPMDataSymbol* symbol, int index = 0);
-        string printStaticString(CPMDataSymbol* symbol, int index = 0);
-        string printStaticChar(CPMDataSymbol* symbol, int index = 0);
-        string printStaticStruct(CPMDataSymbol* symbol, int index = 0);
+        string printStaticValue(CPMStaticSymbol* symbol, CPMDataSymbol& field);
+        string printStaticNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
+        string printStaticString(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
+        string printStaticChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
+        string printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
     public:
         CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders);
         inline Logger* CompilerLog() { return &compilerLog; }
@@ -217,17 +334,17 @@ namespace CPM
         FRIDGE_RAM_ADDR getGlobalOffset() { return globalOffset; }
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
-        bool parseLiteralValue(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode);
         CPMDataType resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         CPMStaticSymbol* resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         int parseNum(const string& num);
         bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode>& unfolded);
-        int evalNum(vector<CPMUnfoldedExpressionNode>& unfolded, bool& ok, CPMNamespace* currentNS = NULL, bool silent = false);
-        bool parseLiteralNumber(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0, bool autoType = false);
-        bool parseLiteralString(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralChar(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralStruct(CPMDataSymbol* symbol, CPMSyntaxTreeNode* valueNode, int index = 0);
+        int staticEvalNum(vector<CPMUnfoldedExpressionNode>& unfolded, bool& ok, CPMNamespace* currentNS = NULL, bool silent = false);
+        bool parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode);
+        bool parseLiteralNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0, bool autoType = false);
+        bool parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
+        bool parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
+        bool parseLiteralStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
         //static vector<string> ParseSymbolName(const string& name);
         string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
     };

@@ -32,12 +32,15 @@ int _tmain(int argc, _TCHAR* argv[])
 
 #ifdef PARSE
     Logger logger;
-    CPMParser* parser = new CPMParser("", "test.cpm", &logger);
+    CPMParser* parser = new CPMParser("", "test2.cpm", &logger);
     
     ofstream fout("test.parsed");
     fout << parser->LayerToString();
-    //fout << comp.CompilerLog()->GetText();
     fout.close();
+
+    ofstream logout("test.log");
+    logout << logger.GetText();
+    logout.close();
 
     //getline (std::cin, name);
     delete parser;

@@ -14,6 +14,8 @@ build-fridge*/
 */testbench/
 */*_sim/
 sdk.txt
+*/out/build/
+*.driveupload
 *.pin
 *.pof
 *.ptf.*
