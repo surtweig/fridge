@@ -23,7 +23,11 @@ void PixBufferRenderer::paintEvent(QPaintEvent* event)
 
     if (sys)
     {
-        FRIDGE_gpu_render_ega_rgb8(sys->gpu, pixels->bits());
+        FRIDGE_VIDEO_MODE currentVMode = FRIDGE_gpu_vmode(sys->gpu);
+        if (currentVMode == FRIDGE_VIDEO_TEXT)
+            FRIDGE_gpu_render_txt_rgb8(sys->gpu, pixels->bits(), FRIDGE_gpu_default_glyph_bitmap);
+        else if (currentVMode == FRIDGE_VIDEO_EGA)
+            FRIDGE_gpu_render_ega_rgb8(sys->gpu, pixels->bits());
     }
     //painter.fillRect(painter.window(), QBrush(QColor(0, 128, 0)));
     painter.drawImage(painter.window(), *pixels);

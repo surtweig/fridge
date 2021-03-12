@@ -186,6 +186,7 @@ void MainWindow::on_sysResetBtn_clicked()
     FRIDGE_cpu_reset(sys->cpu);
     FRIDGE_gpu_reset(sys->gpu);
     emuThread->ReleaseLock();
+    ui->asmCompileBtn->setEnabled(true);
     updateAll();
 }
 
@@ -270,7 +271,13 @@ void MainWindow::on_asmCompileBtn_clicked()
         FridgeAssemblyLanguageCompiler falc("", FalcTempFile, "", {}, &logstream);
 
         emuThread->SetLock();
-        memcpy(sys->cpu->ram + falc.getOffset(), falc.getObjectCode(), falc.getProgramSize());
+        FRIDGE_RAM_ADDR offset = falc.getOffset();
+        FRIDGE_WORD* objectCode = falc.getObjectCode();
+        FRIDGE_RAM_ADDR programSize = falc.getProgramSize();
+        if (objectCode != NULL)
+            memcpy(sys->cpu->ram + offset, objectCode, programSize);
+        else
+            ui->messagesLogView->appendPlainText("Assembly compiler returned null.");
         updateRAMView();
         emuThread->ReleaseLock();
     }
@@ -288,13 +295,19 @@ MessagesLogBuf::MessagesLogBuf(QPlainTextEdit* textView) : streambuf()
 
 std::streamsize MessagesLogBuf::xsputn(const char_type* s, std::streamsize n)
 {
-    textView->appendPlainText(QString::fromLocal8Bit(s, n));
+    //textView->appendPlainText(QString::fromLocal8Bit(s, n));
+    textView->moveCursor (QTextCursor::End);
+    textView->insertPlainText (QString::fromLocal8Bit(s, n));
+    textView->moveCursor (QTextCursor::End);
     return n;
 }
 
 streambuf::int_type MessagesLogBuf::overflow(int_type c)
 {
-    textView->appendPlainText(QString((char)c));
+    //textView->appendPlainText(QString((char)c));
+    textView->moveCursor (QTextCursor::End);
+    textView->insertPlainText (QString((char)c));
+    textView->moveCursor (QTextCursor::End);
     return c;
 }
 

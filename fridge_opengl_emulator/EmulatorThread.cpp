@@ -14,6 +14,8 @@ EmulatorThread::EmulatorThread(FRIDGE_SYSTEM* sys, int targetFrequency, int tick
     this->measuredFreq = 0.0;
     activeTimer->start();
     activeTicksCounter = 0;
+    sysTimerInterval = targetFrequency / 256;
+    sysTimerTicksCounter = 0;
 }
 
 void EmulatorThread::run()
@@ -44,6 +46,26 @@ void EmulatorThread::run()
                 for (int i = 0; i < tickSeriesLength; ++i)
                 {
                     FRIDGE_sys_tick(sys);
+
+                    if (FRIDGE_cpu_flag_PANIC(sys->cpu))
+                    {
+                        isActive = false;
+                        emit corePanic();
+                        break;
+                    }
+
+                    if (++sysTimerTicksCounter >= sysTimerInterval)
+                    {
+                        FRIDGE_sys_timer_tick(sys);
+                        sysTimerTicksCounter = 0;
+                        if (FRIDGE_cpu_flag_PANIC(sys->cpu))
+                        {
+                            isActive = false;
+                            emit corePanic();
+                            break;
+                        }
+                    }
+
                     /*
                     if (visibleFrame != sys->gpu->vframe || FRIDGE_cpu_flag_PANIC(sys->cpu))
                     {
@@ -95,6 +117,8 @@ void EmulatorThread::SetTargetFrequncy(int targetFrequency, int tickSeriesLength
     this->targetFrequency = targetFrequency;
     if (tickSeriesLength > 0)
         this->tickSeriesLength = tickSeriesLength;
+    sysTimerInterval = targetFrequency / 256;
+    sysTimerTicksCounter = 0;
     ReleaseLock();
 }
 

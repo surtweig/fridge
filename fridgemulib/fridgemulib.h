@@ -137,9 +137,11 @@ void FRIDGE_gpu_reset                 (FRIDGE_GPU* gpu);
 void FRIDGE_gpu_tick                  (FRIDGE_GPU* gpu);
 FRIDGE_WORD* FRIDGE_gpu_visible_frame (FRIDGE_GPU* gpu);
 FRIDGE_WORD* FRIDGE_gpu_active_frame  (FRIDGE_GPU* gpu);
+FRIDGE_VIDEO_MODE FRIDGE_gpu_vmode    (FRIDGE_GPU* gpu);
 void FRIDGE_gpu_render_ega_rgb8       (FRIDGE_GPU* gpu, unsigned char* pixels);
 void FRIDGE_gpu_render_ega_rgb8_area  (FRIDGE_GPU* gpu, unsigned char* pixels,
                                        FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset);
+void FRIDGE_gpu_render_txt_rgb8       (FRIDGE_GPU* gpu, unsigned char* pixels, const FRIDGE_WORD* glyphBitmap);
 
 void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys);
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);

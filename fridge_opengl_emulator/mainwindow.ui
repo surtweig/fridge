@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>872</width>
+    <width>902</width>
     <height>600</height>
    </rect>
   </property>
@@ -961,8 +961,8 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>244</width>
-                  <height>362</height>
+                  <width>241</width>
+                  <height>330</height>
                  </rect>
                 </property>
                 <property name="sizePolicy">
@@ -1013,6 +1013,12 @@
          </property>
          <item>
           <widget class="QPlainTextEdit" name="messagesLogView">
+           <property name="font">
+            <font>
+             <family>Consolas</family>
+             <pointsize>9</pointsize>
+            </font>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -1030,8 +1036,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>872</width>
-     <height>20</height>
+     <width>902</width>
+     <height>25</height>
     </rect>
    </property>
   </widget>

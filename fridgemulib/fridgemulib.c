@@ -950,6 +950,11 @@ void FRIDGE_cpu_interrupt (FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode, FRIDGE_WORD a
     cpu->state = FRIDGE_CPU_ACTIVE;
 }
 
+void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_HIGH_WORD(FRIDGE_IRQ_SYS_TIMER), FRIDGE_LOW_WORD(FRIDGE_IRQ_SYS_TIMER));
+}
+
 void FRIDGE_cpu_ram_read (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size)
 {
     for (FRIDGE_RAM_ADDR i = 0; i < size; ++i)
@@ -1057,6 +1062,11 @@ FRIDGE_WORD* FRIDGE_gpu_active_frame(FRIDGE_GPU* gpu)
     else if (gpu->vframe == FRIDGE_VIDEO_FRAME_B)
         return gpu->frame_b;
     return 0;
+}
+
+FRIDGE_VIDEO_MODE FRIDGE_gpu_vmode(FRIDGE_GPU* gpu)
+{
+    return gpu->vmode;
 }
 
 void FRIDGE_gpu_render_ega_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels)
@@ -1186,9 +1196,59 @@ void FRIDGE_gpu_render_ega_rgb8_area(FRIDGE_GPU* gpu, unsigned char* pixels,
     }
 }
 
-void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
+void FRIDGE_gpu_render_txt_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels, const FRIDGE_WORD* glyphBitmap)
 {
-    FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_HIGH_WORD(FRIDGE_IRQ_SYS_TIMER), FRIDGE_LOW_WORD(FRIDGE_IRQ_SYS_TIMER));
+    FRIDGE_WORD* frame = FRIDGE_gpu_visible_frame(gpu);
+    unsigned int output_addr = 0;
+
+    FRIDGE_WORD w = FRIDGE_GPU_FRAME_EGA_WIDTH;
+    FRIDGE_WORD h = FRIDGE_GPU_FRAME_EGA_HEIGHT;
+
+    for (FRIDGE_WORD iy = 0; iy < 0 + h; ++iy)
+    {
+        for (FRIDGE_WORD ix = 0; ix < 0 + w; ++ix)
+        {
+            if (ix >= FRIDGE_GPU_FRAME_EGA_WIDTH)
+                continue;
+            if (iy >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
+                continue;
+
+            FRIDGE_WORD row = iy / FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
+            FRIDGE_WORD col = ix / FRIDGE_GPU_TEXT_GLYPH_WIDTH;
+            FRIDGE_WORD chary = iy % FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
+            FRIDGE_WORD charx = ix % FRIDGE_GPU_TEXT_GLYPH_WIDTH;
+
+            FRIDGE_RAM_ADDR charAddr = (row*FRIDGE_GPU_TEXT_FRAME_WIDTH + col)*2;
+            FRIDGE_RAM_ADDR colorAddr = charAddr+1;
+
+            FRIDGE_WORD charCode = frame[charAddr];
+            FRIDGE_WORD foreColor = FRIDGE_GPU_RIGHT_PIXEL(frame[colorAddr]);
+            FRIDGE_WORD backColor = FRIDGE_GPU_LEFT_PIXEL(frame[colorAddr]);
+
+            FRIDGE_WORD glyphPixelColumn = glyphBitmap[charCode*FRIDGE_GPU_TEXT_GLYPH_WIDTH+charx];
+            FRIDGE_WORD glyphPixel = (glyphPixelColumn << chary) & FRIDGE_HIGHBIT_MASK;
+
+            FRIDGE_WORD color = glyphPixel ? foreColor : backColor;
+
+            /*
+            FRIDGE_WORD px = (ix + gpu->frame_hor_offset) % FRIDGE_GPU_FRAME_EGA_WIDTH;
+            FRIDGE_WORD py = (iy + gpu->frame_ver_offset) % FRIDGE_GPU_FRAME_EGA_HEIGHT;
+            FRIDGE_RAM_ADDR addr = (px + py*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
+
+            FRIDGE_WORD color;
+            if (px % 2 == 0)
+                color = FRIDGE_GPU_LEFT_PIXEL(frame[addr]);
+            else
+                color = FRIDGE_GPU_RIGHT_PIXEL(frame[addr]);
+                */
+
+            FRIDGE_WORD rgb[3] = {gpu->palette[color*3], gpu->palette[color*3+1], gpu->palette[color*3+2]};
+
+            pixels[output_addr++] = rgb[0];
+            pixels[output_addr++] = rgb[1];
+            pixels[output_addr++] = rgb[2];
+        }
+    }
 }
 
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
