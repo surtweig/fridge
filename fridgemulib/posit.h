@@ -42,6 +42,7 @@ Posit16 Posit_fmadd(Posit16 a, Posit16 b, const Posit16Environment* env);
 
 #ifdef POSIT_TEST
 Posit16 bitSeriesMask(int low, int high);
+int bitSeriesCountRight(Posit16 src, int start);
 Posit16 bitSet(Posit16 dst, int position, char bit);
 char bitGet(Posit16 src, int position);
 Posit16 bitCopy(Posit16 dst, Posit16 src, int offset, int count);

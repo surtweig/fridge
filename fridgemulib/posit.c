@@ -42,6 +42,20 @@ char bitGet(Posit16 src, int position)
     return ((src & (1 << position)) > 0) ? 1 : 0;
 }
 
+int bitSeriesCountRight(Posit16 src, int start)
+{
+     Posit16 m = 1 << start;
+     char bit = bitGet(src, start);
+     int c = 1;
+     for (c = 1; c < start+1; ++c)
+     {
+         m >>= 1;
+         if ( ((src & m) > 0) ^ bit )
+             return c;
+     }
+     return c;
+}
+
 // returns a mask with continuous series of ones from low to high position inclusively
 // e.g.: bitSeriesMask(3, 9) = 0000001111111000b
 Posit16 bitSeriesMask(int low, int high)
@@ -66,6 +80,27 @@ Posit16 bitCopy(Posit16 dst, Posit16 src, int offset, int count)
 
     return result;
 }
+
+Posit16 bitCopyOffset(Posit16 dst, Posit16 src, int dstOffset, int srcOffset, int count)
+{
+    if (count <= 0)
+        return dst;
+
+    Posit16 clearMask = ~bitSeriesMask(dstOffset, dstOffset+count-1);
+    Posit16 result = dst & clearMask;
+
+    if (dstOffset >= srcOffset)
+        src <<= dstOffset-srcOffset;
+    else
+        src >>= srcOffset-dstOffset;
+
+    src &= ~clearMask;
+
+    result |= src;
+
+    return result;
+}
+
 
 Posit16 Posit_pack(Posit16Unpacked unpacked, const Posit16Environment* env)
 {
@@ -110,7 +145,29 @@ Posit16 Posit_pack(Posit16Unpacked unpacked, const Posit16Environment* env)
 
 Posit16Unpacked Posit_unpack(Posit16 packed, const Posit16Environment* env)
 {
+    Posit16Unpacked unpacked;
 
+    unpacked.sign = bitGet(packed, BIT_HPOS(0));
+
+    // regime
+    int regsize = bitSeriesCountRight(packed, BIT_HPOS(1));
+    if (bitGet(packed, BIT_HPOS(1)))
+        unpacked.regime = regsize-1;
+    else
+        unpacked.regime = -regsize;
+
+    // exponent
+    int expsize = getExpSize(env->es, regsize);
+    unpacked.exponent = 0;
+    unpacked.exponent = bitCopyOffset(0, packed, 0, BIT_HPOS(regsize+1+expsize), expsize);
+    //unpacked.exponent = bitCopy(0, packed >> fracsize, 0, expsize);
+
+    // fraction
+    int fracsize = POSIT_SIZE-1-regsize-1-expsize;
+    unpacked.fraction = 0;
+    unpacked.fraction = bitCopy(0, packed, 0, fracsize);
+
+    return unpacked;
 }
 
 Posit16 Posit_fromFloat(float value, const Posit16Environment* env)

@@ -86,6 +86,18 @@ void fridgemulib_tests::posit_bitOps()
             }
         }
     }
+
+    for (int i = 0; i < POSIT_SIZE; ++i)
+    {
+        for (int j = i; j < POSIT_SIZE; ++j)
+        {
+            Posit16 s1 = bitSeriesMask(i, j);
+            Posit16 s2 = ~s1;
+
+            QVERIFY(bitSeriesCountRight(s1, j) == (j-i+1));
+            QVERIFY(bitSeriesCountRight(s2, j) == (j-i+1));
+        }
+    }
 }
 
 void fridgemulib_tests::posit_pack()
@@ -98,7 +110,21 @@ void fridgemulib_tests::posit_pack()
     unp.fraction = 789;
     Posit16 pck = Posit_pack(unp, &env);
     qDebug() << pck;
+    Posit16Unpacked unp2 = Posit_unpack(pck, &env);
+    qDebug() << "sign =" << unp2.sign << "reg =" << unp2.regime << "exp =" << unp2.exponent << "frac =" << unp2.fraction;
     QVERIFY(pck == 14101);
+
+    env.es = 5;
+    unp.sign = 1;
+    unp.regime = -3;
+    unp.exponent = 14;
+    unp.fraction = 27;
+    pck = Posit_pack(unp, &env);
+    qDebug() << pck;
+    unp2 = Posit_unpack(pck, &env);
+    qDebug() << "sign =" << unp2.sign << "reg =" << unp2.regime << "exp =" << unp2.exponent << "frac =" << unp2.fraction;
+    QVERIFY(pck == 35739);
+
 }
 
 QTEST_APPLESS_MAIN(fridgemulib_tests)
