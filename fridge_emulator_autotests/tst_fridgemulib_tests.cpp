@@ -27,6 +27,7 @@ private slots:
     void posit_pack();
     void posit_float_conversion();
     void posit_add();
+    void posit_mul();
 };
 
 fridgemulib_tests::fridgemulib_tests()
@@ -165,8 +166,8 @@ void fridgemulib_tests::posit_add()
     float fp2 = Posit_toFloat(p2, &env);
     qDebug() << "posit:" << fp1 << "+" << fp2 << "=" << fpa;
     qDebug() << "float:" << fp1 << "+" << fp2 << "=" << fp1+fp2;
+    QVERIFY(fpa == 6800.0);
 
-    /*
     for (int i = 0; i < 10; ++i)
     {
         Posit16 p1 = rand();//Posit_fromFloat(f1, &env);
@@ -183,7 +184,26 @@ void fridgemulib_tests::posit_add()
         qDebug() << "float:" << fp1 << "+" << fp2 << "=" << fp1+fp2;
         qDebug() << " ";
         //qDebug() << f1 << "+" << f2 << "=" << fa << ";" << fp1 << "+" << fp2 << "=" << fpa;
-    }*/
+    }
+}
+
+void fridgemulib_tests::posit_mul()
+{
+    Posit16Environment env = Posit_env(2);
+
+    float f1 = 4.2345;
+    float f2 = 30.4567;//4.3156;
+
+    Posit16 p1 = Posit_fromFloat(f1, &env);
+    Posit16 p2 = Posit_fromFloat(f2, &env);//-rand();//
+    Posit16 pa = Posit_mul(p1, p2, &env);
+    float fpa = Posit_toFloat(pa, &env);
+    float fp1 = Posit_toFloat(p1, &env);
+    float fp2 = Posit_toFloat(p2, &env);
+    qDebug() << "posit:" << fp1 << "*" << fp2 << "=" << fpa;
+    qDebug() << "float:" << fp1 << "*" << fp2 << "=" << fp1*fp2;
+
+    QVERIFY(fpa == 128.875);
 }
 
 QTEST_APPLESS_MAIN(fridgemulib_tests)
