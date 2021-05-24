@@ -35,6 +35,16 @@ Posit16Environment Posit_env(unsigned char es)
     return env;
 }
 
+void resetLoss(Posit16Environment* env)
+{
+    env->loss = 0;
+}
+
+void addShiftLoss(Posit16Environment* env, int fraction, int shift)
+{
+    env->loss += fraction & bitSeriesMask(0, shift-1);
+}
+
 Posit16 bitSet(Posit16 dst, int position, char bit)
 {
     Posit16 m = 1 << position;
@@ -61,6 +71,20 @@ int bitSeriesCountRight(Posit16 src, int start)
              return c;
      }
      return c;
+}
+
+int bitclz(int n, int size)
+{
+    int m = 1 << (size - 1);
+    int c = 0;
+    while ( (m & n) == 0 )
+    {
+        m >>= 1;
+        ++c;
+        if (c == size)
+            break;
+    }
+    return c;
 }
 
 // returns a mask with continuous series of ones from low to high position inclusively
@@ -279,33 +303,147 @@ float Posit_toFloat(Posit16 value, const Posit16Environment* env)
     return uf.f32;
 }
 
-Posit16 Posit_add(Posit16 a, Posit16 b, const Posit16Environment* env)
+Posit16 Posit_add(Posit16 a, Posit16 b, Posit16Environment* env)
+{
+    Posit16Unpacked ua = Posit_unpack(a, env);
+    Posit16Unpacked ub = Posit_unpack(b, env);
+    Posit16Unpacked ur;
+
+    int aFullExp = getFullExponent(&ua, env);
+    int bFullExp = getFullExponent(&ub, env);
+
+    int aFracSize = getFracSize(&ua, env);
+    int bFracSize = getFracSize(&ub, env);
+
+    int aFractionFirstBitMask = 1 << aFracSize;
+    int bFractionFirstBitMask = 1 << bFracSize;
+
+    int aFraction = aFractionFirstBitMask | ua.fraction;
+    int bFraction = bFractionFirstBitMask | ub.fraction;
+
+    // normalizing fractions
+    int maxFractionSize = aFracSize > bFracSize ? aFracSize : bFracSize;
+
+    aFraction <<= (maxFractionSize - aFracSize);
+    bFraction <<= (maxFractionSize - bFracSize);
+
+    int resultFullExp = 0;
+    int resultFraction = 0;
+
+    resetLoss(env);
+
+    if (ua.sign == ub.sign)
+    {
+        if (aFullExp > bFullExp)
+        {
+            resultFullExp = aFullExp;
+            addShiftLoss(env, bFraction, aFullExp - bFullExp);
+            bFraction >>= aFullExp - bFullExp;
+        }
+        else
+        {
+            resultFullExp = bFullExp;
+            addShiftLoss(env, aFraction, bFullExp - aFullExp);
+            aFraction >>= bFullExp - aFullExp;
+        }
+
+        resultFraction = aFraction + bFraction;
+        if (resultFraction >> (maxFractionSize+1) > 0)
+        {
+            addShiftLoss(env, resultFraction, 1);
+            resultFraction >>= 1;
+            ++resultFullExp;
+        }
+
+        resultFraction = ((~(1u << maxFractionSize)) & resultFraction);
+
+        ur.sign = ua.sign;
+        ur.fraction = resultFraction;
+        setFullExponent(resultFullExp, &ur, env);
+
+        int rFracSize = getFracSize(&ur, env);
+        if (maxFractionSize > rFracSize)
+        {
+            addShiftLoss(env, resultFraction, maxFractionSize - rFracSize);
+            resultFraction >>= (maxFractionSize - rFracSize);
+        }
+        else if (rFracSize > maxFractionSize)
+            resultFraction <<= (rFracSize - maxFractionSize);
+
+        ur.fraction = resultFraction;
+    }
+    else
+    {
+        if (aFullExp > bFullExp || ((aFullExp == bFullExp && aFraction > bFraction)))
+        {
+            resultFullExp = aFullExp;
+            ur.sign = ua.sign;
+            bFraction >>= aFullExp - bFullExp;
+            resultFraction = aFraction - bFraction;
+        }
+        else
+        {
+            ur.sign = !ua.sign;
+            resultFullExp = bFullExp;
+            aFraction >>= bFullExp - aFullExp;
+            resultFraction = bFraction - aFraction;
+        }
+
+        if (resultFraction == 0)
+        {
+            ur.sign = 0;
+            resultFullExp = 0;
+        }
+
+        int shift = bitclz(resultFraction, maxFractionSize+1);
+        resultFullExp -= shift;
+        resultFraction <<= shift;
+        resultFraction = ((~(1u << maxFractionSize)) & resultFraction);
+
+        setFullExponent(resultFullExp, &ur, env);
+
+        int rFracSize = getFracSize(&ur, env);
+        if (maxFractionSize > rFracSize)
+        {
+            addShiftLoss(env, resultFraction, maxFractionSize - rFracSize);
+            resultFraction >>= (maxFractionSize - rFracSize);
+        }
+        else if (rFracSize > maxFractionSize)
+            resultFraction <<= (rFracSize - maxFractionSize);
+
+        ur.fraction = resultFraction;
+    }
+
+    return Posit_pack(ur, env);
+}
+
+Posit16 Posit_sub(Posit16 a, Posit16 b, Posit16Environment* env)
+{
+    b = bitSet(b, POSIT_SIZE-1, bitGet(b, POSIT_SIZE-1));
+    return Posit_add(a, b, env);
+}
+
+Posit16 Posit_mul(Posit16 a, Posit16 b, Posit16Environment* env)
 {
 
 }
 
-Posit16 Posit_sub(Posit16 a, Posit16 b, const Posit16Environment* env)
+Posit16 Posit_div(Posit16 a, Posit16 b, Posit16Environment* env)
 {
 
 }
 
-Posit16 Posit_mul(Posit16 a, Posit16 b, const Posit16Environment* env)
+Posit16 Posit_fmadd(Posit16 a, Posit16 b, Posit16Environment* env)
 {
 
 }
 
-Posit16 Posit_div(Posit16 a, Posit16 b, const Posit16Environment* env)
+Posit16 Posit_maxpos(const Posit16Environment* env)
 {
 
 }
 
-Posit16 Posit_fmadd(Posit16 a, Posit16 b, const Posit16Environment* env)
+Posit16 Posit_minpos(const Posit16Environment* env)
 {
 
 }
-
-
-
-
-
-

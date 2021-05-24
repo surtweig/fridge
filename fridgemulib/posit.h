@@ -34,11 +34,13 @@ Posit16 Posit_pack(Posit16Unpacked unpacked, const Posit16Environment* env);
 Posit16Unpacked Posit_unpack(Posit16 packed, const Posit16Environment* env);
 Posit16 Posit_fromFloat(float value, const Posit16Environment* env);
 float Posit_toFloat(Posit16 value, const Posit16Environment* env);
-Posit16 Posit_add(Posit16 a, Posit16 b, const Posit16Environment* env);
-Posit16 Posit_sub(Posit16 a, Posit16 b, const Posit16Environment* env);
-Posit16 Posit_mul(Posit16 a, Posit16 b, const Posit16Environment* env);
-Posit16 Posit_div(Posit16 a, Posit16 b, const Posit16Environment* env);
-Posit16 Posit_fmadd(Posit16 a, Posit16 b, const Posit16Environment* env);
+Posit16 Posit_add(Posit16 a, Posit16 b, Posit16Environment* env);
+Posit16 Posit_sub(Posit16 a, Posit16 b, Posit16Environment* env);
+Posit16 Posit_mul(Posit16 a, Posit16 b, Posit16Environment* env);
+Posit16 Posit_div(Posit16 a, Posit16 b, Posit16Environment* env);
+Posit16 Posit_fmadd(Posit16 a, Posit16 b, Posit16Environment* env);
+Posit16 Posit_maxpos(const Posit16Environment* env);
+Posit16 Posit_minpos(const Posit16Environment* env);
 
 #ifdef POSIT_TEST
 int bitSeriesMask(int low, int high);
