@@ -337,14 +337,22 @@ Posit16 Posit_add(Posit16 a, Posit16 b, Posit16Environment* env)
         if (aFullExp > bFullExp)
         {
             resultFullExp = aFullExp;
-            addShiftLoss(env, bFraction, aFullExp - bFullExp);
-            bFraction >>= aFullExp - bFullExp;
+            int fracShift = (aFullExp - bFullExp);
+            if (fracShift > POSIT_SIZE)
+                fracShift = POSIT_SIZE;
+            addShiftLoss(env, bFraction, fracShift);
+
+            bFraction >>= fracShift;
         }
         else
         {
             resultFullExp = bFullExp;
-            addShiftLoss(env, aFraction, bFullExp - aFullExp);
-            aFraction >>= bFullExp - aFullExp;
+            int fracShift = (bFullExp - aFullExp);
+            if (fracShift > POSIT_SIZE)
+                fracShift = POSIT_SIZE;
+            addShiftLoss(env, aFraction, fracShift);
+
+            aFraction >>= fracShift;
         }
 
         resultFraction = aFraction + bFraction;
