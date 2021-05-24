@@ -495,7 +495,59 @@ Posit16 Posit_mul(Posit16 a, Posit16 b, Posit16Environment* env)
 
 Posit16 Posit_div(Posit16 a, Posit16 b, Posit16Environment* env)
 {
+    if (a == POSIT16_NAR || b == POSIT16_NAR || b == POSIT16_ZERO)
+        return POSIT16_NAR;
+    if (a == POSIT16_ZERO)
+        return POSIT16_ZERO;
 
+    Posit16Unpacked ua = Posit_unpack(a, env);
+    Posit16Unpacked ub = Posit_unpack(b, env);
+    Posit16Unpacked ur;
+
+    int aFullExp = getFullExponent(&ua, env);
+    int bFullExp = getFullExponent(&ub, env);
+
+    int aFracSize = getFracSize(&ua, env);
+    int bFracSize = getFracSize(&ub, env);
+
+    int aFractionFirstBitMask = 1 << aFracSize;
+    int bFractionFirstBitMask = 1 << bFracSize;
+
+    int aFraction = aFractionFirstBitMask | ua.fraction;
+    int bFraction = bFractionFirstBitMask | ub.fraction;
+
+    // normalizing fractions
+    int maxFractionSize = aFracSize > bFracSize ? aFracSize : bFracSize;
+
+    aFraction <<= (maxFractionSize - aFracSize);
+    bFraction <<= (maxFractionSize - bFracSize);
+
+    int resultFullExp = aFullExp - bFullExp;
+
+    if (aFraction < bFraction)
+    {
+        resultFullExp--;
+        bFraction >>= 1;
+    }
+
+    int resultFraction = (aFraction << maxFractionSize) / bFraction;
+    ur.sign = ua.sign ^ ub.sign;
+
+    resultFraction = ((~(1 << maxFractionSize)) & resultFraction);
+
+    setFullExponent(resultFullExp, &ur, env);
+
+    int rFracSize = getFracSize(&ur, env);
+    if (maxFractionSize > rFracSize)
+    {
+        addShiftLoss(env, resultFraction, maxFractionSize - rFracSize);
+        resultFraction >>= (maxFractionSize - rFracSize);
+    }
+    else if (rFracSize > maxFractionSize)
+        resultFraction <<= (rFracSize - maxFractionSize);
+
+    ur.fraction = resultFraction;
+    return Posit_pack(ur, env);
 }
 
 Posit16 Posit_fmadd(Posit16 a, Posit16 b, Posit16Environment* env)

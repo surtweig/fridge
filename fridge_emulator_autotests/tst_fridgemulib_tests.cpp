@@ -28,6 +28,7 @@ private slots:
     void posit_float_conversion();
     void posit_add();
     void posit_mul();
+    void posit_div();
 };
 
 fridgemulib_tests::fridgemulib_tests()
@@ -203,8 +204,29 @@ void fridgemulib_tests::posit_mul()
     qDebug() << "posit:" << fp1 << "*" << fp2 << "=" << fpa;
     qDebug() << "float:" << fp1 << "*" << fp2 << "=" << fp1*fp2;
 
-    QVERIFY(fpa == 128.875);
+    QVERIFY(qAbs(fpa-128.875)<=1e-5);
 }
+
+void fridgemulib_tests::posit_div()
+{
+    Posit16Environment env = Posit_env(2);
+
+    float f1 = 4.2345;
+    float f2 = 30.4567;//4.3156;
+
+    Posit16 p1 = Posit_fromFloat(f1, &env);
+    Posit16 p2 = Posit_fromFloat(f2, &env);//-rand();//
+    Posit16 pa = Posit_div(p2, p1, &env);
+    float fpa = Posit_toFloat(pa, &env);
+    float fp1 = Posit_toFloat(p1, &env);
+    float fp2 = Posit_toFloat(p2, &env);
+    qDebug() << "posit:" << fp2 << "/" << fp1 << "=" << fpa;
+    qDebug() << "float:" << fp2 << "/" << fp1 << "=" << fp2/fp1;
+    qDebug() << qAbs(fpa-7.19141);
+
+    QVERIFY(qAbs(fpa-7.19141)<=1e-5);
+}
+
 
 QTEST_APPLESS_MAIN(fridgemulib_tests)
 
