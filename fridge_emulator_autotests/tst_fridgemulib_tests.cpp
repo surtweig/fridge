@@ -25,6 +25,7 @@ private slots:
 
     void posit_bitOps();
     void posit_pack();
+    void posit_float_conversion();
 };
 
 fridgemulib_tests::fridgemulib_tests()
@@ -125,6 +126,27 @@ void fridgemulib_tests::posit_pack()
     qDebug() << "sign =" << unp2.sign << "reg =" << unp2.regime << "exp =" << unp2.exponent << "frac =" << unp2.fraction;
     QVERIFY(pck == 35739);
 
+}
+
+void fridgemulib_tests::posit_float_conversion()
+{
+    Posit16Environment env = Posit_env(3);
+    float x = 1.2345;
+
+    Posit16 p = Posit_fromFloat(x, &env);
+    Posit16Unpacked unp = Posit_unpack(p, &env);
+    Posit16 p2 = Posit_pack(unp, &env);
+    //Posit16Unpacked unp = Posit_fromFloat(x, &env);
+    //Posit16 p = Posit_pack(unp, &env);
+
+    qDebug() << "sign =" << unp.sign << "reg =" << unp.regime << "exp =" << unp.exponent << "frac =" << unp.fraction;
+
+    float x2 = Posit_toFloat(p2, &env);
+    qDebug() << x << "->" << x2;
+
+    QVERIFY(qAbs(x-x2) < 0.001);
+
+    QVERIFY(Posit_toFloat(Posit_fromFloat(0.0, &env), &env) == 0.0);
 }
 
 QTEST_APPLESS_MAIN(fridgemulib_tests)
