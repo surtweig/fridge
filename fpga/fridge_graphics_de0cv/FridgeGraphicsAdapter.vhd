@@ -84,6 +84,7 @@ architecture main of FridgeGraphicsAdapter is
      --signal fbuf_a : XCM2_VIDEO_FBUF:= (others => 2);--(others => 2);--
      --signal fbuf_b : XCM2_VIDEO_FBUF:= (others => 2);--WelcomeScreenData;--(others => 2);--
      signal linebuffer, linebufferRead : XCM2_VIDEO_LINEBUF;
+     signal lineBufferCopyPos : integer range 0 to XCM2_VIDEO_FRAME_WIDTH/2:= 0;
      signal visible_buf : std_logic:= '0';
      signal swap_next : std_logic:= '0';
      signal present_trigger_lock : std_logic:= '0';
@@ -174,6 +175,7 @@ begin
           variable charForeColor : XCM2_INDEX_COLOR;
           variable charBackColor : XCM2_INDEX_COLOR;
           variable backAddr : integer;
+          variable copyPos : integer;
      begin         
           if rising_edge(CLK) then
                --if (WritePixel = '1') then
@@ -220,6 +222,17 @@ begin
                     --     end if;
                     --end if;
                     
+                         
+                    if ((screen_horcounter < ScreenHorOffset-1 or screen_horcounter >= ScreenWidth-ScreenHorOffset) and
+                        gramReadAddrOffset > lineBufferCopyPos and lineBufferCopyPos < vbufferSize) then
+                         copyPos:= lineBufferCopyPos;
+                         --linebuffer(copyPos) <= linebufferRead(copyPos);
+						 if copyPos = 0 then
+							linebuffer <= linebufferRead;
+						 end if;
+                         lineBufferCopyPos <= copyPos + 1;
+                    end if;
+                         
                     if (HPOS >= HStart and VPOS >= VStart) then
                          if (screen_horcounter = 1 and screen_vercounter = 0) then
                               gramReadEnabled <= '1';
@@ -277,12 +290,13 @@ begin
                          
                          if (screen_vercounter = lineSwapVPos and screen_vercounter < ScreenHeight-ScreenVerOffset) then
                               if (screen_horcounter = 0) then
-                                   linebuffer <= linebufferRead;
+                                   --linebuffer <= linebufferRead;
                                    vbuffer_line_addr <= vbuffer_line_addr + vbufferSize;
                                    gramReadEnabled <= '0';
                               elsif (screen_horcounter = ScreenHorOffset-1) then
                                    --gramReadAddrOffset <= X"0000";
                                    gramReadAddrBase <= to_unsigned(vbuffer_line_addr, 16);
+                                   lineBufferCopyPos <= 0;
                                    if vmode = XCM2_VIDEO_EGA then
                                         lineSwapVPos <= lineSwapVPos + PixelSize;
                                    elsif vmode = XCM2_VIDEO_TEXT then
@@ -362,8 +376,8 @@ begin
                                                   to_unsigned(linebuffer(text_colcounter*4 + 1), 4) --text_row_addr
                                                   )
                                              );
-                                             charForeColor:= to_integer(to_unsigned(linebuffer(text_colcounter*4 + 2), 4));
-                                             charBackColor:= to_integer(to_unsigned(linebuffer(text_colcounter*4 + 3), 4));
+                                             charForeColor:= to_integer(to_unsigned(linebuffer(text_colcounter*4 + 3), 4));
+                                             charBackColor:= to_integer(to_unsigned(linebuffer(text_colcounter*4 + 2), 4));
                                         --else
                                         --     charRasterData:= RasterFontData(to_integer(
                                         --          to_unsigned(fbuf_b(text_row_addr + text_colcounter*4), 4) &
