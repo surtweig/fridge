@@ -47,14 +47,17 @@ void MainWindow::initFridge()
     sys = new FRIDGE_SYSTEM();
     sys->cpu = new FRIDGE_CPU();
     sys->gpu = new FRIDGE_GPU();
+    sys->pam = new FRIDGE_PAM16();
     FRIDGE_cpu_reset(sys->cpu);
     FRIDGE_gpu_reset(sys->gpu);
+    FRIDGE_pam16_reset(sys, 3);
 }
 
 void MainWindow::destroyFridge()
 {
     delete sys->cpu;
     delete sys->gpu;
+    delete sys->pam;
     delete sys;
 }
 
@@ -268,7 +271,7 @@ void MainWindow::on_asmCompileBtn_clicked()
         falcFile << ui->asmCodeEdit->toPlainText().toStdString();
         falcFile.close();
         ostream logstream(logbuf);
-        FridgeAssemblyLanguageCompiler falc("", FalcTempFile, "", {}, &logstream);
+        FridgeAssemblyLanguageCompiler falc("", FalcTempFile, BinTempFile, {}, &logstream, true);
 
         emuThread->SetLock();
         FRIDGE_RAM_ADDR offset = falc.getOffset();

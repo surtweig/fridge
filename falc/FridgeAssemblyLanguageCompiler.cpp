@@ -900,6 +900,7 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
 
         for (map<string, StaticResourceInfo>::iterator ires = resources.begin(); ires != resources.end(); ++ires)
         {
+            logout("Resource '" + ires->first + "' at " + int_to_hex(pos));
             memcpy(objectCode + pos, ires->second.pdata, ires->second.size);
             pos += ires->second.size;
         }
@@ -1063,7 +1064,15 @@ map<string, FRIDGE_WORD> FridgeAssemblyLanguageCompiler::IRIDs = {
     {"VMODE", VMODE},
     {"VPAL",  VPAL},
     {"VSS",   VSS},
-    {"VSD",  VSD}
+    {"VSD",  VSD},
+    {"UCLR",   UCLR},
+    {"UPUSH",  UPUSH},
+    {"UPOP",   UPOP},
+    {"UADD",   UADD},
+    {"USUB",   USUB},
+    {"UMUL",   UMUL},
+    {"UDIV",   UDIV},
+    {"UFMADD", UFMADD},
 };
 
 
@@ -1397,6 +1406,16 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
     { VPAL    , { { {NONE, NONE} }, 0} },
     { VSS     , { { {NONE, NONE} }, 0} },
     { VSD     , { { {NONE, NONE} }, 0} },
+
+    { UCLR    , { { {NONE, NONE} }, 0} },
+    { UPUSH   , { { {NONE, NONE} }, 0} },
+    { UPOP    , { { {NONE, NONE} }, 0} },
+    { UADD    , { { {NONE, NONE} }, 0} },
+    { USUB    , { { {NONE, NONE} }, 0} },
+    { UMUL    , { { {NONE, NONE} }, 0} },
+    { UDIV    , { { {NONE, NONE} }, 0} },
+    { UFMADD  , { { {NONE, NONE} }, 0} },
+
 };
 
 
@@ -1647,8 +1666,16 @@ map<FRIDGE_WORD, string> FridgeAssemblyLanguageCompiler::IRNames =
         {VMODE,   "VMODE"},
         {VPAL,    "VPAL"},
         {VSS,     "VSS"},
-        {VSD,     "VSD"}
-    };
+        {VSD,     "VSD"},
+        {UCLR,    "UCLR"},
+        {UPUSH,   "UPUSH"},
+        {UPOP,    "UPOP"},
+        {UADD,    "UADD"},
+        {USUB,    "USUB"},
+        {UMUL,    "UMUL"},
+        {UDIV,    "UDIV"},
+        {UFMADD,  "UFMADD"},
+};
 
 FridgeAssemblyLanguageCompiler::~FridgeAssemblyLanguageCompiler()
 {

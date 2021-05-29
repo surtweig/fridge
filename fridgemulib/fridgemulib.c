@@ -487,6 +487,27 @@ void ir_VSD(FRIDGE_SYSTEM* sys)
     }
 }
 
+#ifdef FRIDGE_POSIT16_SUPPORT
+
+void ir_UCLR(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_pam16_reset(sys, sys->cpu->rA);
+}
+
+void ir_UPUSH(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_pam16_push(sys, FRIDGE_cpu_pair_HL(sys->cpu));
+}
+
+void ir_UPOP(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_DWORD hl = FRIDGE_pam16_pop(sys);
+    sys->cpu->rH = FRIDGE_HIGH_WORD(hl);
+    sys->cpu->rL = FRIDGE_LOW_WORD(hl);
+}
+
+#endif
+
 FRIDGE_WORD dummyDevInput(FRIDGE_SYSTEM* sys)
 {
     return 0;
@@ -921,6 +942,17 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VSLA:  ir_VSLA(sys);  break;
         case VSS:   ir_VSS(sys);   break;
         case VSD:   ir_VSD(sys);   break;
+
+#ifdef FRIDGE_POSIT16_SUPPORT
+        case UCLR: ir_UCLR(sys); break;
+        case UPUSH : ir_UPUSH(sys); break;
+        case UPOP : ir_UPOP(sys); break;
+        case UADD : FRIDGE_pam16_add(sys); break;
+        case USUB : FRIDGE_pam16_sub(sys); break;
+        case UMUL : FRIDGE_pam16_mul(sys); break;
+        case UDIV : FRIDGE_pam16_div(sys); break;
+        case UFMADD : FRIDGE_pam16_fmadd(sys); break;
+#endif
     }
 }
 
@@ -1269,3 +1301,78 @@ void FRIDGE_keyboard_release(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
         kbrd->input_index = 0;
 }
 
+#ifdef FRIDGE_POSIT16_SUPPORT
+
+void FRIDGE_pam16_reset(FRIDGE_SYSTEM* sys, unsigned char es)
+{
+    sys->pam->sp = 0;
+    if (es > 0)
+        sys->pam->env = Posit_env(es);
+    for (int i = 0; i < FRIDGE_PAM16_STACK_SIZE; ++i)
+        sys->pam->stack[i] = POSIT16_ZERO;
+}
+
+void FRIDGE_pam16_push(FRIDGE_SYSTEM* sys, Posit16 data)
+{
+    if (sys->pam->sp < FRIDGE_PAM16_STACK_SIZE)
+    {
+        sys->pam->stack[sys->pam->sp++] = data;
+    }
+    else
+    {
+        corePanic(sys->cpu);
+    }
+}
+
+Posit16 FRIDGE_pam16_pop(FRIDGE_SYSTEM* sys)
+{
+    if (sys->pam->sp > 0)
+    {
+        return sys->pam->stack[--sys->pam->sp];
+    }
+    else
+    {
+        corePanic(sys->cpu);
+        return 0;
+    }
+}
+
+void FRIDGE_pam16_add(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p0 = FRIDGE_pam16_pop(sys);
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys, Posit_add(p0, p1, &sys->pam->env));
+}
+
+void FRIDGE_pam16_sub(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p0 = FRIDGE_pam16_pop(sys);
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys, Posit_sub(p0, p1, &sys->pam->env));
+}
+
+void FRIDGE_pam16_mul(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p0 = FRIDGE_pam16_pop(sys);
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys, Posit_mul(p0, p1, &sys->pam->env));
+}
+
+void FRIDGE_pam16_div(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p0 = FRIDGE_pam16_pop(sys);
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys, Posit_div(p0, p1, &sys->pam->env));
+}
+
+void FRIDGE_pam16_fmadd(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p0 = FRIDGE_pam16_pop(sys);
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    Posit16 p2 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys,
+        Posit_add(p0,
+            Posit_mul(p1, p2, &sys->pam->env), &sys->pam->env));
+}
+
+#endif

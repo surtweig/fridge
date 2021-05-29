@@ -1,4 +1,7 @@
 #include <fridge.h>
+#ifdef FRIDGE_POSIT16_SUPPORT
+    #include <posit.h>
+#endif
 
 #ifndef FRIDGEMULIB_H
 #define FRIDGEMULIB_H
@@ -169,12 +172,35 @@ typedef struct FRIDGE_KEYBOARD_CONTROLLER
     FRIDGE_WORD output_index;
 } FRIDGE_KEYBOARD_CONTROLLER;
 
+#ifdef FRIDGE_POSIT16_SUPPORT
+    typedef struct FRIDGE_PAM16
+    {
+        Posit16 stack[FRIDGE_PAM16_STACK_SIZE];
+        FRIDGE_WORD sp;
+        Posit16Environment env;
+    } FRIDGE_PAM16;
+
+    void FRIDGE_pam16_reset(FRIDGE_SYSTEM* sys, unsigned char es);
+    void FRIDGE_pam16_push(FRIDGE_SYSTEM* sys, Posit16 data);
+    Posit16 FRIDGE_pam16_pop(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_add(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_sub(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_mul(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_div(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_fmadd(FRIDGE_SYSTEM* sys);
+#endif
+
 typedef struct FRIDGE_SYSTEM
 {
     FRIDGE_CPU* cpu;
     FRIDGE_GPU* gpu;
     FRIDGE_ROM* rom;
     FRIDGE_KEYBOARD_CONTROLLER* kbrd;
+#ifdef FRIDGE_POSIT16_SUPPORT
+    FRIDGE_PAM16* pam;
+#endif
 } FRIDGE_SYSTEM;
+
+
 
 #endif

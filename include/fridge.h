@@ -8,6 +8,7 @@ typedef unsigned short FRIDGE_ROM_ADDR;
 typedef unsigned int FRIDGE_SIZE_T;
 
 #define FRIDGE_ASCENDING_STACK
+#define FRIDGE_POSIT16_SUPPORT
 
 #define FRIDGE_RAM_SIZE 0x10000 // bytes
 #define FRIDGE_MAX_DWORD 0xffff
@@ -58,6 +59,10 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_DEV_ROM_RESET_ID 0x01
 #define FRIDGE_DEV_ROM_ID 0x02
 #define FRIDGE_DEV_KEYBOARD_ID 0x03
+
+#ifdef FRIDGE_POSIT16_SUPPORT
+    #define FRIDGE_PAM16_STACK_SIZE 8
+#endif
 
 typedef enum FRIDGE_IRCODE {
 
@@ -172,14 +177,14 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
-    IR247,
-    IR248,
-    IR249,
-    IR250,
-    IR251,
-    IR252,
-    IR253,
-    IR254,
+    UCLR,   // resets PAM16, sets ES = A if A > 0
+    UPUSH,  // PAM16 stack push from HL
+    UPOP,   // PAM16 stack pop to HL
+    UADD,   // PAM16 add top two
+    USUB,   // PAM16 subtract top two
+    UMUL,   // PAM16 multiply top two
+    UDIV,   // PAM16 divide top two
+    UFMADD, // PAM16 fused multiply-add S[sp-1] + S[sp-2] * S[sp-3]
     IR255
 
 } FRIDGE_IRCODE;
