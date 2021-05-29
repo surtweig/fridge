@@ -244,6 +244,25 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_MVI;
+
+     procedure ir_MVI_M(signal IRArg0 : in XCM2_WORD; signal rH, rL : in XCM2_WORD;
+                        signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
+                        signal state : in CPUState; variable nextState : inout CPUState) is
+     variable vh, vl : std_logic_vector(0 to 7);
+     variable vhl : std_logic_vector(0 to 15);
+     
+     begin
+          if (state = CPU_EXECUTE_IR) then
+               vh:= std_logic_vector(rH);
+               vl:= std_logic_vector(rL);
+               vhl:= vh & vl;
+               memAddrBuffer <= unsigned(vhl);
+               memWriteBuffer <= IRArg0;
+               nextState:= CPU_STORE_WORD;
+          elsif (state = CPU_STORE_WORD) then
+               nextState:= CPU_FETCH_IR;
+          end if;
+     end procedure ir_MVI_M;     
      
      procedure ir_LXI(signal rDstH, rDstL : inout XCM2_WORD; signal IRArg0, IRArg1 : in XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1050,12 +1069,12 @@ architecture main of FridgeCPU is
           end if;
      end procedure ir_Dummy;
      
-     procedure ir_VMODE(signal gpuModeSwitch : inout std_logic_vector(0 to 1); signal IRArg0 : in XCM2_WORD;
+     procedure ir_VMODE(signal gpuModeSwitch : inout std_logic_vector(0 to 1); signal mode : in XCM2_WORD;
                         signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
                gpuModeSwitch(0) <= '1';
-               gpuModeSwitch(1) <= IRArg0(7);
+               gpuModeSwitch(1) <= mode(7);
                nextState:= CPU_EXECUTE_IR_STAGE_2;
           elsif (state = CPU_EXECUTE_IR_STAGE_2) then
                gpuModeSwitch(0) <= '0';
@@ -1127,7 +1146,7 @@ begin
                     --if nextState /= CPU_FETCH_IR then
                     --     state <= nextState;
                     --else
-                    --     if DEBUG_STEP = '1' and debugStepPressed = '0' then
+                    --    if DEBUG_STEP = '1' and debugStepPressed = '0' then
                     --          debugStepPressed <= '1';
                     --     elsif DEBUG_STEP = '0' and debugStepPressed = '1' then
                     --          state <= nextState;
@@ -1136,13 +1155,14 @@ begin
                     --end if;
                     
                     state <= nextState;                    
+					
                     PC <= nextPC;
                     SP <= nextSP;
                     if (INT = '1') then
                          interruptRequested <= '1';
                          interruptAddr <= INT_IRQ;
                     elsif (interruptInProgress = '0') then
-                         interruptRequested <= '0';
+                        interruptRequested <= '0';
                     end if;
                else
                     state <= CPU_INVALID;
@@ -1183,7 +1203,7 @@ begin
                                   
                     buf_nextPC := PC + 1;   
                                        
-                    if (buf_currentIRCode >= LXI_BC and buf_currentIRCode <= SHLD) or (buf_currentIRCode >= JMP and buf_currentIRCode <= CM)
+                    if (buf_currentIRCode >= LXI_BC and buf_currentIRCode <= SHLD) or (buf_currentIRCode >= JMP and buf_currentIRCode <= CM) or (buf_currentIRCode = DAI)
                     then
                          -- 3byte instructions
                          if (state = CPU_FETCH_IR) then
@@ -1193,7 +1213,7 @@ begin
                          else
                               buf_nextState := CPU_EXECUTE_IR;
                          end if;
-                    elsif (buf_currentIRCode >= MVI_A and buf_currentIRCode <= MVI_L) or
+                    elsif (buf_currentIRCode >= MVI_A and buf_currentIRCode <= MVI_M) or
                        buf_currentIRCode = ADI or
                        buf_currentIRCode = ACI or
                        buf_currentIRCode = SUI or
@@ -1203,8 +1223,8 @@ begin
                        buf_currentIRCode = XRI or
                        buf_currentIRCode = CPI or
                        buf_currentIRCode = IIN or
-                       buf_currentIRCode = IOUT or
-                       buf_currentIRCode = VMODE
+                       buf_currentIRCode = IOUT
+                       --or buf_currentIRCode = VMODE
                     then
                          -- 2byte instructions
                          if (state = CPU_FETCH_IR) then      
@@ -1299,6 +1319,7 @@ begin
                     when MVI_E => ir_MVI(rE, IRArg0, state, buf_nextState);
                     when MVI_H => ir_MVI(rH, IRArg0, state, buf_nextState);
                     when MVI_L => ir_MVI(rL, IRArg0, state, buf_nextState);
+                    when MVI_M => ir_MVI_M(IRArg0, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     
                     when LXI_BC => ir_LXI(rB, rC, IRArg0, IRArg1, state, buf_nextState);
                     when LXI_DE => ir_LXI(rD, rE, IRArg0, IRArg1, state, buf_nextState);
@@ -1393,6 +1414,7 @@ begin
                     when DAD_DE => ir_DAD(rH, rL, rD, rE, state, buf_nextState);
                     when DAD_HL => ir_DAD(rH, rL, rH, rL, state, buf_nextState);
                     when DAD_SP => ir_DAD_D(rH, rL, SP, state, buf_nextState);
+                    when DAI    => ir_DAD(rH, rL, IRArg0, IRArg1, state, buf_nextState);
                     
                     when ANA_A => ir_ANA(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ANA_B => ir_ANA(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1500,7 +1522,7 @@ begin
                     
                     --when VFCLR => ir_Trigger(gpuBackClr, state, buf_nextState);
                     when VPRE => ir_Trigger(gpuPresentTrigger, state, buf_nextState);
-                    when VMODE => ir_VMODE(gpuModeSwitch, IRArg0, state, buf_nextState);
+                    when VMODE => ir_VMODE(gpuModeSwitch, rA, state, buf_nextState);
                     when VFSA => ir_VFSA(rA, rH, rL, gpuBackStore, gpuBackLoad, gpuBackAddr, gpuBackData, state, buf_nextState);
                     
                     when others => ir_Dummy(state, buf_nextState);
