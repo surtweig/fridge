@@ -13,8 +13,12 @@ port (
     
     COMMAND_ENABLED : in std_logic; 
     COMMAND_READY : out std_logic;
-    DATA : inout XCM2_DWORD;
-    COMMAND_CODE : in PAM16_COMMAND
+    DATA_WRITE : in XCM2_DWORD;
+    DATA_READ : out XCM2_DWORD;
+    COMMAND_CODE : in PAM16_COMMAND;
+    
+    DEBUG_SP : out XCM2_WORD;
+    DEBUG_ES : out XCM2_WORD
 );
 
 end FridgePAM16;
@@ -39,7 +43,6 @@ architecture main of FridgePAM16 is
     signal stack : PAM16_STACK;
     signal sp : integer range 0 to PAM16_STACK_SIZE-1;
     signal currentCmd : PAM16_COMMAND;
-    signal ready : std_logic:= '1';
     signal inputData : XCM2_DWORD;
     signal state, nextState : PAMState:= PAM_READY;
     
@@ -115,27 +118,32 @@ architecture main of FridgePAM16 is
     
     
 begin
-
-    COMMAND_READY <= ready;
-
+    
     process (CLK) is
         variable inputLow : XCM2_WORD;
         variable stackPos : integer;
     begin
     
-        if falling_edge(CLK) then
-            if state = PAM_READY then
-                if COMMAND_ENABLED = '1' and ready = '1' then
+        DEBUG_ES <= es;
+    
+        if rising_edge(CLK) then
+            if (state = PAM_READY) then
+                COMMAND_READY <= '1';
+            else
+                COMMAND_READY <= '0';
+            end if;
+            DEBUG_SP <= to_unsigned(sp, 4) & COMMAND_CODE;--to_unsigned(PAMState'POS(state), 4);
+    
+            if state = PAM_READY or COMMAND_CODE = PAM16_RESET then
+                if COMMAND_ENABLED = '1' then
                 
-                    if currentCmd = PAM16_NOP then
-                                    
-                        currentCmd <= COMMAND_CODE;
-                        inputData <= DATA;
+                    currentCmd <= COMMAND_CODE;
+                    inputData <= DATA_WRITE;
                     
-                    elsif currentCmd = PAM16_RESET then
+                    if COMMAND_CODE = PAM16_RESET then
                     
                         -- input low word to ES
-                        inputLow:= inputData(8 to 15);
+                        inputLow:= DATA_WRITE(8 to 15);
                         if inputLow < 1 then
                             es <= X"01";
                         elsif inputLow > PAM16_POSIT_SIZE-1 then
@@ -148,26 +156,29 @@ begin
                             stack(i) <= X"0000";
                         end loop;
                         sp <= 0;
+                        nextState <= PAM_READY;
                         
-                    elsif currentCmd = PAM16_PUSH then
+                    elsif COMMAND_CODE = PAM16_PUSH then
                     
                         if stackPos < PAM16_STACK_SIZE then
                             stackPos:= sp;
-                            stack(stackPos) <= PAM16_POSIT(DATA);
+                            stack(stackPos) <= PAM16_POSIT(DATA_WRITE);
                             sp <= stackPos+1;
                         end if;
+                        nextState <= PAM_READY;
                     
-                    elsif currentCmd = PAM16_POP then
+                    elsif COMMAND_CODE = PAM16_POP then
                     
                         stackPos:= sp-1;
                         if stackPos >= 0 then
-                            DATA <= PAM16_POSIT(stack(stackPos));
+                            DATA_READ <= PAM16_POSIT(stack(stackPos));
                             sp <= stackPos;
                         else
-                            DATA <= PAM16_POSIT_ZERO;
+                            DATA_READ <= PAM16_POSIT_ZERO;
                         end if;
+                        nextState <= PAM_READY;
                     
-                    elsif currentCmd = PAM16_ADD then
+                    elsif COMMAND_CODE = PAM16_ADD then
                     
                         p_a <= PAM16_POSIT(stack(sp-1));
                         p_b <= PAM16_POSIT(stack(sp-2));

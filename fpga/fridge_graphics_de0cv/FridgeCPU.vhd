@@ -5,6 +5,7 @@ use ieee.std_logic_unsigned.all;
 
 use work.FridgeGlobals.all;
 use work.FridgeIRCodes.all;
+use work.FridgePAM16Commands.all;
 
 entity FridgeCPU is
      
@@ -12,6 +13,7 @@ port (
      CLK_MAIN : in std_logic;
      CLK_PHI2 : in std_logic;
      RESET : in std_logic;
+     DEBUG_SWITCH : in std_logic;
      HALTED : out std_logic;
      
      INTE : out std_logic;
@@ -43,10 +45,16 @@ port (
      GPU_VMEM_ADDR : out XCM2_DWORD;
      GPU_VMEM_DATA : inout XCM2_WORD;
      
+     PAM16_COMMAND_ENABLED : out std_logic; 
+     PAM16_COMMAND_READY : in std_logic;
+     PAM16_DATA_WRITE : out XCM2_DWORD;
+     PAM16_DATA_READ : in XCM2_DWORD;
+     PAM16_COMMAND_CODE : out PAM16_COMMAND;
+     
      DEBUG_STEP : in std_logic;
      DEBUG_STATE : out XCM2_WORD;
      DEBUG_CURRENT_IR : out XCM2_WORD;
-     DEBUG_PC_L : out XCM2_WORD
+     DEBUG_PC : out XCM2_DWORD
 );
      
 end FridgeCPU;
@@ -71,7 +79,8 @@ architecture main of FridgeCPU is
           CPU_STORE_DWORD_H,       -- 0E
           CPU_STORE_DWORD_L,       -- 0F
           CPU_DEVICE_READ,         -- 10
-          CPU_DEVICE_WRITE         -- 11
+          CPU_DEVICE_WRITE,        -- 11
+          CPU_PAUSED
      );
 
      signal state : CPUState:= CPU_INVALID;
@@ -883,11 +892,12 @@ architecture main of FridgeCPU is
                end if;          
           elsif (state = CPU_LOAD_DWORD_H) then
                nextState:= CPU_LOAD_DWORD_L;
+               nextPC(0 to 7):= RAM_READ_DATA;
                memAddrBuffer <= SP + X"01";
           elsif (state = CPU_LOAD_DWORD_L) then
                nextState:= CPU_FETCH_IR;
                nextSP:= SP + X"02";
-               nextPC:= XCM2_DWORD_HL(memReadBufferH, RAM_READ_DATA);
+               nextPC(8 to 15):= RAM_READ_DATA;--XCM2_DWORD_HL(memReadBufferH, RAM_READ_DATA);
                memAddrBuffer <= nextPC;
           end if;
      end procedure ir_RET;
@@ -1098,6 +1108,45 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_VFSA;
+     
+     procedure ir_PAM16C(signal rA : in XCM2_WORD; signal rH, rL : inout XCM2_WORD; signal pam16Ready : in std_logic;
+                         signal pam16CmdEnabled : out std_logic; signal pam16CmdCode : out PAM16_COMMAND; signal pam16DataWrite : out XCM2_DWORD; signal pam16DataRead : in XCM2_DWORD;
+                         signal state : in CPUState; variable nextState : inout CPUState) is
+        variable cmdCode : PAM16_COMMAND;
+        variable data : XCM2_DWORD;
+     begin
+        if (state = CPU_EXECUTE_IR) then
+            pam16CmdEnabled <= '1';
+            cmdCode:= rA(4 to 7);
+            pam16CmdCode <= cmdCode;
+            
+            if (cmdCode = PAM16_RESET) then
+                data:= X"0000";
+                data(12 to 15):= rA(0 to 3); -- ES
+                pam16DataWrite <= data;
+            elsif (cmdCode = PAM16_PUSH) then
+                pam16DataWrite <= XCM2_DWORD_HL(rH, rL);
+            end if;
+            
+            nextState:= CPU_EXECUTE_IR_STAGE_2;
+            
+        elsif (state = CPU_EXECUTE_IR_STAGE_2) then
+            cmdCode:= rA(4 to 7);
+            
+            if (pam16Ready = '1') then
+                pam16CmdEnabled <= '0';
+                nextState:= CPU_FETCH_IR;
+                
+                if (cmdCode = PAM16_POP) then
+                    rH <= XCM2_HIGH_WORD(pam16DataRead);
+                    rL <= XCM2_LOW_WORD(pam16DataRead);
+                end if;                
+            else
+                nextState:= CPU_EXECUTE_IR_STAGE_2;
+            end if;
+            
+        end if;
+     end procedure ir_PAM16C;
                         
 begin
 
@@ -1129,8 +1178,8 @@ begin
           GPU_PRESENT_TRIGGER <= gpuPresentTrigger;
           GPU_BACK_DATA <= gpuBackData;
           
-          DEBUG_STATE <= rB;--to_unsigned(CPUState'POS(state), 8);
-          DEBUG_PC_L <= rC;--XCM2_LOW_WORD(PC);
+          DEBUG_STATE <= to_unsigned(CPUState'POS(state), 8);
+          DEBUG_PC <= PC;--XCM2_LOW_WORD(PC);
           DEBUG_CURRENT_IR <= currentIRCode;
           
           if (state = CPU_DEVICE_READ) then
@@ -1143,18 +1192,23 @@ begin
                
           if rising_edge(CLK_MAIN) then
                if RESET = '0' then
-                    --if nextState /= CPU_FETCH_IR then
-                    --     state <= nextState;
-                    --else
-                    --    if DEBUG_STEP = '1' and debugStepPressed = '0' then
-                    --          debugStepPressed <= '1';
-                    --     elsif DEBUG_STEP = '0' and debugStepPressed = '1' then
-                    --          state <= nextState;
-                    --          debugStepPressed <= '0';
-                    --     end if;
-                    --end if;
-                    
-                    state <= nextState;                    
+               
+                    if DEBUG_SWITCH = '1' then
+                        if nextState /= CPU_FETCH_IR then
+                            state <= nextState;
+                        else
+                            if DEBUG_STEP = '1' and debugStepPressed = '0' then
+                                debugStepPressed <= '1';
+                            elsif DEBUG_STEP = '0' and debugStepPressed = '1' then
+                                state <= nextState;
+                                debugStepPressed <= '0';
+                            else
+                                state <= CPU_PAUSED;
+                            end if;
+                        end if;
+                    else
+                        state <= nextState; -- normal operation
+                    end if;
 					
                     PC <= nextPC;
                     SP <= nextSP;
@@ -1178,6 +1232,17 @@ begin
                     buf_nextState:= CPU_INVALID;
                     nextPC <= X"0000";
                     nextSP <= X"FFFF";
+                    rA <= X"00";
+                    rB <= X"00";
+                    rC <= X"00";
+                    rD <= X"00";
+                    rE <= X"00";
+                    rH <= X"00";
+                    rL <= X"00";
+                    rF <= X"00";
+                    IRTemp <= X"00";
+                    IRArg0 <= X"00";
+                    IRArg1 <= X"00";                    
                end if;
                
                if (interruptRequested = '1') then
@@ -1524,6 +1589,8 @@ begin
                     when VPRE => ir_Trigger(gpuPresentTrigger, state, buf_nextState);
                     when VMODE => ir_VMODE(gpuModeSwitch, rA, state, buf_nextState);
                     when VFSA => ir_VFSA(rA, rH, rL, gpuBackStore, gpuBackLoad, gpuBackAddr, gpuBackData, state, buf_nextState);
+                    
+                    when PAM16C => ir_PAM16C(rA, rH, rL, PAM16_COMMAND_READY, PAM16_COMMAND_ENABLED, PAM16_COMMAND_CODE, PAM16_DATA_WRITE, PAM16_DATA_READ, state, buf_nextState);
                     
                     when others => ir_Dummy(state, buf_nextState);
                end case;

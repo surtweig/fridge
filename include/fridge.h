@@ -177,14 +177,19 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
-    UCLR,   // resets PAM16, sets ES = A if A > 0
-    UPUSH,  // PAM16 stack push from HL
-    UPOP,   // PAM16 stack pop to HL
-    UADD,   // PAM16 add top two
-    USUB,   // PAM16 subtract top two
-    UMUL,   // PAM16 multiply top two
-    UDIV,   // PAM16 divide top two
-    UFMADD, // PAM16 fused multiply-add S[sp-1] + S[sp-2] * S[sp-3]
+#ifdef FRIDGE_POSIT16_SUPPORT
+    PAM16C,  // executes PAM16 command
+             // command code is 4 low bits of A (A & 0x0f)
+#else
+    IR247,
+#endif
+    IR248,
+    IR249,
+    IR250,
+    IR251,
+    IR252,
+    IR253,
+    IR254,
     IR255
 
 } FRIDGE_IRCODE;
@@ -208,6 +213,23 @@ const FRIDGE_WORD FRIDGE_gpu_default_palette[FRIDGE_GPU_PALETTE_SIZE] =
     0xff, 0xff, 0x40, // bright yellow
     0xff, 0xff, 0xff, // white
 };
+
+#ifdef FRIDGE_POSIT16_SUPPORT
+typedef enum FRIDGE_PAM16_COMMAND
+{
+    PAM16_NOP,
+    PAM16_RESET,  // resets PAM16, sets ES = (A >> 4) if (A >> 4) > 0
+    PAM16_PUSH,   // stack push from HL
+    PAM16_POP,    // stack pop to HL
+    PAM16_ADD,    // add top two
+    PAM16_SUB,    // subtract top two
+    PAM16_MUL,    // multiply top two
+    PAM16_DIV,    // divide top two
+    PAM16_FMADD,  // fused multiply-add S[sp-1] + S[sp-2] * S[sp-3]
+    PAM16_PACK,   // packs a posit number from sign (B), regime (C), exponent (DE), fraction (HL)
+    PAM16_UNPACK, // unpacks a posit number to sign (B), regime (C), exponent (DE), fraction (HL)
+};
+#endif
 
 // Each word contains 8 vertical pixels
 const FRIDGE_WORD FRIDGE_gpu_default_glyph_bitmap[FRIDGE_GPU_TEXT_GLYPH_WIDTH*256] =

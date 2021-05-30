@@ -16,7 +16,8 @@ port (
      RESET_N : in std_logic;
      HEX0, HEX1, HEX2, HEX3, HEX4, HEX5 : out std_logic_vector(6 downto 0);
      LEDR : out std_logic_vector(9 downto 0);
-     PS2_CLK, PS2_DAT, PS2_CLK2, PS2_DAT2 : in std_logic
+     PS2_CLK, PS2_DAT, PS2_CLK2, PS2_DAT2 : in std_logic;
+     SW : in std_logic_vector(0 downto 0)
      );
      
 end FridgeMain;
@@ -36,7 +37,14 @@ architecture main of FridgeMain is
      signal RAM_WRITE_DATA, RAM_READ_DATA : XCM2_WORD;
      signal RAM_WRITE_ADDR, RAM_READ_ADDR : XCM2_DWORD;
      
-     signal CPU_DEBUG_STATE, CPU_DEBUG_CURRENT_IR, CPU_DEBUG_PC_L : XCM2_WORD;
+     signal PAM16_COMMAND_ENABLED, PAM16_COMMAND_READY : std_logic;
+     signal PAM16_DATA_READ : XCM2_DWORD;
+     signal PAM16_DATA_WRITE : XCM2_DWORD;
+     signal PAM16_COMMAND_CODE : PAM16_COMMAND;
+     signal PAM16_DEBUG_SP, PAM16_DEBUG_ES : XCM2_WORD;
+     
+     signal CPU_DEBUG_STATE, CPU_DEBUG_CURRENT_IR : XCM2_WORD;
+     signal CPU_DEBUG_PC : XCM2_DWORD;
      
      component vga_pll is
           port (
@@ -59,6 +67,7 @@ architecture main of FridgeMain is
                CLK_MAIN : in std_logic;
                CLK_PHI2 : in std_logic;
                RESET : in std_logic;
+               DEBUG_SWITCH : in std_logic;
                HALTED : out std_logic;
                
                INTE : out std_logic;
@@ -90,10 +99,16 @@ architecture main of FridgeMain is
                GPU_VMEM_ADDR : out XCM2_DWORD;
                GPU_VMEM_DATA : inout XCM2_WORD;
                
+               PAM16_COMMAND_ENABLED : out std_logic; 
+               PAM16_COMMAND_READY : in std_logic;
+               PAM16_DATA_WRITE : out XCM2_DWORD;
+               PAM16_DATA_READ : in XCM2_DWORD;
+               PAM16_COMMAND_CODE : out PAM16_COMMAND;
+     
                DEBUG_STEP : in std_logic;
                DEBUG_STATE : out XCM2_WORD;
                DEBUG_CURRENT_IR : out XCM2_WORD;
-               DEBUG_PC_L : out XCM2_WORD
+               DEBUG_PC : out XCM2_DWORD
           );
      end component FridgeCPU;
      
@@ -144,26 +159,40 @@ architecture main of FridgeMain is
           );
      end component LUTDisplay;
      
+     component FridgePAM16 is
+         port (
+             CLK : in std_logic;    
+             COMMAND_ENABLED : in std_logic; 
+             COMMAND_READY : out std_logic;
+             DATA_WRITE : in XCM2_DWORD;
+             DATA_READ : out XCM2_DWORD;
+             COMMAND_CODE : in PAM16_COMMAND;
+             DEBUG_SP : out XCM2_WORD;
+             DEBUG_ES : out XCM2_WORD
+         );
+     end component FridgePAM16;
+     
 begin
      RESET <= not RESET_N;
      CPU_DEBUG_STEP <= not KEY(0);
 
-     C_LUT_LEFT : LUTDisplay port map(CPU_DEBUG_STATE, HEX5, HEX4);
+     C_LUT_LEFT : LUTDisplay port map(PAM16_DEBUG_SP, HEX5, HEX4); --CPU_DEBUG_STATE -- CPU_DEBUG_PC(0 to 7)
+     C_LUT_CENTER : LUTDisplay port map(PAM16_DEBUG_ES, HEX3, HEX2); -- CPU_DEBUG_PC(8 to 15)
      C_LUT_RIGHT : LUTDisplay port map(CPU_DEBUG_CURRENT_IR, HEX1, HEX0);
-     C_LUT_CENTER : LUTDisplay port map(CPU_DEBUG_PC_L, HEX3, HEX2);
      
      C_CPU_PLL : cpu_clk_pll port map(CLOCK2_50, CPU_CLK, RESET);
      --CPU_CLK <= not KEY(0);
      
      C_CPU : FridgeCPU port map(
-               CPU_CLK, CPU_CLK, RESET, CPU_HLT,              
+               CPU_CLK, CPU_CLK, RESET, SW(0), CPU_HLT,              
                CPU_INTE, CPU_INT, CPU_INT_IRQ,
                CPU_DEVICE_SEL, CPU_DEVICE_READ, CPU_DEVICE_DATA,               
                RAM_WRITE_DATA, RAM_WRITE_ADDR, RAM_WRITE_ENABLED, RAM_READ_DATA, RAM_READ_ADDR,                 
                GPU_VIDEO_MODE_SWITCH, GPU_PALETTE_SWITCH, GPU_PRESENT_TRIGGER,               
                GPU_BACK_STORE, GPU_BACK_LOAD, GPU_BACK_ADDR, GPU_BACK_DATA, GPU_BACK_CLR,          
                GPU_VMEM_STORE, GPU_VMEM_LOAD, GPU_VMEM_ADDR, GPU_VMEM_DATA,
-               CPU_DEBUG_STEP, CPU_DEBUG_STATE, CPU_DEBUG_CURRENT_IR, CPU_DEBUG_PC_L
+               PAM16_COMMAND_ENABLED, PAM16_COMMAND_READY, PAM16_DATA_WRITE, PAM16_DATA_READ, PAM16_COMMAND_CODE,
+               CPU_DEBUG_STEP, CPU_DEBUG_STATE, CPU_DEBUG_CURRENT_IR, CPU_DEBUG_PC
      );
      
      C_RAM : FridgeRAM 
@@ -180,5 +209,9 @@ begin
           GPU_VMEM_STORE, GPU_VMEM_LOAD, GPU_VMEM_ADDR, GPU_VMEM_DATA,
           KEY
           );
+          
+     C_PAM16 : FridgePAM16 port map(
+          CPU_CLK, PAM16_COMMAND_ENABLED, PAM16_COMMAND_READY, PAM16_DATA_WRITE, PAM16_DATA_READ, PAM16_COMMAND_CODE, PAM16_DEBUG_SP, PAM16_DEBUG_ES
+     );
           
 end main;

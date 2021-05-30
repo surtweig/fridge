@@ -491,7 +491,7 @@ void ir_VSD(FRIDGE_SYSTEM* sys)
 
 void ir_UCLR(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_pam16_reset(sys, sys->cpu->rA);
+    FRIDGE_pam16_reset(sys, sys->cpu->rA >> 4);
 }
 
 void ir_UPUSH(FRIDGE_SYSTEM* sys)
@@ -506,6 +506,21 @@ void ir_UPOP(FRIDGE_SYSTEM* sys)
     sys->cpu->rL = FRIDGE_LOW_WORD(hl);
 }
 
+void ir_PAM16C(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_WORD cmd = sys->cpu->rA & 0x0f;
+    switch (cmd)
+    {
+        case PAM16_RESET : ir_UCLR(sys); break;
+        case PAM16_PUSH  : ir_UPUSH(sys); break;
+        case PAM16_POP   : ir_UPOP(sys); break;
+        case PAM16_ADD   : FRIDGE_pam16_add(sys); break;
+        case PAM16_SUB   : FRIDGE_pam16_sub(sys); break;
+        case PAM16_MUL   : FRIDGE_pam16_mul(sys); break;
+        case PAM16_DIV   : FRIDGE_pam16_div(sys); break;
+        case PAM16_FMADD : FRIDGE_pam16_fmadd(sys); break;
+    }
+}
 #endif
 
 FRIDGE_WORD dummyDevInput(FRIDGE_SYSTEM* sys)
@@ -944,6 +959,8 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VSD:   ir_VSD(sys);   break;
 
 #ifdef FRIDGE_POSIT16_SUPPORT
+        case PAM16C : ir_PAM16C(sys); break;
+        /*
         case UCLR: ir_UCLR(sys); break;
         case UPUSH : ir_UPUSH(sys); break;
         case UPOP : ir_UPOP(sys); break;
@@ -952,6 +969,7 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case UMUL : FRIDGE_pam16_mul(sys); break;
         case UDIV : FRIDGE_pam16_div(sys); break;
         case UFMADD : FRIDGE_pam16_fmadd(sys); break;
+        */
 #endif
     }
 }

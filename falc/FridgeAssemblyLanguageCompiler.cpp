@@ -253,6 +253,20 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     aliases["FRIDGE_DEV_ROM_RESET_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_RESET_ID);
     aliases["FRIDGE_DEV_ROM_ID"]                 = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_ID);
     aliases["FRIDGE_DEV_KEYBOARD_ID"]            = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_KEYBOARD_ID);
+
+#ifdef FRIDGE_POSIT16_SUPPORT
+    aliases["FRIDGE_PAM16_NOP"]    = int_to_hex((FRIDGE_WORD)PAM16_NOP);
+    aliases["FRIDGE_PAM16_RESET"]  = int_to_hex((FRIDGE_WORD)PAM16_RESET);
+    aliases["FRIDGE_PAM16_PUSH"]   = int_to_hex((FRIDGE_WORD)PAM16_PUSH);
+    aliases["FRIDGE_PAM16_POP"]    = int_to_hex((FRIDGE_WORD)PAM16_POP);
+    aliases["FRIDGE_PAM16_ADD"]    = int_to_hex((FRIDGE_WORD)PAM16_ADD);
+    aliases["FRIDGE_PAM16_SUB"]    = int_to_hex((FRIDGE_WORD)PAM16_SUB);
+    aliases["FRIDGE_PAM16_MUL"]    = int_to_hex((FRIDGE_WORD)PAM16_MUL);
+    aliases["FRIDGE_PAM16_DIV"]    = int_to_hex((FRIDGE_WORD)PAM16_DIV);
+    aliases["FRIDGE_PAM16_FMADD"]  = int_to_hex((FRIDGE_WORD)PAM16_FMADD);
+    aliases["FRIDGE_PAM16_PACK"]   = int_to_hex((FRIDGE_WORD)PAM16_PACK);
+    aliases["FRIDGE_PAM16_UNPACK"] = int_to_hex((FRIDGE_WORD)PAM16_UNPACK);
+#endif
 }
 
 bool FridgeAssemblyLanguageCompiler::readResources()
@@ -466,7 +480,7 @@ template< typename T > string FridgeAssemblyLanguageCompiler::int_to_hex(T i)
     stringstream stream;
     stream << "0x"
            << setfill('0') << setw(sizeof(T) * 2)
-           << hex << i;
+           << hex << (int)i;
     return stream.str();
 }
 
@@ -1064,15 +1078,8 @@ map<string, FRIDGE_WORD> FridgeAssemblyLanguageCompiler::IRIDs = {
     {"VMODE", VMODE},
     {"VPAL",  VPAL},
     {"VSS",   VSS},
-    {"VSD",  VSD},
-    {"UCLR",   UCLR},
-    {"UPUSH",  UPUSH},
-    {"UPOP",   UPOP},
-    {"UADD",   UADD},
-    {"USUB",   USUB},
-    {"UMUL",   UMUL},
-    {"UDIV",   UDIV},
-    {"UFMADD", UFMADD},
+    {"VSD",   VSD},
+    {"PAM16C", PAM16C},
 };
 
 
@@ -1406,16 +1413,7 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
     { VPAL    , { { {NONE, NONE} }, 0} },
     { VSS     , { { {NONE, NONE} }, 0} },
     { VSD     , { { {NONE, NONE} }, 0} },
-
-    { UCLR    , { { {NONE, NONE} }, 0} },
-    { UPUSH   , { { {NONE, NONE} }, 0} },
-    { UPOP    , { { {NONE, NONE} }, 0} },
-    { UADD    , { { {NONE, NONE} }, 0} },
-    { USUB    , { { {NONE, NONE} }, 0} },
-    { UMUL    , { { {NONE, NONE} }, 0} },
-    { UDIV    , { { {NONE, NONE} }, 0} },
-    { UFMADD  , { { {NONE, NONE} }, 0} },
-
+    { PAM16C  , { { {NONE, NONE} }, 0} },
 };
 
 
@@ -1667,14 +1665,7 @@ map<FRIDGE_WORD, string> FridgeAssemblyLanguageCompiler::IRNames =
         {VPAL,    "VPAL"},
         {VSS,     "VSS"},
         {VSD,     "VSD"},
-        {UCLR,    "UCLR"},
-        {UPUSH,   "UPUSH"},
-        {UPOP,    "UPOP"},
-        {UADD,    "UADD"},
-        {USUB,    "USUB"},
-        {UMUL,    "UMUL"},
-        {UDIV,    "UDIV"},
-        {UFMADD,  "UFMADD"},
+        {PAM16C,  "PAM16C"},
 };
 
 FridgeAssemblyLanguageCompiler::~FridgeAssemblyLanguageCompiler()

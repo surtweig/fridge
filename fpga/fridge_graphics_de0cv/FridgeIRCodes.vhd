@@ -2,15 +2,17 @@ use work.FridgeGlobals.all;
 
 package FridgePAM16Commands is
 
-constant PAM16_NOP   : PAM16_COMMAND:= X"00";
-constant PAM16_RESET : PAM16_COMMAND:= X"01";
-constant PAM16_PUSH  : PAM16_COMMAND:= X"02";
-constant PAM16_POP   : PAM16_COMMAND:= X"03";
-constant PAM16_ADD   : PAM16_COMMAND:= X"04";
-constant PAM16_SUB   : PAM16_COMMAND:= X"05";
-constant PAM16_MUL   : PAM16_COMMAND:= X"06";
-constant PAM16_DIV   : PAM16_COMMAND:= X"07";
-constant PAM16_FMADD : PAM16_COMMAND:= X"08";
+constant PAM16_NOP    : PAM16_COMMAND:= X"0";
+constant PAM16_RESET  : PAM16_COMMAND:= X"1";
+constant PAM16_PUSH   : PAM16_COMMAND:= X"2";
+constant PAM16_POP    : PAM16_COMMAND:= X"3";
+constant PAM16_ADD    : PAM16_COMMAND:= X"4";
+constant PAM16_SUB    : PAM16_COMMAND:= X"5";
+constant PAM16_MUL    : PAM16_COMMAND:= X"6";
+constant PAM16_DIV    : PAM16_COMMAND:= X"7";
+constant PAM16_FMADD  : PAM16_COMMAND:= X"8";
+constant PAM16_PACK   : PAM16_COMMAND:= X"9";
+constant PAM16_UNPACK : PAM16_COMMAND:= X"A";
 
 end FridgePAM16Commands;
 
@@ -265,7 +267,7 @@ constant VSSI    : XCM2_WORD:= X"F3";
 constant VSLA    : XCM2_WORD:= X"F4";
 constant VSS     : XCM2_WORD:= X"F5";
 constant VSD     : XCM2_WORD:= X"F6";
-constant IR247   : XCM2_WORD:= X"F7";
+constant PAM16C  : XCM2_WORD:= X"F7";
 constant IR248   : XCM2_WORD:= X"F8";
 constant IR249   : XCM2_WORD:= X"F9";
 constant IR250   : XCM2_WORD:= X"FA";
