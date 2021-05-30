@@ -1471,30 +1471,30 @@ begin
                     when JZ  => ir_JMP(fZero,       IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JNC => ir_JMP(not fCarry,  IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JC  => ir_JMP(fCarry,      IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
-                    when JPO => ir_JMP(fParity,     IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
-                    when JPE => ir_JMP(not fParity, IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
-                    when JP  => ir_JMP(fSign,       IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
-                    when JM  => ir_JMP(not fSign,   IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
+                    when JPO => ir_JMP(not fParity, IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
+                    when JPE => ir_JMP(fParity,     IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
+                    when JP  => ir_JMP(not fSign,   IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
+                    when JM  => ir_JMP(fSign,       IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     
                     when CALL => ir_CALL('1',         IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CNZ  => ir_CALL(not fZero,   IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CZ   => ir_CALL(fZero,       IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CNC  => ir_CALL(not fCarry,  IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CC   => ir_CALL(fCarry,      IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    when CPO  => ir_CALL(fParity,     IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    when CPE  => ir_CALL(not fParity, IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    when CP   => ir_CALL(fSign,       IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    when CM   => ir_CALL(not fSign,   IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
+                    when CPO  => ir_CALL(not fParity, IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
+                    when CPE  => ir_CALL(fParity,     IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
+                    when CP   => ir_CALL(not fSign,   IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
+                    when CM   => ir_CALL(fSign,       IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     
                     when RET  => ir_RET('1',         buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RNZ  => ir_RET(not fZero,   buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RZ   => ir_RET(fZero,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RNC  => ir_RET(not fCarry,  buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when IRRC => ir_RET(fCarry,      buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
-                    when RPO  => ir_RET(fParity,     buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
-                    when RPE  => ir_RET(not fParity, buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
-                    when RP   => ir_RET(fSign,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
-                    when RM   => ir_RET(not fSign,   buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);                    
+                    when RPO  => ir_RET(not fParity, buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
+                    when RPE  => ir_RET(fParity,     buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
+                    when RP   => ir_RET(not fSign,   buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
+                    when RM   => ir_RET(fSign,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);                    
                     
                     when PCHL => ir_PCHL(rH, rL, buf_nextPC, state, buf_nextState);
                     
