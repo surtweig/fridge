@@ -1,0 +1,54 @@
+include "posit.inc"
+include "vtext.inc"
+include "string.inc"
+
+static str "P = 0x.... clz = 0x...."
+alias pos 0x12AA
+
+// HL - P
+// returns clz to HL
+subroutine pamclz
+	MVI A, FRIDGE_PAM16_PUSH
+	PAM16C
+	MVI A, FRIDGE_PAM16_ADD
+	PAM16C
+endsub
+
+main pamtest
+
+	MVI A, 3
+	CALL POSIT_RESET
+	
+	LXI HL, pos
+	CALL pamclz
+	MOV B, H
+	MOV C, L
+	LXI HL, str
+	DAI 0x0013
+	CALL string_dhex
+
+	LXI BC, pos
+	LXI HL, str
+	DAI 0x0006
+	CALL string_dhex
+
+    EI
+    MVI A, 1
+    VMODE                  // Turn on text mode
+
+    MVI A, 1               // blue background
+    STA VTEXT_BACK_COLOR
+    
+    MVI A, 15              // white letters
+    STA VTEXT_FORE_COLOR
+    
+    MVI B, 1               // text position C=row B=column
+    MVI C, 1
+
+    LXI HL, str     // Passing the string's address through HL register pair
+    CALL vtext_putstr      // Print the string
+    
+    VPRE   // Present video frame
+
+    entry loop
+    JMP loop

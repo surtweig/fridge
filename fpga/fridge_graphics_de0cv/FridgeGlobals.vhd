@@ -29,10 +29,10 @@ package FridgeGlobals is
     constant PAM16_POSIT_ZERO : PAM16_POSIT:= X"0000";
     constant PAM16_POSIT_NAR : PAM16_POSIT:= X"8000";
     type PAM16_POSIT_UNPACKED is record
-        sign : std_logic;
+        sign, zero, nar : std_logic;
         regime : integer range -(PAM16_POSIT_SIZE-1) to (PAM16_POSIT_SIZE-2);
-        exponent : unsigned(0 to PAM16_POSIT_SIZE-2);
-        fraction : unsigned(0 to PAM16_POSIT_SIZE-2);
+        exponent : XCM2_DWORD;
+        fraction : XCM2_DWORD;
     end record;
     constant PAM16_STACK_SIZE : integer:= 8;
     type PAM16_STACK is array (0 to PAM16_STACK_SIZE-1) of PAM16_POSIT; 

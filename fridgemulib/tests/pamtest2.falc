@@ -1,0 +1,75 @@
+include "posit.inc"
+include "vtext.inc"
+include "string.inc"
+
+//            0002    000A    0012    001A
+static str "P=.... BC=.... DE=.... HL=...."
+alias pos 0x8B9B
+//alias pos 0x7101 //0 1110 001 00000001
+alias es 5
+
+// HL - P
+// returns unpacked posit to BC, DE, HL
+subroutine pam_unpack
+    MVI A, FRIDGE_PAM16_PUSH
+    PAM16C
+    MVI A, FRIDGE_PAM16_UNPACK
+    PAM16C
+endsub
+
+main pamtest2
+
+    MVI A, es
+    CALL POSIT_RESET
+    
+    // unpack, pushing results to the stack
+    LXI HL, pos
+    CALL pam_unpack
+    PUSH HL
+    PUSH DE
+    PUSH BC
+
+    // print posit
+    LXI BC, pos
+    LXI HL, str
+    DAI 0x0002
+    CALL string_dhex
+
+    // print BC
+    POP BC
+    LXI HL, str
+    DAI 0x000A
+    CALL string_dhex
+
+    // print DE
+    POP BC
+    LXI HL, str
+    DAI 0x0012
+    CALL string_dhex
+
+    // print HL
+    POP BC
+    LXI HL, str
+    DAI 0x001A
+    CALL string_dhex
+
+    EI
+    MVI A, 1
+    VMODE                  // Turn on text mode
+
+    MVI A, 1               // blue background
+    STA VTEXT_BACK_COLOR
+    
+    MVI A, 15              // white letters
+    STA VTEXT_FORE_COLOR
+    
+    MVI B, 1               // text position C=row B=column
+    MVI C, 1
+
+    LXI HL, str            // Passing the string's address through HL register pair
+    CALL vtext_putstr      // Print the string
+    
+    VPRE   // Present video frame
+
+    entry loop
+    JMP loop

@@ -40,8 +40,16 @@ architecture main of FridgePAM16 is
         PAM_PUSH_RESULT
     );
     
+    component PAM16Unpacker is
+    port (
+        POSIT : in PAM16_POSIT;
+        ES : in XCM2_WORD;
+        UNP : out PAM16_POSIT_UNPACKED
+    );
+    end component PAM16Unpacker;
+    
     signal stack : PAM16_STACK;
-    signal sp : integer range 0 to PAM16_STACK_SIZE-1;
+    signal sp, nextsp : integer range 0 to PAM16_STACK_SIZE-1;
     signal currentCmd : PAM16_COMMAND;
     signal inputData : XCM2_DWORD;
     signal state, nextState : PAMState:= PAM_READY;
@@ -52,6 +60,12 @@ architecture main of FridgePAM16 is
     signal p_b : PAM16_POSIT;
     signal unp_a : PAM16_POSIT_UNPACKED;
     signal unp_b : PAM16_POSIT_UNPACKED;
+    
+    signal unpacker_posit : PAM16_POSIT;
+    signal unpacker_unp : PAM16_POSIT_UNPACKED;
+    --signal unpacker_es : unsigned(3 downto 0);
+    --signal unpacker_sign, unpacker_zero, unpacker_nar : std_logic;
+    --signal unpacker_exponent, unpacker_fraction : unsigned(12 downto 0);
     
     signal es : XCM2_WORD;
     
@@ -78,7 +92,7 @@ architecture main of FridgePAM16 is
             return z1;
         elsif sel = ('0', '1') then
             return z2;
-        elsif sel = ('1', '1') then
+        else 
             return z3;
         end if;
     end function;
@@ -103,9 +117,9 @@ architecture main of FridgePAM16 is
         return unsigned(res);
     end function;
     
-    procedure positUnpack(signal p : in PAM16_POSIT; signal unp : out PAM16_POSIT_UNPACKED; signal es : in PAM16_POSIT) is
+    procedure positUnpack(signal p : in PAM16_POSIT; signal unp : out PAM16_POSIT_UNPACKED; signal es : in PAM16_POSIT;
+                          signal state : in PAMState; signal nextState : out PAMState) is
     begin
-        unp.sign <= p(0);
         
     end procedure positUnpack;
     
@@ -119,12 +133,16 @@ architecture main of FridgePAM16 is
     
 begin
     
+    C_UNPACKER : PAM16Unpacker port map (
+        unpacker_posit, es, unpacker_unp
+    );
+    
     process (CLK) is
         variable inputLow : XCM2_WORD;
         variable stackPos : integer;
     begin
     
-        DEBUG_ES <= es;
+        DEBUG_ES <= to_unsigned(PAMState'POS(state), 8);--es;
     
         if rising_edge(CLK) then
             if (state = PAM_READY) then
@@ -134,13 +152,13 @@ begin
             end if;
             DEBUG_SP <= to_unsigned(sp, 4) & COMMAND_CODE;--to_unsigned(PAMState'POS(state), 4);
     
-            if state = PAM_READY or COMMAND_CODE = PAM16_RESET then
-                if COMMAND_ENABLED = '1' then
+            if (state = PAM_READY or COMMAND_CODE = PAM16_RESET) then
+                if (COMMAND_ENABLED = '1') then
                 
                     currentCmd <= COMMAND_CODE;
                     inputData <= DATA_WRITE;
                     
-                    if COMMAND_CODE = PAM16_RESET then
+                    if (COMMAND_CODE = PAM16_RESET) then
                     
                         -- input low word to ES
                         inputLow:= DATA_WRITE(8 to 15);
@@ -155,46 +173,108 @@ begin
                         for i in 0 to PAM16_STACK_SIZE-1 loop
                             stack(i) <= X"0000";
                         end loop;
-                        sp <= 0;
+                        nextsp <= 0;
                         nextState <= PAM_READY;
                         
-                    elsif COMMAND_CODE = PAM16_PUSH then
+                    elsif (COMMAND_CODE = PAM16_PUSH) then
                     
                         if stackPos < PAM16_STACK_SIZE then
                             stackPos:= sp;
                             stack(stackPos) <= PAM16_POSIT(DATA_WRITE);
-                            sp <= stackPos+1;
+                            nextsp <= stackPos+1;
                         end if;
                         nextState <= PAM_READY;
                     
-                    elsif COMMAND_CODE = PAM16_POP then
+                    elsif (COMMAND_CODE = PAM16_POP) then
                     
                         stackPos:= sp-1;
                         if stackPos >= 0 then
                             DATA_READ <= PAM16_POSIT(stack(stackPos));
-                            sp <= stackPos;
+                            nextsp <= stackPos;
                         else
                             DATA_READ <= PAM16_POSIT_ZERO;
                         end if;
                         nextState <= PAM_READY;
                     
-                    elsif COMMAND_CODE = PAM16_ADD then
+                    elsif (COMMAND_CODE = PAM16_ADD) then
+                        
+                        stackPos:= sp-1;
+                        if stackPos >= 0 then
+                            unpacker_posit <= PAM16_POSIT(stack(stackPos));
+                            p_a <= PAM16_POSIT(stack(stackPos));
+                            --nextsp <= stackPos;
+                        else
+                            unpacker_posit <= PAM16_POSIT_ZERO;
+                            p_a <= PAM16_POSIT_ZERO;
+                        end if;
+                        
+                        stackPos:= sp-2;
+                        if stackPos >= 0 then
+                            p_b <= PAM16_POSIT(stack(stackPos));
+                            nextsp <= stackPos;
+                        else
+                            p_b <= PAM16_POSIT_ZERO;
+                        end if;                        
+      
+                        --DATA_READ <= X"000" & clz(p_a);                        
+                        --p_b <= PAM16_POSIT(stack(sp-2));
+                        nextState <= PAM_UNPACK_ARG0;
+                        
+                    elsif (COMMAND_CODE = PAM16_UNPACK) then
                     
-                        p_a <= PAM16_POSIT(stack(sp-1));
-                        p_b <= PAM16_POSIT(stack(sp-2));
-                        nextState <= PAM_OP_START;
+                        stackPos:= sp-1;
+                        if stackPos >= 0 then
+                            unpacker_posit <= PAM16_POSIT(stack(stackPos));
+                            nextsp <= stackPos;
+                        else
+                            unpacker_posit <= PAM16_POSIT_ZERO;
+                        end if;
+                        nextState <= PAM_UNPACK_ARG0;                      
                         
                     end if;
                 
                 end if; -- COMMAND_ENABLED
-            elsif state >= PAM_UNPACK_ARG0 and state <= PAM_UNPACK_ARG2 then
+                
+            elsif (state >= PAM_UNPACK_ARG0 and state <= PAM_UNPACK_ARG2) then
+            
+                if (COMMAND_CODE = PAM16_UNPACK) then
+                
+                    if (state = PAM_UNPACK_ARG0) then                                            
+                        DATA_READ <= unsigned'(unpacker_unp.sign & unpacker_unp.zero & unpacker_unp.nar) &
+                                     unsigned'(b"00000") &
+                                     unsigned(to_signed(unpacker_unp.regime, 8));
+                        --DATA_READ <= unsigned(to_signed(unpacker_unp.regime, 16));
+                        nextState <= PAM_UNPACK_ARG1;
+                        
+                    elsif (state = PAM_UNPACK_ARG1) then                    
+                        DATA_READ <= unpacker_unp.exponent;
+                        nextState <= PAM_UNPACK_ARG2;                        
+                        
+                    else                    
+                        DATA_READ <= unpacker_unp.fraction;
+                        nextState <= PAM_READY;
+                        
+                    end if;
+                    
+                elsif (COMMAND_CODE = PAM16_ADD) then
+                    if (state = PAM_UNPACK_ARG0) then
+                        unp_a <= unpacker_unp;
+                        unpacker_posit <= p_b;
+                        nextState <= PAM_UNPACK_ARG1;
+                    else
+                        unp_b <= unpacker_unp;
+                        nextState <= PAM_OP_START;
+                    end if;
+                end if;
+                
             elsif state >= PAM_OP_START and state <= PAM_OP_FINISH then
             elsif state = PAM_PACK_RESULT then
             end if;
         end if;
         
-        if rising_edge(CLK) then
+        if falling_edge(CLK) then
             state <= nextState;
+            sp <= nextsp;
         end if;
         
     end process;

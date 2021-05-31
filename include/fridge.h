@@ -30,7 +30,7 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_GPU_TEXT_FRAME_WIDTH 40 // = FRIDGE_GPU_FRAME_EGA_WIDTH/FRIDGE_GPU_TEXT_GLYPH_WIDTH;
 #define FRIDGE_GPU_TEXT_FRAME_HEIGHT 20 // = FRIDGE_GPU_FRAME_EGA_HEIGHT/FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
 #define FRIDGE_BOOT_SECTION_INDEX_ADDRESS 0x0003
-#define FRIDGE_EXECUTABLE_OFFSET 0x0100
+#define FRIDGE_EXECUTABLE_OFFSET 0x0200
 #define FRIDGE_IRQ_SYS_TIMER 0x0004
 #define FRIDGE_IRQ_KEYBOARD_PRESS 0x0007
 #define FRIDGE_IRQ_KEYBOARD_RELEASE 0x000a
@@ -228,7 +228,7 @@ typedef enum FRIDGE_PAM16_COMMAND
     PAM16_FMADD,  // fused multiply-add S[sp-1] + S[sp-2] * S[sp-3]
     PAM16_PACK,   // packs a posit number from sign (B), regime (C), exponent (DE), fraction (HL)
     PAM16_UNPACK, // unpacks a posit number to sign (B), regime (C), exponent (DE), fraction (HL)
-};
+} FRIDGE_PAM16_COMMAND;
 #endif
 
 // Each word contains 8 vertical pixels

@@ -1109,7 +1109,7 @@ architecture main of FridgeCPU is
           end if;
      end procedure ir_VFSA;
      
-     procedure ir_PAM16C(signal rA : in XCM2_WORD; signal rH, rL : inout XCM2_WORD; signal pam16Ready : in std_logic;
+     procedure ir_PAM16C(signal rA : in XCM2_WORD; signal rB, rC, rD, rE, rH, rL : inout XCM2_WORD; signal pam16Ready : in std_logic;
                          signal pam16CmdEnabled : out std_logic; signal pam16CmdCode : out PAM16_COMMAND; signal pam16DataWrite : out XCM2_DWORD; signal pam16DataRead : in XCM2_DWORD;
                          signal state : in CPUState; variable nextState : inout CPUState) is
         variable cmdCode : PAM16_COMMAND;
@@ -1124,27 +1124,65 @@ architecture main of FridgeCPU is
                 data:= X"0000";
                 data(12 to 15):= rA(0 to 3); -- ES
                 pam16DataWrite <= data;
+                nextState:= CPU_FETCH_IR;
+                
             elsif (cmdCode = PAM16_PUSH) then
                 pam16DataWrite <= XCM2_DWORD_HL(rH, rL);
-            end if;
-            
-            nextState:= CPU_EXECUTE_IR_STAGE_2;
+                nextState:= CPU_FETCH_IR;
+            elsif (cmdCode = PAM16_POP or cmdCode = PAM16_UNPACK or cmdCode = PAM16_ADD) then
+                --pam16CmdEnabled <= '0';
+                nextState:= CPU_EXECUTE_IR_STAGE_2;
+            else
+                nextState:= CPU_FETCH_IR;
+            end if;            
             
         elsif (state = CPU_EXECUTE_IR_STAGE_2) then
+        
             cmdCode:= rA(4 to 7);
             
             if (pam16Ready = '1') then
                 pam16CmdEnabled <= '0';
-                nextState:= CPU_FETCH_IR;
-                
-                if (cmdCode = PAM16_POP) then
+                                
+                if (cmdCode = PAM16_POP or cmdCode = PAM16_ADD) then
                     rH <= XCM2_HIGH_WORD(pam16DataRead);
                     rL <= XCM2_LOW_WORD(pam16DataRead);
+                    nextState:= CPU_FETCH_IR;
                 end if;                
-            else
-                nextState:= CPU_EXECUTE_IR_STAGE_2;
             end if;
             
+            if (cmdCode = PAM16_UNPACK) then
+                nextState:= CPU_EXECUTE_IR_STAGE_3;                    
+            else
+                nextState:= CPU_FETCH_IR;
+            end if;
+        
+        elsif (state = CPU_EXECUTE_IR_STAGE_3) then
+        
+            cmdCode:= rA(4 to 7);
+            if (cmdCode = PAM16_UNPACK) then
+                rB <= XCM2_HIGH_WORD(pam16DataRead);
+                rC <= XCM2_LOW_WORD(pam16DataRead);
+                nextState:= CPU_EXECUTE_IR_STAGE_4;                    
+            end if;
+                        
+        elsif (state = CPU_EXECUTE_IR_STAGE_4) then
+        
+            cmdCode:= rA(4 to 7);
+            if (cmdCode = PAM16_UNPACK) then
+                rD <= XCM2_HIGH_WORD(pam16DataRead);
+                rE <= XCM2_LOW_WORD(pam16DataRead);
+                nextState:= CPU_EXECUTE_IR_STAGE_5;
+            end if;
+            
+        elsif (state = CPU_EXECUTE_IR_STAGE_5) then
+            cmdCode:= rA(4 to 7);
+            if (cmdCode = PAM16_UNPACK) then
+                rH <= XCM2_HIGH_WORD(pam16DataRead);
+                rL <= XCM2_LOW_WORD(pam16DataRead);
+                nextState:= CPU_FETCH_IR;
+            end if;
+        else
+            nextState:= CPU_FETCH_IR;
         end if;
      end procedure ir_PAM16C;
                         
@@ -1590,7 +1628,7 @@ begin
                     when VMODE => ir_VMODE(gpuModeSwitch, rA, state, buf_nextState);
                     when VFSA => ir_VFSA(rA, rH, rL, gpuBackStore, gpuBackLoad, gpuBackAddr, gpuBackData, state, buf_nextState);
                     
-                    when PAM16C => ir_PAM16C(rA, rH, rL, PAM16_COMMAND_READY, PAM16_COMMAND_ENABLED, PAM16_COMMAND_CODE, PAM16_DATA_WRITE, PAM16_DATA_READ, state, buf_nextState);
+                    when PAM16C => ir_PAM16C(rA, rB, rC, rD, rE, rH, rL, PAM16_COMMAND_READY, PAM16_COMMAND_ENABLED, PAM16_COMMAND_CODE, PAM16_DATA_WRITE, PAM16_DATA_READ, state, buf_nextState);
                     
                     when others => ir_Dummy(state, buf_nextState);
                end case;

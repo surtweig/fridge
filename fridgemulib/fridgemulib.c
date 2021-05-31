@@ -519,6 +519,7 @@ void ir_PAM16C(FRIDGE_SYSTEM* sys)
         case PAM16_MUL   : FRIDGE_pam16_mul(sys); break;
         case PAM16_DIV   : FRIDGE_pam16_div(sys); break;
         case PAM16_FMADD : FRIDGE_pam16_fmadd(sys); break;
+        case PAM16_UNPACK : FRIDGE_pam16_unpack(sys); break;
     }
 }
 #endif
@@ -1358,8 +1359,11 @@ Posit16 FRIDGE_pam16_pop(FRIDGE_SYSTEM* sys)
 void FRIDGE_pam16_add(FRIDGE_SYSTEM* sys)
 {
     Posit16 p0 = FRIDGE_pam16_pop(sys);
-    Posit16 p1 = FRIDGE_pam16_pop(sys);
-    FRIDGE_pam16_push(sys, Posit_add(p0, p1, &sys->pam->env));
+    FRIDGE_DWORD clz = bitSeriesCountRight(p0, POSIT_SIZE-1);
+    sys->cpu->rH = FRIDGE_HIGH_WORD(clz);
+    sys->cpu->rL = FRIDGE_LOW_WORD(clz);
+    //Posit16 p1 = FRIDGE_pam16_pop(sys);
+    //FRIDGE_pam16_push(sys, Posit_add(p0, p1, &sys->pam->env));
 }
 
 void FRIDGE_pam16_sub(FRIDGE_SYSTEM* sys)
@@ -1391,6 +1395,30 @@ void FRIDGE_pam16_fmadd(FRIDGE_SYSTEM* sys)
     FRIDGE_pam16_push(sys,
         Posit_add(p0,
             Posit_mul(p1, p2, &sys->pam->env), &sys->pam->env));
+}
+
+void FRIDGE_pam16_pack(FRIDGE_SYSTEM* sys)
+{
+
+}
+
+void FRIDGE_pam16_unpack(FRIDGE_SYSTEM* sys)
+{
+    Posit16 p = FRIDGE_pam16_pop(sys);
+    Posit16Unpacked u = Posit_unpack(p, &sys->pam->env);
+    FRIDGE_DWORD bc = 0;
+    FRIDGE_DWORD de = u.exponent;
+    FRIDGE_DWORD hl = u.fraction;
+    bitSet(bc, POSIT_SIZE-1, u.sign);
+    bitSet(bc, POSIT_SIZE-2, p == POSIT16_ZERO ? 1 : 0);
+    bitSet(bc, POSIT_SIZE-3, p == POSIT16_NAR ? 1 : 0);
+    //bc |= u.regime;
+    sys->cpu->rB = FRIDGE_HIGH_WORD(bc);
+    sys->cpu->rC = u.regime;
+    sys->cpu->rD = FRIDGE_HIGH_WORD(de);
+    sys->cpu->rE = FRIDGE_LOW_WORD(de);
+    sys->cpu->rH = FRIDGE_HIGH_WORD(hl);
+    sys->cpu->rL = FRIDGE_LOW_WORD(hl);
 }
 
 #endif

@@ -188,6 +188,8 @@ typedef struct FRIDGE_KEYBOARD_CONTROLLER
     void FRIDGE_pam16_mul(FRIDGE_SYSTEM* sys);
     void FRIDGE_pam16_div(FRIDGE_SYSTEM* sys);
     void FRIDGE_pam16_fmadd(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_pack(FRIDGE_SYSTEM* sys);
+    void FRIDGE_pam16_unpack(FRIDGE_SYSTEM* sys);
 #endif
 
 typedef struct FRIDGE_SYSTEM
