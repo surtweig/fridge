@@ -1390,11 +1390,8 @@ Posit16 FRIDGE_pam16_pop(FRIDGE_SYSTEM* sys)
 void FRIDGE_pam16_add(FRIDGE_SYSTEM* sys)
 {
     Posit16 p0 = FRIDGE_pam16_pop(sys);
-    FRIDGE_DWORD clz = bitSeriesCountRight(p0, POSIT_SIZE-1);
-    sys->cpu->rH = FRIDGE_HIGH_WORD(clz);
-    sys->cpu->rL = FRIDGE_LOW_WORD(clz);
-    //Posit16 p1 = FRIDGE_pam16_pop(sys);
-    //FRIDGE_pam16_push(sys, Posit_add(p0, p1, &sys->pam->env));
+    Posit16 p1 = FRIDGE_pam16_pop(sys);
+    FRIDGE_pam16_push(sys, Posit_add(p0, p1, &sys->pam->env));
 }
 
 void FRIDGE_pam16_sub(FRIDGE_SYSTEM* sys)
