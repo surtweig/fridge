@@ -42,7 +42,7 @@ void EmulatorThread::run()
             SetLock();
             //for (qint64 si = 0; si < seriesCount; ++si)
             {
-                FRIDGE_VIDEO_FRAME visibleFrame = sys->gpu->vframe;
+                FRIDGE_VIDEO_FRAME_INDEX visibleFrame = sys->gpu->visible_frame;
                 for (int i = 0; i < tickSeriesLength; ++i)
                 {
                     FRIDGE_sys_tick(sys);

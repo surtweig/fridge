@@ -253,6 +253,16 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     aliases["FRIDGE_DEV_ROM_RESET_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_RESET_ID);
     aliases["FRIDGE_DEV_ROM_ID"]                 = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_ID);
     aliases["FRIDGE_DEV_KEYBOARD_ID"]            = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_KEYBOARD_ID);
+    aliases["FRIDGE_GPU_VIDEO_MODE_EGA"]         = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_MODE_EGA);
+    aliases["FRIDGE_GPU_VIDEO_MODE_TEXT"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_MODE_TEXT);
+    aliases["FRIDGE_GPU_VIDEO_FRAME_0"]          = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_FRAME_0);
+    aliases["FRIDGE_GPU_VIDEO_FRAME_1"]          = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_FRAME_1);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_NONE"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_NONE);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_AUTO"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_AUTO);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_MANUAL_00"]   = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_MANUAL_00);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_MANUAL_01"]   = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_MANUAL_01);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_MANUAL_10"]   = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_MANUAL_10);
+    aliases["FRIDGE_GPU_VIDEO_SWAP_MANUAL_11"]   = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_SWAP_MANUAL_11);
 
 #ifdef FRIDGE_POSIT16_SUPPORT
     aliases["FRIDGE_PAM16_NOP"]    = int_to_hex((FRIDGE_WORD)PAM16_NOP);

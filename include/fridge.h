@@ -29,6 +29,16 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_GPU_TEXT_GLYPH_HEIGHT 8
 #define FRIDGE_GPU_TEXT_FRAME_WIDTH 40 // = FRIDGE_GPU_FRAME_EGA_WIDTH/FRIDGE_GPU_TEXT_GLYPH_WIDTH;
 #define FRIDGE_GPU_TEXT_FRAME_HEIGHT 20 // = FRIDGE_GPU_FRAME_EGA_HEIGHT/FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
+#define FRIDGE_GPU_VIDEO_MODE_EGA 0
+#define FRIDGE_GPU_VIDEO_MODE_TEXT 1
+#define FRIDGE_GPU_VIDEO_FRAME_0 0
+#define FRIDGE_GPU_VIDEO_FRAME_1 1
+#define FRIDGE_GPU_VIDEO_SWAP_NONE 0
+#define FRIDGE_GPU_VIDEO_SWAP_AUTO 1
+#define FRIDGE_GPU_VIDEO_SWAP_MANUAL_00 2
+#define FRIDGE_GPU_VIDEO_SWAP_MANUAL_01 3
+#define FRIDGE_GPU_VIDEO_SWAP_MANUAL_10 4
+#define FRIDGE_GPU_VIDEO_SWAP_MANUAL_11 5
 #define FRIDGE_BOOT_SECTION_INDEX_ADDRESS 0x0003
 #define FRIDGE_EXECUTABLE_OFFSET 0x0200
 #define FRIDGE_IRQ_SYS_TIMER 0x0004
@@ -141,8 +151,15 @@ typedef enum FRIDGE_IRCODE {
 
     IIN, IOUT, HLT, EI, DI, // 233 instructions
 
-    // video controller instructions
-    VPRE,  // swaps back and visible buffers and sets buffer offset (position HL)
+    // video controller instructions        
+    VPRE,  // swaps active and visible buffers according to swap mode (A) and sets buffer offset (position HL)
+           // A=0:     FRIDGE_VIDEO_SWAP_NONE          leaves buffer indices unchanged
+           // A=1:     FRIDGE_VIDEO_SWAP_AUTO          alternates between (visible=0, active=1) and (visible=1, active=0)
+           // A=2:     FRIDGE_VIDEO_SWAP_MANUAL_00     sets (visible=0, active=0)
+           // A=3:     FRIDGE_VIDEO_SWAP_MANUAL_01     sets (visible=0, active=1)
+           // A=4:     FRIDGE_VIDEO_SWAP_MANUAL_10     sets (visible=1, active=0)
+           // A=5:     FRIDGE_VIDEO_SWAP_MANUAL_11     sets (visible=1, active=1)
+
     VMODE, // switches video mode (A = 0 for EGA and 1 for TEXT)
     VPAL,  // updates EGA pallette color (color A, rgb B, C, D)
 

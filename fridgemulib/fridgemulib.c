@@ -309,13 +309,43 @@ void ir_safe_IOUT(FRIDGE_SYSTEM* sys)
 
 void ir_VPRE(FRIDGE_SYSTEM* sys)
 {
+    FRIDGE_VIDEO_FRAME_SWAP_MODE swapmode = sys->cpu->rA;
     sys->gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
     sys->gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
 
-    if (sys->gpu->vframe == FRIDGE_VIDEO_FRAME_A)
-        sys->gpu->vframe = FRIDGE_VIDEO_FRAME_B;
-    else
-        sys->gpu->vframe = FRIDGE_VIDEO_FRAME_A;
+    switch (swapmode)
+    {
+        case FRIDGE_VIDEO_SWAP_NONE:
+            break;
+        case FRIDGE_VIDEO_SWAP_AUTO:
+            if (sys->gpu->visible_frame == FRIDGE_VIDEO_FRAME_0)
+            {
+                sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+                sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+            }
+            else
+            {
+                sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+                sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+            }
+            break;
+        case FRIDGE_VIDEO_SWAP_MANUAL_00:
+            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+            break;
+        case FRIDGE_VIDEO_SWAP_MANUAL_01:
+            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+            break;
+        case FRIDGE_VIDEO_SWAP_MANUAL_10:
+            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+            break;
+        case FRIDGE_VIDEO_SWAP_MANUAL_11:
+            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+            break;
+    }
 }
 
 void ir_VMODE(FRIDGE_SYSTEM* sys)
@@ -1070,7 +1100,8 @@ FRIDGE_DWORD FRIDGE_cpu_pair_HL (const FRIDGE_CPU* cpu)
 void FRIDGE_gpu_reset (FRIDGE_GPU* gpu)
 {
     gpu->vmode = FRIDGE_VIDEO_TEXT;
-    gpu->vframe = FRIDGE_VIDEO_FRAME_A;
+    gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+    gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
     for (int i = 0; i < FRIDGE_GPU_FRAME_BUFFER_SIZE; ++i)
     {
         gpu->frame_a[i] = 0;
@@ -1099,18 +1130,18 @@ void FRIDGE_gpu_tick(FRIDGE_GPU* gpu)
 
 FRIDGE_WORD* FRIDGE_gpu_visible_frame(FRIDGE_GPU* gpu)
 {
-    if (gpu->vframe == FRIDGE_VIDEO_FRAME_A)
-        return gpu->frame_b;
-    else if (gpu->vframe == FRIDGE_VIDEO_FRAME_B)
+    if (gpu->visible_frame == FRIDGE_VIDEO_FRAME_0)
         return gpu->frame_a;
+    else if (gpu->visible_frame == FRIDGE_VIDEO_FRAME_1)
+        return gpu->frame_b;
     return 0;
 }
 
 FRIDGE_WORD* FRIDGE_gpu_active_frame(FRIDGE_GPU* gpu)
 {
-    if (gpu->vframe == FRIDGE_VIDEO_FRAME_A)
+    if (gpu->active_frame == FRIDGE_VIDEO_FRAME_0)
         return gpu->frame_a;
-    else if (gpu->vframe == FRIDGE_VIDEO_FRAME_B)
+    else if (gpu->active_frame == FRIDGE_VIDEO_FRAME_1)
         return gpu->frame_b;
     return 0;
 }
