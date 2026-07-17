@@ -1300,17 +1300,21 @@ void FRIDGE_gpu_render_txt_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels, const FR
             FRIDGE_WORD chary = iy % FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
             FRIDGE_WORD charx = ix % FRIDGE_GPU_TEXT_GLYPH_WIDTH;
 
-            FRIDGE_RAM_ADDR charAddr = (row*FRIDGE_GPU_TEXT_FRAME_WIDTH + col)*2;
-            FRIDGE_RAM_ADDR colorAddr = charAddr+1;
+            FRIDGE_WORD color = 0; // bottom partial text line kept empty (background)
+            if (row < FRIDGE_GPU_TEXT_FRAME_HEIGHT)
+            {
+                FRIDGE_RAM_ADDR charAddr = (row*FRIDGE_GPU_TEXT_FRAME_WIDTH + col)*2;
+                FRIDGE_RAM_ADDR colorAddr = charAddr+1;
 
-            FRIDGE_WORD charCode = frame[charAddr];
-            FRIDGE_WORD foreColor = FRIDGE_GPU_RIGHT_PIXEL(frame[colorAddr]);
-            FRIDGE_WORD backColor = FRIDGE_GPU_LEFT_PIXEL(frame[colorAddr]);
+                FRIDGE_WORD charCode = frame[charAddr];
+                FRIDGE_WORD foreColor = FRIDGE_GPU_RIGHT_PIXEL(frame[colorAddr]);
+                FRIDGE_WORD backColor = FRIDGE_GPU_LEFT_PIXEL(frame[colorAddr]);
 
-            FRIDGE_WORD glyphPixelColumn = glyphBitmap[charCode*FRIDGE_GPU_TEXT_GLYPH_WIDTH+charx];
-            FRIDGE_WORD glyphPixel = (glyphPixelColumn << chary) & FRIDGE_HIGHBIT_MASK;
+                FRIDGE_WORD glyphPixelColumn = glyphBitmap[charCode*FRIDGE_GPU_TEXT_GLYPH_WIDTH+charx];
+                FRIDGE_WORD glyphPixel = (glyphPixelColumn << chary) & FRIDGE_HIGHBIT_MASK;
 
-            FRIDGE_WORD color = glyphPixel ? foreColor : backColor;
+                color = glyphPixel ? foreColor : backColor;
+            }
 
             /*
             FRIDGE_WORD px = (ix + gpu->frame_hor_offset) % FRIDGE_GPU_FRAME_EGA_WIDTH;

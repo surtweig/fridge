@@ -8,7 +8,8 @@ typedef unsigned short FRIDGE_ROM_ADDR;
 typedef unsigned int FRIDGE_SIZE_T;
 
 #define FRIDGE_ASCENDING_STACK
-#define FRIDGE_POSIT16_SUPPORT
+//#define FRIDGE_POSIT16_SUPPORT
+#define FRIDGE_VIDEO_240X180
 
 #define FRIDGE_RAM_SIZE 0x10000 // bytes
 #define FRIDGE_MAX_DWORD 0xffff
@@ -19,16 +20,28 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_MAX_INSTRUCTIONS 0x100
 #define FRIDGE_GPU_BUS_SIZE 4
 #define FRIDGE_GPU_FRAME_EGA_WIDTH 240
+#ifdef FRIDGE_VIDEO_240X180
+#define FRIDGE_GPU_FRAME_EGA_HEIGHT 180
+#else
 #define FRIDGE_GPU_FRAME_EGA_HEIGHT 160
+#endif
 #define FRIDGE_GPU_SPRITE_MEMORY_SIZE 0x10000 // bytes
 #define FRIDGE_GPU_MAX_SPRITES 64
 #define FRIDGE_GPU_MAX_SPRITES_PER_PIXEL 4
 #define FRIDGE_GPU_PALETTE_SIZE 48 // 3*16
+#ifdef FRIDGE_VIDEO_240X180
+#define FRIDGE_GPU_FRAME_BUFFER_SIZE 21600 // FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT >> 1; // 240x180x4 bits
+#else
 #define FRIDGE_GPU_FRAME_BUFFER_SIZE 19200 // FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT >> 1; // 240x160x4 bits
+#endif
 #define FRIDGE_GPU_TEXT_GLYPH_WIDTH 6
 #define FRIDGE_GPU_TEXT_GLYPH_HEIGHT 8
 #define FRIDGE_GPU_TEXT_FRAME_WIDTH 40 // = FRIDGE_GPU_FRAME_EGA_WIDTH/FRIDGE_GPU_TEXT_GLYPH_WIDTH;
+#ifdef FRIDGE_VIDEO_240X180
+#define FRIDGE_GPU_TEXT_FRAME_HEIGHT 22 // = floor(FRIDGE_GPU_FRAME_EGA_HEIGHT/FRIDGE_GPU_TEXT_GLYPH_HEIGHT); bottom half-line kept empty
+#else
 #define FRIDGE_GPU_TEXT_FRAME_HEIGHT 20 // = FRIDGE_GPU_FRAME_EGA_HEIGHT/FRIDGE_GPU_TEXT_GLYPH_HEIGHT;
+#endif
 #define FRIDGE_GPU_VIDEO_MODE_EGA 0
 #define FRIDGE_GPU_VIDEO_MODE_TEXT 1
 #define FRIDGE_GPU_VIDEO_FRAME_0 0
@@ -151,7 +164,7 @@ typedef enum FRIDGE_IRCODE {
 
     IIN, IOUT, HLT, EI, DI, // 233 instructions
 
-    // video controller instructions        
+    // video controller instructions
     VPRE,  // swaps active and visible buffers according to swap mode (A) and sets buffer offset (position HL)
            // A=0:     FRIDGE_VIDEO_SWAP_NONE          leaves buffer indices unchanged
            // A=1:     FRIDGE_VIDEO_SWAP_AUTO          alternates between (visible=0, active=1) and (visible=1, active=0)
