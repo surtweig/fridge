@@ -1,0 +1,25 @@
+include "vtext.inc"
+
+offset 0x0200
+
+static HelloMsg "Hello, World!"
+
+main Start
+    MVI A, 1
+    VMODE
+
+    MVI A, 1
+    STA VTEXT_BACK_COLOR
+    MVI A, 15
+    STA VTEXT_FORE_COLOR
+
+    MVI B, 1
+    MVI C, 1
+
+    LXI HL, HelloMsg
+    CALL vtext_putstr
+
+    MVI A, FRIDGE_GPU_VIDEO_SWAP_AUTO
+    VPRE
+
+    HLT

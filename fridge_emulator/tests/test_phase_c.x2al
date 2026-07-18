@@ -1,0 +1,21 @@
+offset 0x0200
+unsafe_flow
+main start
+	MVI A, 0          // EGA mode
+	VMODE
+	MVI A, 2          // VPRE manual_00 (visible=active=frame_a)
+	VPRE
+	LXI BC, 0x5460    // 21600 = FRIDGE_GPU_FRAME_BUFFER_SIZE
+	MVI H, 0
+	MVI L, 0
+entry loop
+	MOV A, B          // A = B (high byte of BC)
+	ORA C             // A = B | C, zero iff BC == 0
+	JNZ cont
+	HLT
+entry cont
+	MVI A, 0xFF       // both pixels = color 15 (white in default palette)
+	VFSA
+	INX HL
+	DCX BC
+	JMP loop

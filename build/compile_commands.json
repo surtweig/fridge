@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/zuzu/repos/fridge/build",
+  "command": "/usr/bin/c++  -I/home/zuzu/repos/fridge/fridgemulib/../include -std=gnu++14 -o CMakeFiles/fridgemulib.dir/main.cpp.o -c /home/zuzu/repos/fridge/fridgemulib/main.cpp",
+  "file": "/home/zuzu/repos/fridge/fridgemulib/main.cpp",
+  "output": "CMakeFiles/fridgemulib.dir/main.cpp.o"
+},
+{
+  "directory": "/home/zuzu/repos/fridge/build",
+  "command": "/usr/bin/cc  -I/home/zuzu/repos/fridge/fridgemulib/../include  -o CMakeFiles/fridgemulib.dir/fridgemulib.c.o -c /home/zuzu/repos/fridge/fridgemulib/fridgemulib.c",
+  "file": "/home/zuzu/repos/fridge/fridgemulib/fridgemulib.c",
+  "output": "CMakeFiles/fridgemulib.dir/fridgemulib.c.o"
+},
+{
+  "directory": "/home/zuzu/repos/fridge/build",
+  "command": "/usr/bin/cc  -I/home/zuzu/repos/fridge/fridgemulib/../include  -o CMakeFiles/fridgemulib.dir/posit.c.o -c /home/zuzu/repos/fridge/fridgemulib/posit.c",
+  "file": "/home/zuzu/repos/fridge/fridgemulib/posit.c",
+  "output": "CMakeFiles/fridgemulib.dir/posit.c.o"
+}
+]

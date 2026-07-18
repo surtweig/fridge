@@ -1,4 +1,6 @@
 #include "app.h"
+#include "rom_loader.h"
+#include "vulkan_globals.h"
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -14,14 +16,14 @@
 static VkDebugReportCallbackEXT g_DebugReport = VK_NULL_HANDLE;
 #endif
 
-static VkAllocationCallbacks* g_Allocator = nullptr;
-static VkInstance               g_Instance = VK_NULL_HANDLE;
-static VkPhysicalDevice         g_PhysicalDevice = VK_NULL_HANDLE;
-static VkDevice                 g_Device = VK_NULL_HANDLE;
-static uint32_t                 g_QueueFamily = (uint32_t)-1;
-static VkQueue                  g_Queue = VK_NULL_HANDLE;
-static VkPipelineCache          g_PipelineCache = VK_NULL_HANDLE;
-static VkDescriptorPool         g_DescriptorPool = VK_NULL_HANDLE;
+VkAllocationCallbacks* g_Allocator = nullptr;
+VkInstance               g_Instance = VK_NULL_HANDLE;
+VkPhysicalDevice         g_PhysicalDevice = VK_NULL_HANDLE;
+VkDevice                 g_Device = VK_NULL_HANDLE;
+uint32_t                 g_QueueFamily = (uint32_t)-1;
+VkQueue                  g_Queue = VK_NULL_HANDLE;
+VkPipelineCache          g_PipelineCache = VK_NULL_HANDLE;
+VkDescriptorPool         g_DescriptorPool = VK_NULL_HANDLE;
 
 static ImGui_ImplVulkanH_Window g_MainWindowData;
 static uint32_t                 g_MinImageCount = 2;
@@ -336,8 +338,46 @@ static void FramePresent(ImGui_ImplVulkanH_Window* wd)
     wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
 }
 
-int main(int, char**)
+static int SmokeTest(const char* rom_path)
 {
+    FridgeCtx ctx;
+    FridgeCtx_Init(ctx);
+
+    if (!RomLoader_LoadRaw(&ctx.cpu, rom_path))
+        return 1;
+
+    std::printf("[smoke] loaded %s\n", rom_path);
+    std::printf("[smoke] PC=%04X  A=%02X  state=%d  PANIC=%d\n",
+                ctx.cpu.PC, ctx.cpu.rA, (int)ctx.cpu.state,
+                (int)FRIDGE_cpu_flag_PANIC(&ctx.cpu));
+
+    int steps = 0;
+    const int max_steps = 1000000;
+    while (ctx.cpu.state == FRIDGE_CPU_ACTIVE && steps < max_steps)
+    {
+        FRIDGE_sys_tick(&ctx.system);
+        ++steps;
+    }
+
+    std::printf("[smoke] halted after %d steps: PC=%04X  A=%02X  state=%d  PANIC=%d\n",
+                steps, ctx.cpu.PC, ctx.cpu.rA, (int)ctx.cpu.state,
+                (int)FRIDGE_cpu_flag_PANIC(&ctx.cpu));
+
+    unsigned non_zero = 0;
+    for (int i = 0; i < FRIDGE_GPU_FRAME_BUFFER_SIZE; ++i)
+        if (ctx.gpu.frame_a[i] != 0) ++non_zero;
+    std::printf("[smoke] frame_a non-zero bytes: %u / %d\n",
+                non_zero, FRIDGE_GPU_FRAME_BUFFER_SIZE);
+
+    FridgeCtx_Shutdown(ctx);
+    return 0;
+}
+
+int main(int argc, char** argv)
+{
+    if (argc >= 3 && std::strcmp(argv[1], "--smoke-test") == 0)
+        return SmokeTest(argv[2]);
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
         std::fprintf(stderr, "Error: %s\n", SDL_GetError());
@@ -427,12 +467,23 @@ int main(int, char**)
                 && event.window.event == SDL_WINDOWEVENT_CLOSE
                 && event.window.windowID == SDL_GetWindowID(window))
                 done = true;
+
+            // Forward keyboard events to the Fridge keyboard controller,
+            // but skip when ImGui wants the keyboard (e.g. user editing hex
+            // values in the register panel).
+            if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)
+            {
+                if (!ImGui::GetIO().WantCaptureKeyboard)
+                    App_HandleSdlEvent(app, event);
+            }
         }
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {
             SDL_Delay(10);
             continue;
         }
+
+        App_PumpPending(app);
 
         int fb_width, fb_height;
         SDL_GetWindowSize(window, &fb_width, &fb_height);

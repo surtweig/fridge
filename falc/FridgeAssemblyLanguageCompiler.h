@@ -14,7 +14,7 @@
 #include <sstream>
 using namespace std;
 
-#define STD_PATH "..\\x2al_std\\"
+#define STD_PATH "../x2al_std/"
 #define R_INCLUDE "include"
 #define R_ALIAS "alias"
 #define R_SUBROUTINE "subroutine"

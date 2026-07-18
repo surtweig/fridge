@@ -24,8 +24,27 @@ set(IMGUI_SOURCES
 add_executable(fridge_emulator
     src/main.cpp
     src/app.cpp
+    src/fridge_ctx.cpp
+    src/rom_loader.cpp
+    src/emu_worker.cpp
+    src/keymap.cpp
+    src/vk_texture.cpp
+    src/file_dialog.cpp
     ${IMGUI_SOURCES}
+
+    # fridgemulib as sources (matches fridge_opengl_emulator.pro pattern).
+    # posit.c intentionally excluded — PAM16 disabled.
+    ../fridgemulib/fridgemulib.c
 )
+
+# fridgemulib.c is plain C89 but its header uses no extern "C" guards, so compile
+# it as C++ to share mangled symbols with the rest of the executable. This matches
+# the existing Qt project (fridge_opengl_emulator.pro) which builds the same file
+# as C++ via the .pro qmake pipeline. C permits implicit int/enum conversions
+# that C++ rejects; -fpermissive downgrades them to warnings.
+set_source_files_properties(../fridgemulib/fridgemulib.c PROPERTIES LANGUAGE CXX)
+set_source_files_properties(../fridgemulib/fridgemulib.c APPEND
+    PROPERTIES COMPILE_OPTIONS "-fpermissive")
 
 target_include_directories(fridge_emulator PRIVATE
     src

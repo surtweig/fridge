@@ -1,0 +1,5 @@
+offset 0x0200
+unsafe_flow
+main start
+	MVI A, 0x55
+	HLT
