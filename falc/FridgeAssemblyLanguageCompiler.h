@@ -28,7 +28,8 @@ using namespace std;
 #define FRIDGE_INSTRUCTION_MAX_EXTRA_SIZE 2
 #define FRIDGE_INSTRUCTION_MAX_OPERANDS 2
 #define ResourceSizePostfix "_SIZE"
-#define HashMemOriginAlias "MEM_ORIGIN"
+#define HeapOriginAlias "HEAP_ORIGIN"
+#define StackOriginAlias "STACK_ORIGIN"
 #define R_UNSAFE_FLOW "unsafe_flow"
 
 struct ParsedLine
@@ -37,6 +38,7 @@ struct ParsedLine
     FRIDGE_RAM_ADDR address;
     int lineNumber;
     string sourceFile;
+    string rawText;
 };
 
 typedef enum OperandType
@@ -58,6 +60,7 @@ struct StaticResourceInfo
 {
     FRIDGE_WORD* pdata;
     FRIDGE_DWORD size;
+    FRIDGE_RAM_ADDR address;
 };
 
 class FridgeAssemblyLanguageCompiler
@@ -119,6 +122,13 @@ public:
     FRIDGE_WORD* getObjectCode() { return objectCode; }
     FRIDGE_RAM_ADDR getOffset() { return offset; }
     FRIDGE_RAM_ADDR getProgramSize() { return programSize; }
+    FRIDGE_RAM_ADDR getMainEntry() { return mainEntry; }
+    FRIDGE_RAM_ADDR getResOrigin() { return (FRIDGE_RAM_ADDR)resOrigin; }
+    const map<string, string>& getAliases() { return aliases; }
+    const map<string, FRIDGE_RAM_ADDR>& getEntries() { return entries; }
+    const map<string, FRIDGE_RAM_ADDR>& getSubroutines() { return subroutines; }
+    const map<string, StaticResourceInfo>& getResources() { return resources; }
+    const vector<ParsedLine>& getLines() { return lines; }
     void printParsed();
     void printCompiled();
     void printCompiled(ostream* f);

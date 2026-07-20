@@ -78,6 +78,12 @@ void EmuWorker::Unlock()
 
 bool EmuWorker::StepOnce()
 {
+    if (breakpoints_ && breakpoints_->count(sys_->cpu->PC))
+    {
+        active_.store(false, std::memory_order_relaxed);
+        return true;
+    }
+
     FRIDGE_sys_tick(sys_);
 
     if (FRIDGE_cpu_flag_PANIC(sys_->cpu))
@@ -141,6 +147,13 @@ void EmuWorker::RunLoop()
             {
                 for (int i = 0; i < tick_series_length_; ++i)
                 {
+                    if (breakpoints_ && breakpoints_->count(sys_->cpu->PC))
+                    {
+                        active_.store(false, std::memory_order_relaxed);
+                        panicked = true;
+                        break;
+                    }
+
                     FRIDGE_sys_tick(sys_);
 
                     if (FRIDGE_cpu_flag_PANIC(sys_->cpu))

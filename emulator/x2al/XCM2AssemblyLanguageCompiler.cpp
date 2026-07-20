@@ -717,12 +717,12 @@ bool XCM2AssemblyLanguageCompiler::addressMarkup()
         }
     }
 
-    // dealias MEM_ORIGIN
+    // dealias HEAP_ORIGIN
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
         for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
         {
-            if ((*iword) == HashMemOriginAlias)
+            if ((*iword) == HeapOriginAlias)
                 (*iword) = int_to_hex((XCM2_RAM_ADDR)(programSize + offset));
         }
     }

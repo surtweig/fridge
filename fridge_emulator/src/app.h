@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <unordered_set>
 
 #include <SDL.h>
 
@@ -11,6 +12,7 @@
 #include "fridge_ctx.h"
 #include "emu_worker.h"
 #include "vk_texture.h"
+#include "falcfrontend.h"
 
 struct App {
     // ImGui options.
@@ -39,8 +41,21 @@ struct App {
     // Pending open-ROM dialog trigger (set by menu item, consumed by main).
     std::atomic<bool> pending_open_rom {false};
 
+    // Source-level debug state.
+    DebugInfo debug;
+    bool source_loaded = false;
+    std::unordered_set<FRIDGE_RAM_ADDR> breakpoints;
+
+    // Pending open-source dialog trigger (set by menu item, consumed by main).
+    std::atomic<bool> pending_open_source {false};
+
     // Boot-worker preview of last measured frequency (read in App_DrawFrame).
     double measured_freq = 0.0;
+
+    // Target execution speed (Hz) selected from the UI. One of the
+    // predefined speeds in DrawStatus; persisted so the active button can
+    // be highlighted.
+    int target_frequency = 1000000;
 };
 
 void App_Init(App& app);

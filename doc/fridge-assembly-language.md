@@ -176,7 +176,7 @@ static HelloWorld "Hello, World!"
 // HelloWorld_SIZE is an alias for the string's length
 ```
 
-The `MEM_ORIGIN` alias resolves to the address just past all static resources
+The `HEAP_ORIGIN` alias resolves to the address just past all static resources
 (useful for a heap pointer).
 
 ### `unsafe_flow`
@@ -771,7 +771,7 @@ for loading directly into emulator RAM at the specified offset.
         |   ...                 |
         |   JMP 0x0000 (3 bytes)|  -- if static data present
         |   Static resources    |
-MEM_ORIGIN +-----------------+  -- alias for heap start
+HEAP_ORIGIN +-----------------+  -- alias for heap start
         |   Stack (grows up)   |  -- SP typically starts at 0xFFFF
 0xFFFF  +-----------------------+
 ```

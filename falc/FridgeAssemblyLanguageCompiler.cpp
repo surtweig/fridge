@@ -107,8 +107,10 @@ bool FridgeAssemblyLanguageCompiler::preprocessFile(string sourceRootFolder, str
 
             if (!wasInclude && parsed.words.size() > 0)
             {
+                parsed.address = 0;
                 parsed.lineNumber = currentLineNumber;
                 parsed.sourceFile = currentSourceFile;
+                parsed.rawText = line;
                 lines.push_back(parsed);
             }
             currentLineNumber++;
@@ -645,6 +647,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
         map<string, FRIDGE_WORD>::iterator irid = IRIDs.find(iline->words[0]);
         if (irid != IRIDs.end())
         {
+            iline->address = pc + offset;
             pc += 1 + IRSigs[irid->second].extraSize;
             //(*errstr)  <<  pc  <<  " "  <<  iline->words[0]  <<  "\n";
         }
@@ -666,15 +669,28 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
     if (!mainEntryDeclared)
         logwarnout("Main entry is not declared.");
 
+#ifdef FRIDGE_ASCENDING_STACK
+    int preambleShift = 3; // LXI SP, STACK_ORIGIN
+#else
+    int preambleShift = 0;
+#endif
+
     if (mainEntry != offset)
-    {
-        programSize += 3; // JMP mainEntry at the beginning
-        for (map<string, FRIDGE_RAM_ADDR>::iterator ientry = entries.begin(); ientry != entries.end(); ++ientry)
-            ientry->second = (FRIDGE_RAM_ADDR)(ientry->second + 3);
-        for (map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.begin(); isub != subroutines.end(); ++isub)
-            isub->second = (FRIDGE_RAM_ADDR)(isub->second + 3);
-        mainEntry += 3;
-    }
+        preambleShift += 3; // JMP mainEntry
+
+    programSize += preambleShift;
+
+    for (map<string, FRIDGE_RAM_ADDR>::iterator ientry = entries.begin(); ientry != entries.end(); ++ientry)
+        ientry->second = (FRIDGE_RAM_ADDR)(ientry->second + preambleShift);
+    for (map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.begin(); isub != subroutines.end(); ++isub)
+        isub->second = (FRIDGE_RAM_ADDR)(isub->second + preambleShift);
+
+    if (mainEntry != offset)
+        mainEntry += preambleShift;
+#ifdef FRIDGE_ASCENDING_STACK
+    else
+        mainEntry = offset + 3; // code starts right after LXI SP
+#endif
 
     // dealias entries and subroutines addresses
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
@@ -757,16 +773,17 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
 
             }
 
+            ires->second.address = programSize + offset;
             programSize += ires->second.size;
         }
     }
 
-    // dealias MEM_ORIGIN
+    // dealias HEAP_ORIGIN
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
         for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
         {
-            if ((*iword) == HashMemOriginAlias)
+            if ((*iword) == HeapOriginAlias)
                 (*iword) = int_to_hex((FRIDGE_RAM_ADDR)(programSize + offset));
         }
     }
@@ -783,11 +800,22 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
 
     logout("Program size is " + to_string(programSize) + " bytes.");
 
+    // Emit LXI SP, STACK_ORIGIN preamble (ascending stack only)
+#ifdef FRIDGE_ASCENDING_STACK
+    {
+        FRIDGE_DWORD sp_target = (FRIDGE_DWORD)(programSize + offset);
+        objectCode[pos] = LXI_SP;
+        objectCode[pos + 1] = FRIDGE_HIGH_WORD(sp_target);
+        objectCode[pos + 2] = FRIDGE_LOW_WORD(sp_target);
+        pos += 3;
+    }
+#endif
+
     if (mainEntry != offset)
     {
-        objectCode[0] = JMP;
-        objectCode[1] = FRIDGE_HIGH_WORD(mainEntry);
-        objectCode[2] = FRIDGE_LOW_WORD(mainEntry);
+        objectCode[pos] = JMP;
+        objectCode[pos + 1] = FRIDGE_HIGH_WORD(mainEntry);
+        objectCode[pos + 2] = FRIDGE_LOW_WORD(mainEntry);
         pos += 3;
     }
 

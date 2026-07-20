@@ -30,11 +30,17 @@ add_executable(fridge_emulator
     src/keymap.cpp
     src/vk_texture.cpp
     src/file_dialog.cpp
+    src/falcfrontend.cpp
+    src/ui_source.cpp
+    src/ui_symbols.cpp
     ${IMGUI_SOURCES}
 
     # fridgemulib as sources (matches fridge_opengl_emulator.pro pattern).
     # posit.c intentionally excluded — PAM16 disabled.
     ../fridgemulib/fridgemulib.c
+
+    # falc compiler as source (no main.cpp — only the compiler class).
+    ../falc/FridgeAssemblyLanguageCompiler.cpp
 )
 
 # fridgemulib.c is plain C89 but its header uses no extern "C" guards, so compile
@@ -50,6 +56,7 @@ target_include_directories(fridge_emulator PRIVATE
     src
     ../include
     ../fridgemulib
+    ../falc
     deps/imgui
     deps/imgui/backends
     deps/vma/include

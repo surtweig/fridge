@@ -5,9 +5,37 @@
 #include "rom_loader.h"
 #include "keymap.h"
 #include "file_dialog.h"
+#include "falcfrontend.h"
+#include "ui_source.h"
+#include "ui_symbols.h"
 
 #include <cstdio>
 #include <cstring>
+
+// Map a target frequency to a sensible tick batch size (the number of CPU
+// ticks the worker runs per lock hold). Smaller batches at low frequencies
+// keep the throttle responsive; larger batches at high frequencies amortise
+// the lock overhead.
+static int TickSeriesLengthFor(int target_frequency)
+{
+    switch (target_frequency)
+    {
+        case 2:        return 1;
+        case 10:       return 1;
+        case 1000:     return 10;
+        case 10000:    return 100;
+        case 1000000:  return 10000;
+        default:       return 10000;
+    }
+}
+
+// Push the currently-selected target frequency (and matching tick batch
+// size) into the worker.
+static void ApplyTargetFrequency(App& app)
+{
+    app.worker->SetTargetFrequency(app.target_frequency,
+                                   TickSeriesLengthFor(app.target_frequency));
+}
 
 static bool LoadRomIntoApp(App& app, const char* path, bool was_active)
 {
@@ -19,6 +47,7 @@ static bool LoadRomIntoApp(App& app, const char* path, bool was_active)
     {
         app.rom_path = path;
         app.rom_loaded = true;
+        app.source_loaded = false;
         if (was_active)
             app.worker->SetActive(true);
     }
@@ -29,6 +58,49 @@ static bool LoadRomIntoApp(App& app, const char* path, bool was_active)
     }
     app.worker->Unlock();
     return ok;
+}
+
+static void LoadSourceIntoApp(App& app, const char* path, bool was_active)
+{
+    app.worker->Lock();
+    app.worker->SetActive(false);
+
+    DebugInfo info;
+    std::string err;
+    bool ok = FalcCompile(path, info, err);
+
+    std::fprintf(stderr, "%s", err.c_str());
+
+    if (ok && info.bytes.size() > 0)
+    {
+        FridgeCtx_Reset(app.fridge);
+
+        FRIDGE_RAM_ADDR load_offset = info.offset;
+        FRIDGE_RAM_ADDR max_size = FRIDGE_RAM_SIZE - load_offset;
+        if (info.bytes.size() > (size_t)max_size)
+        {
+            std::fprintf(stderr, "[app] binary too large (%zu bytes, max %u at offset 0x%04X)\n",
+                         info.bytes.size(), (unsigned)max_size, load_offset);
+            ok = false;
+        }
+        else
+        {
+            std::memcpy(app.fridge.cpu.ram + load_offset, info.bytes.data(), info.bytes.size());
+            app.fridge.cpu.PC = load_offset;
+            app.fridge.cpu.state = FRIDGE_CPU_ACTIVE;
+
+            app.debug = std::move(info);
+            app.source_loaded = true;
+            app.rom_loaded = false;
+            app.rom_path.clear();
+            app.breakpoints.clear();
+        }
+    }
+
+    if (!ok && !err.empty())
+        std::fprintf(stderr, "[app] falc compile failed\n");
+
+    app.worker->Unlock();
 }
 
 void App_Init(App& app)
@@ -42,7 +114,9 @@ void App_Init(App& app)
                    VK_FORMAT_R8G8B8A8_UNORM);
 
     app.worker = new EmuWorker(&app.fridge.system);
-    app.worker->SetTargetFrequency(1000000, 10000);
+    app.worker->SetBreakpoints(&app.breakpoints);
+    app.target_frequency = 1000000;
+    ApplyTargetFrequency(app);
     app.worker->Start();
 
     const char* env_rom = std::getenv("FRIDGE_OPEN_ROM");
@@ -96,6 +170,22 @@ void App_PumpPending(App& app)
         }
     }
 
+    if (app.pending_open_source.exchange(false))
+    {
+        bool was_active = app.worker->IsActive();
+        std::string path = FileDialog::OpenFile("Open Fridge Source");
+        if (!path.empty())
+        {
+            LoadSourceIntoApp(app, path.c_str(), was_active);
+        }
+        else
+        {
+            std::fprintf(stderr,
+                "[app] Open Source cancelled or no native dialog available "
+                "(install zenity or kdialog).\n");
+        }
+    }
+
     if (app.pending_reset.exchange(false))
     {
         app.worker->Lock();
@@ -104,6 +194,13 @@ void App_PumpPending(App& app)
         FridgeCtx_Reset(app.fridge);
         if (app.rom_loaded && !app.rom_path.empty())
             RomLoader_LoadRaw(&app.fridge.cpu, app.rom_path.c_str());
+        if (app.source_loaded)
+        {
+            std::memcpy(app.fridge.cpu.ram + app.debug.offset,
+                        app.debug.bytes.data(), app.debug.bytes.size());
+            app.fridge.cpu.PC = app.debug.offset;
+            app.fridge.cpu.state = FRIDGE_CPU_ACTIVE;
+        }
         if (was_active)
             app.worker->SetActive(true);
         app.worker->Unlock();
@@ -121,6 +218,8 @@ static void DrawMainMenuBar(App& app)
     {
         if (ImGui::MenuItem("Open ROM...", nullptr))
             app.pending_open_rom.store(true);
+        if (ImGui::MenuItem("Open Source...", nullptr))
+            app.pending_open_source.store(true);
         ImGui::Separator();
         if (ImGui::MenuItem("Quit", "Alt+F4"))
         {
@@ -280,7 +379,8 @@ static void DrawStatus(App& app)
     ImGui::Text("CPU state: %s", state_text);
     ImGui::Text("Measured freq: %.1f Hz", app.measured_freq);
     ImGui::Text("ROM: %s",
-        app.rom_loaded ? app.rom_path.c_str() : "(none)");
+        app.rom_loaded ? app.rom_path.c_str() :
+        (app.source_loaded ? "(source loaded)" : "(none)"));
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
@@ -309,6 +409,26 @@ static void DrawStatus(App& app)
     if (ImGui::Button("Open ROM..."))
         app.pending_open_rom.store(true);
 
+    ImGui::Separator();
+    ImGui::TextUnformatted("Speed:");
+    ImGui::SameLine();
+    static const int kSpeeds[] = {2, 10, 1000, 10000, 1000000};
+    static const char* kLabels[] = {"2 Hz", "10 Hz", "1 kHz", "10 kHz", "1 MHz"};
+    for (size_t i = 0; i < sizeof(kSpeeds) / sizeof(kSpeeds[0]); ++i)
+    {
+        if (i) ImGui::SameLine();
+        bool selected = (app.target_frequency == kSpeeds[i]);
+        if (selected)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        if (ImGui::Button(kLabels[i]))
+        {
+            app.target_frequency = kSpeeds[i];
+            ApplyTargetFrequency(app);
+        }
+        if (selected)
+            ImGui::PopStyleColor();
+    }
+
     ImGui::End();
 }
 
@@ -318,6 +438,19 @@ void App_DrawFrame(App& app)
 
     DrawStatus(app);
     DrawRegistersPanel(app);
+
+    if (app.source_loaded && !app.debug.sourceLines.empty())
+    {
+        if (app.worker)
+            app.worker->Lock();
+        DrawSourcePanel(app, app.debug, &app.fridge.cpu);
+        DrawStaticsPanel(app.debug, &app.fridge.cpu);
+        if (app.worker)
+            app.worker->Unlock();
+
+        DrawAliasesPanel(app.debug);
+    }
+
     DrawFramebufferPanel(app);
 
     if (app.show_demo_window)

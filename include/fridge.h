@@ -7,7 +7,7 @@ typedef unsigned short FRIDGE_RAM_ADDR;
 typedef unsigned short FRIDGE_ROM_ADDR;
 typedef unsigned int FRIDGE_SIZE_T;
 
-#define FRIDGE_ASCENDING_STACK
+//#define FRIDGE_ASCENDING_STACK
 //#define FRIDGE_POSIT16_SUPPORT
 #define FRIDGE_VIDEO_240X180
 

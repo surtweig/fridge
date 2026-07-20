@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 
 #include <fridge.h>
 #include "fridgemulib.h"
@@ -53,6 +54,8 @@ public:
     void SetFramePresentedCallback(std::function<void()> cb)  { on_frame_  = std::move(cb); }
     void SetPanicCallback(std::function<void()> cb)            { on_panic_  = std::move(cb); }
 
+    void SetBreakpoints(const std::unordered_set<FRIDGE_RAM_ADDR>* bps) { breakpoints_ = bps; }
+
 private:
     void RunLoop();
 
@@ -78,4 +81,5 @@ private:
 
     std::function<void()> on_frame_;
     std::function<void()> on_panic_;
+    const std::unordered_set<FRIDGE_RAM_ADDR>* breakpoints_ = nullptr;
 };

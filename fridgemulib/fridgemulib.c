@@ -668,7 +668,7 @@ void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
     cpu->state = FRIDGE_CPU_ACTIVE;
     cpu->PC = 0;
 #ifdef FRIDGE_ASCENDING_STACK
-    cpu->SP = FRIDGE_EXECUTABLE_OFFSET;
+    cpu->SP = 0x1000;
 #else
     cpu->SP = FRIDGE_RAM_SIZE-1;
 #endif

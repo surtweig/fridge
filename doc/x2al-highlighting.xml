@@ -25,7 +25,7 @@
             <Keywords name="Folders in comment, middle"></Keywords>
             <Keywords name="Folders in comment, close"></Keywords>
             <Keywords name="Keywords1">MOV MVI LXI LDA STA LHLD SHLD LDAX STAX XCNG PUSH POP XTHL SPHL</Keywords>
-            <Keywords name="Keywords2">subroutine entry alias end static offset main endsub MEM_ORIGIN include unsafe_flow</Keywords>
+            <Keywords name="Keywords2">subroutine entry alias end static offset main endsub HEAP_ORIGIN include unsafe_flow</Keywords>
             <Keywords name="Keywords3">ADD ADI ADC ACI SUB SUI SBB SBI INR DCR INX DCX DAD DAA ANA ANI ORA ORI XRA XRI CMP CPI RLC RRC RAL RAR CMA CMC STC RTC</Keywords>
             <Keywords name="Keywords4">A B C D E H L BC DE HL SP AF M</Keywords>
             <Keywords name="Keywords5">JMP JNZ JZ JNC JC JPO JPE JP JM CALL CNZ CZ CNC CC CPO CPE CP CM RET RNZ RZ RNC RC RPO RPE RP RM PCHL</Keywords>

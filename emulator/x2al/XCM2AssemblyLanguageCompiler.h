@@ -24,10 +24,10 @@ using namespace std;
 #define R_OFFSET "offset"
 #define R_STATICRESOURCE "static"
 #define IRCodeAliasPrefix "#"
-#define XCM2_INSTRUCTION_MAX_EXTRA_SIZE 2 
-#define XCM2_INSTRUCTION_MAX_OPERANDS 2 
+#define XCM2_INSTRUCTION_MAX_EXTRA_SIZE 2
+#define XCM2_INSTRUCTION_MAX_OPERANDS 2
 #define ResourceSizePostfix "_SIZE"
-#define HashMemOriginAlias "MEM_ORIGIN"
+#define HeapOriginAlias "HEAP_ORIGIN"
 #define R_UNSAFE_FLOW "unsafe_flow"
 
 struct ParsedLine
@@ -121,4 +121,3 @@ public:
 
     ~XCM2AssemblyLanguageCompiler();
 };
-

@@ -15,7 +15,7 @@ MainWindow::MainWindow(QWidget *parent) :
     projectGroup = NULL;
     selectedProject = NULL;
     emulator = NULL;
-    initConsoleTable();   
+    initConsoleTable();
 
     LogMessage("MainWindow", "Welcome to XCM2 Fridge IDE");
 
@@ -25,7 +25,7 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete console;
-    delete ui;    
+    delete ui;
 }
 
 void MainWindow::initConsoleTable()
@@ -221,7 +221,7 @@ void MainWindow::SourceSelected(IProjectGroupItem* source)
     ui->TextEditorTabs->setCurrentWidget(sourceEdits[source]);
 }
 
-const char x2alReservedWords[] = "subroutine entry alias end static offset main endsub mem_origin include unsafe_flow";
+const char x2alReservedWords[] = "subroutine entry alias end static offset main endsub heap_origin include unsafe_flow";
 const char x2alRegisters[] = "a b c d e h l bc de hl sp af m";
 const char x2alMemoryIrs[] = "mov mvi lxi lda sta lhld shld ldax stax xcng push pop xthl sphl";
 const char x2alArithmeticIrs[] = "add adi adc aci sub sui sbb sbi inr dcr inx dcx dad daa ana ani ora ori xra xri cmp cpi rlc rrc ral rar cma cmc stc rtc";

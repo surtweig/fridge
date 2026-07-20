@@ -1,5 +1,6 @@
 #include "app.h"
 #include "rom_loader.h"
+#include "falcfrontend.h"
 #include "vulkan_globals.h"
 
 #include "imgui.h"
@@ -373,10 +374,69 @@ static int SmokeTest(const char* rom_path)
     return 0;
 }
 
+static int SmokeTestSource(const char* source_path)
+{
+    DebugInfo info;
+    std::string err;
+    if (!FalcCompile(source_path, info, err))
+    {
+        std::fprintf(stderr, "[smoke-source] compile failed:\n%s\n", err.c_str());
+        return 1;
+    }
+
+    std::printf("[smoke-source] compiled %s — %zu bytes, offset=0x%04X, main=0x%04X\n",
+                source_path, info.bytes.size(), info.offset, info.mainEntry);
+    std::printf("[smoke-source] %zu source lines, %zu addr lines, %zu entries, %zu subs, %zu statics, %zu aliases\n",
+                info.sourceLines.size(), info.addrToLine.size(),
+                info.entries.size(), info.subroutines.size(),
+                info.statics.size(), info.aliases.size());
+
+    FridgeCtx ctx;
+    FridgeCtx_Init(ctx);
+
+    FRIDGE_RAM_ADDR load_off = info.offset;
+    if (info.bytes.size() > (size_t)(FRIDGE_RAM_SIZE - load_off))
+    {
+        std::fprintf(stderr, "[smoke-source] binary too large\n");
+        return 1;
+    }
+
+    std::memcpy(ctx.cpu.ram + load_off, info.bytes.data(), info.bytes.size());
+    ctx.cpu.PC = load_off;
+    ctx.cpu.state = FRIDGE_CPU_ACTIVE;
+
+    std::printf("[smoke-source] PC=%04X  A=%02X  state=%d  PANIC=%d\n",
+                ctx.cpu.PC, ctx.cpu.rA, (int)ctx.cpu.state,
+                (int)FRIDGE_cpu_flag_PANIC(&ctx.cpu));
+
+    int steps = 0;
+    const int max_steps = 1000000;
+    while (ctx.cpu.state == FRIDGE_CPU_ACTIVE && steps < max_steps)
+    {
+        FRIDGE_sys_tick(&ctx.system);
+        ++steps;
+    }
+
+    std::printf("[smoke-source] halted after %d steps: PC=%04X  A=%02X  state=%d  PANIC=%d\n",
+                steps, ctx.cpu.PC, ctx.cpu.rA, (int)ctx.cpu.state,
+                (int)FRIDGE_cpu_flag_PANIC(&ctx.cpu));
+
+    unsigned non_zero = 0;
+    for (int i = 0; i < FRIDGE_GPU_FRAME_BUFFER_SIZE; ++i)
+        if (ctx.gpu.frame_a[i] != 0) ++non_zero;
+    std::printf("[smoke-source] frame_a non-zero bytes: %u / %d\n",
+                non_zero, FRIDGE_GPU_FRAME_BUFFER_SIZE);
+
+    FridgeCtx_Shutdown(ctx);
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     if (argc >= 3 && std::strcmp(argv[1], "--smoke-test") == 0)
         return SmokeTest(argv[2]);
+    if (argc >= 3 && std::strcmp(argv[1], "--smoke-test-source") == 0)
+        return SmokeTestSource(argv[2]);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
