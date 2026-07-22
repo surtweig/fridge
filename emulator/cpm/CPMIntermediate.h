@@ -80,7 +80,7 @@ namespace CPM
     {
     protected:
         map<string, CPMDataSymbol*> locals;
-        vector<CPMDataSymbol*> literals;
+        vector<CPMStaticSymbol*> literals;
         FRIDGE_DWORD stackOffset;
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
@@ -93,7 +93,7 @@ namespace CPM
         virtual CPMRelativeCodeChunk* GenerateCode();
         CPMDataSymbol* resolveLocalSymbolName(const string &name);
         FRIDGE_DWORD StackOffset() { return stackOffset; }
-        void addLiteral(CPMDataSymbol* symbol) { literals.push_back(symbol); }
+        void addLiteral(CPMStaticSymbol* symbol) { literals.push_back(symbol); }
     };
 
     class CPMFunctionSemanticBlock : public CPMSemanticBlock
@@ -135,9 +135,9 @@ namespace CPM
         CPMSematicExpression* destExpr;
         CPMDataSymbol* source;
         CPMSematicExpression* srcExpr;
-        bool staticDest;
-        bool literalSource;
-        
+        CPMStaticSymbol* staticDest;
+        CPMStaticSymbol* literalSource;
+
     public:
         CPMOperator_Assign(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         virtual CPMRelativeCodeChunk* GenerateCode();

@@ -14,9 +14,11 @@ namespace CPM
         CPM_CHAR,
         CPM_NUM,
         CPM_STR,
+        CPM_CHARLIT,
         CPM_ID,
-        CPM_REF,
-        CPM_INDEX,
+        CPM_REF,        // "."-joined identifier sequence: NS.Name, a.b.c
+                        // (lexical joiner only — NOT a pointer/ref indicator;
+                        // pointer types are expressed as `(T ptr)` type-exprs)
         CPM_EXPR,
         CPM_LINE,
         CPM_BLOCK,
@@ -30,12 +32,11 @@ namespace CPM
 
     const char CPM_BLOCK_OPEN = '(';
     const char CPM_BLOCK_CLOSE = ')';
-    const char CPM_INDEX_OPEN = '[';
-    const char CPM_INDEX_CLOSE = ']';
     const char CPM_LINE_END = ';';
     const char CPM_OPERAND_DELIM = ',';
     const char CPM_SUBSCRIPT_DELIM = '.';
     const char CPM_STR_DELIM = '"';
+    const char CPM_CHAR_DELIM = '\'';
     const string CPM_COMMENT_LINE = "//";
     const string CPM_COMMENT_BLOCK_OPEN = "/*";
     const string CPM_COMMENT_BLOCK_CLOSE = "*/";
@@ -107,13 +108,26 @@ namespace CPM
         CPMSyntaxNodeType Type() override { return CPM_ID; }
     };
 
+    class CPMSD_CHARLIT : public CPMSyntaxDetector
+    {
+    private:
+        bool closed;
+    public:
+        CPMSD_CHARLIT();
+        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
+        CPMSyntaxNodeType Type() override { return CPM_CHARLIT; }
+    };
+
+    // Joins dot-separated identifiers (NS.Name, a.b.c) into a single CPM_REF
+    // node. The name CPM_REF is historical; this detector is NOT about pointer
+    // or reference types — it only does lexical `.`-joining. Pointer types are
+    // written `(T ptr)` in the new grammar.
     class CPMSD_REF : public CPMSyntaxDetector
     {
     private:
     public:
         CPMSD_REF();
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
         CPMSyntaxNodeType Type() override { return CPM_REF; }
     };
 
@@ -129,20 +143,6 @@ namespace CPM
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
         //bool Complete() override;
         CPMSyntaxNodeType Type() override { return CPM_EXPR; }
-    };
-
-    class CPMSD_INDEX : public CPMSyntaxDetector
-    {
-    private:
-        //bool closed;
-        int pcounter;
-        int itemsCount;
-        bool opened;
-    public:
-        CPMSD_INDEX();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_INDEX; }
     };
 
     class CPMSD_LINE : public CPMSyntaxDetector
@@ -170,16 +170,14 @@ namespace CPM
     inline bool CharIsDigit(char c) { return c >= '0' && c <= '9'; }
     inline bool CharIsHexDigit(char c) { return CharIsDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
     inline bool CharIsWhiteSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
-    inline bool CharIsDelimiter(char c) { 
+    inline bool CharIsDelimiter(char c) {
         return c == CPM_LINE_END ||
                c == CPM_OPERAND_DELIM ||
                c == CPM_SUBSCRIPT_DELIM ||
                c == CPM_BLOCK_OPEN ||
                c == CPM_BLOCK_CLOSE ||
-               c == CPM_INDEX_OPEN ||
-               c == CPM_INDEX_CLOSE ||
                c == CPM_STR_DELIM ||
-               c == '\''; }
+               c == CPM_CHAR_DELIM; }
     string CPMSyntaxTreeNodeToString(CPMSyntaxTreeNode* node);
     string CPMSyntaxTreeNodeToStringRecoursive(CPMSyntaxTreeNode* node, string indent = "");
     string CPMSTRContent(CPMSyntaxTreeNode* node);

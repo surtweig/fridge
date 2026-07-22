@@ -11,15 +11,191 @@ namespace CPM
     CPMDataSymbol::CPMDataSymbol()
     {
         name = "?";
-        type = CPM_DATATYPE_UNDEFINED;
-        count = 1;
-        isPtr = false;
+        typeExpr.kind = CPM_TYPE_VOID;
+        typeExpr.base = CPM_DATATYPE_UNDEFINED;
         offset = 0;
         owner = nullptr;
     }
 
     CPMDataSymbol::~CPMDataSymbol()
     {
+    }
+
+    CPMDataType CPMDataSymbol::legacyType() const
+    {
+        // The "element type" view: for an array, the child's base; for a
+        // pointer, the child's base; for a base, the base itself. Only valid
+        // for the legacy-supported flat shapes.
+        switch (typeExpr.kind)
+        {
+        case CPM_TYPE_BASE:  return typeExpr.base;
+        case CPM_TYPE_PTR:   return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
+        case CPM_TYPE_ARRAY: return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
+        case CPM_TYPE_VOID:  return CPM_DATATYPE_UNDEFINED;
+        }
+        return CPM_DATATYPE_UNDEFINED;
+    }
+
+    bool CPMDataSymbol::legacyIsPtr() const
+    {
+        return typeExpr.kind == CPM_TYPE_PTR;
+    }
+
+    int CPMDataSymbol::legacyCount() const
+    {
+        return typeExpr.kind == CPM_TYPE_ARRAY ? typeExpr.arrayCount : 1;
+    }
+
+    void CPMDataSymbol::setLegacyType(CPMDataType base, bool isPtr, int count)
+    {
+        typeExpr.child.reset();
+        typeExpr.arrayCount = 0;
+        if (isPtr)
+        {
+            typeExpr.kind = CPM_TYPE_PTR;
+            typeExpr.child.reset(new CPMType());
+            typeExpr.child->kind = CPM_TYPE_BASE;
+            typeExpr.child->base = base;
+        }
+        else if (count > 1)
+        {
+            typeExpr.kind = CPM_TYPE_ARRAY;
+            typeExpr.arrayCount = count;
+            typeExpr.child.reset(new CPMType());
+            typeExpr.child->kind = CPM_TYPE_BASE;
+            typeExpr.child->base = base;
+        }
+        else
+        {
+            typeExpr.kind = CPM_TYPE_BASE;
+            typeExpr.base = base;
+        }
+    }
+
+    CPMDataType CPMArgumentSignature::legacyType() const
+    {
+        switch (typeExpr.kind)
+        {
+        case CPM_TYPE_BASE:  return typeExpr.base;
+        case CPM_TYPE_PTR:   return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
+        case CPM_TYPE_ARRAY: return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
+        case CPM_TYPE_VOID:  return CPM_DATATYPE_UNDEFINED;
+        }
+        return CPM_DATATYPE_UNDEFINED;
+    }
+
+    bool CPMArgumentSignature::legacyIsPtr() const
+    {
+        return typeExpr.kind == CPM_TYPE_PTR;
+    }
+
+    int CPMArgumentSignature::legacyCount() const
+    {
+        return typeExpr.kind == CPM_TYPE_ARRAY ? typeExpr.arrayCount : 1;
+    }
+
+    void CPMArgumentSignature::setLegacyType(CPMDataType base, bool isPtr, int count)
+    {
+        typeExpr.child.reset();
+        typeExpr.arrayCount = 0;
+        if (isPtr)
+        {
+            typeExpr.kind = CPM_TYPE_PTR;
+            typeExpr.child.reset(new CPMType());
+            typeExpr.child->kind = CPM_TYPE_BASE;
+            typeExpr.child->base = base;
+        }
+        else if (count > 1)
+        {
+            typeExpr.kind = CPM_TYPE_ARRAY;
+            typeExpr.arrayCount = count;
+            typeExpr.child.reset(new CPMType());
+            typeExpr.child->kind = CPM_TYPE_BASE;
+            typeExpr.child->base = base;
+        }
+        else
+        {
+            typeExpr.kind = CPM_TYPE_BASE;
+            typeExpr.base = base;
+        }
+    }
+
+    // ---- CPMType ----
+
+    CPMType::CPMType()
+        : kind(CPM_TYPE_VOID)
+        , base(CPM_DATATYPE_VOID)
+        , arrayCount(0)
+        , child()
+    {
+    }
+
+    CPMType::~CPMType()
+    {
+    }
+
+    CPMType::CPMType(const CPMType& other)
+        : kind(other.kind)
+        , base(other.base)
+        , arrayCount(other.arrayCount)
+        , child(other.child ? new CPMType(*other.child) : nullptr)
+    {
+    }
+
+    CPMType& CPMType::operator=(const CPMType& other)
+    {
+        if (this != &other)
+        {
+            kind = other.kind;
+            base = other.base;
+            arrayCount = other.arrayCount;
+            child.reset(other.child ? new CPMType(*other.child) : nullptr);
+        }
+        return *this;
+    }
+
+    bool CPMType::operator==(const CPMType& o) const
+    {
+        if (kind != o.kind)
+            return false;
+        switch (kind)
+        {
+        case CPM_TYPE_VOID:
+            return true;
+        case CPM_TYPE_BASE:
+            return base == o.base;
+        case CPM_TYPE_PTR:
+            return (child && o.child) ? *child == *o.child : !child && !o.child;
+        case CPM_TYPE_ARRAY:
+            if (arrayCount != o.arrayCount)
+                return false;
+            return (child && o.child) ? *child == *o.child : !child && !o.child;
+        }
+        return false;
+    }
+
+    bool CPMType::operator<(const CPMType& o) const
+    {
+        if (kind != o.kind)
+            return kind < o.kind;
+        switch (kind)
+        {
+        case CPM_TYPE_VOID:
+            return false;
+        case CPM_TYPE_BASE:
+            return base < o.base;
+        case CPM_TYPE_PTR:
+            if (!child) return o.child != nullptr;
+            if (!o.child) return false;
+            return *child < *o.child;
+        case CPM_TYPE_ARRAY:
+            if (arrayCount != o.arrayCount)
+                return arrayCount < o.arrayCount;
+            if (!child) return o.child != nullptr;
+            if (!o.child) return false;
+            return *child < *o.child;
+        }
+        return false;
     }
 
     /*
@@ -61,7 +237,7 @@ namespace CPM
             {
                 CPMStructSymbol* ss = (CPMStructSymbol*)data[i];
                 for (auto fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
-                    size += fi->second.serialize(output); 
+                    size += fi->second.serialize(output);
             }
             return size;
         }
@@ -69,7 +245,7 @@ namespace CPM
     */
 
     CPMStaticSymbol::CPMStaticSymbol()
-    {        
+    {
         isconst = false;
         importSource = -1;
         staticData = nullptr;
@@ -89,7 +265,7 @@ namespace CPM
     {
         if (other.name != name)
             return other.name < name;
-        
+
         int n = arguments.size();
         int n2 = other.arguments.size();
         if (n2 != n)
@@ -97,12 +273,25 @@ namespace CPM
 
         for (int i = 0; i < n; ++i)
         {
-            if (arguments[i].type != other.arguments[i].type)
-                return other.arguments[i].type < arguments[i].type;
-            else if (arguments[i].isPtr != other.arguments[i].isPtr)
-                return arguments[i].isPtr;
+            // Compare the full recursive type structure. The new operator<
+            // on CPMType gives a total ordering that distinguishes every
+            // distinct type-expr shape, so overloads that differ by
+            // pointer-ness, array-ness, or nested shape all resolve correctly.
+            if (!(arguments[i].typeExpr == other.arguments[i].typeExpr))
+                return other.arguments[i].typeExpr < arguments[i].typeExpr;
         }
         return false;
+    }
+
+    bool IsIntDataType(CPMDataType dtype)
+    {
+        return dtype == CPM_DATATYPE_UINT8 || dtype == CPM_DATATYPE_UINT16 || dtype == CPM_DATATYPE_INT8 || dtype == CPM_DATATYPE_INT16;
+    }
+
+    // 1-2 byte primitive type
+    bool IsImmediateDataType(CPMDataType dtype)
+    {
+        return IsIntDataType(dtype) || dtype == CPM_DATATYPE_BOOL || dtype == CPM_DATATYPE_CHAR;
     }
 
     CPMCompiler::CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders) : compilerLog(), asmDebugOutput()
@@ -169,7 +358,7 @@ namespace CPM
             compilerLog.Add(LOG_MESSAGE, "Source file: '")->Add(filename)->Add("'.");
             //sources.emplace(filename, CPMSourceFile());
             sources[filename].name = filename;
-            isrc = sources.find(filename);            
+            isrc = sources.find(filename);
             isrc->second.name = filename;
             isrc->second.parser = new CPMParser(rootFolder, filename, CompilerLog());
             if (isrc->second.parser->NoErrors())
@@ -263,9 +452,9 @@ namespace CPM
         ns->statics[name].field.name = name;
         CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
         ss->isconst = isConst;
-        ss->field.type = type;
+        ss->field.typeExpr.kind = CPM_TYPE_BASE;
+        ss->field.typeExpr.base = type;
         ss->field.owner = ns;
-        ss->field.count = 1;
         if (!isConst)
         {
             if (type == CPM_DATATYPE_INT16 || type == CPM_DATATYPE_UINT16)
@@ -274,7 +463,9 @@ namespace CPM
                 ss->staticData = ns->staticAllocate((FRIDGE_WORD)data);
             else
             {
-                CPM_ASSERT_MESSAGE(false, "Invalid data type '" + GetTypeName(type) + "' for numeric static '" + name + "'.");
+                //CPM_ASSERT_MESSAGE(false, "Invalid data type '" + GetTypeName(type) + "' for numeric static '" + name + "'.");
+                compilerLog.Add(LOG_ERROR, "Invalid data type '")->Add(GetTypeName(type))->Add("' for numeric static '")->Add(name)->Add("'.");
+                Error();
             }
             if (ss->staticData == nullptr)
             {
@@ -295,10 +486,10 @@ namespace CPM
         ns->statics[name].field.name = name;
         CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
         ss->isconst = isConst;
-        ss->field.type = CPM_DATATYPE_STRING;
+        ss->field.typeExpr.kind = CPM_TYPE_BASE;
+        ss->field.typeExpr.base = CPM_DATATYPE_STRING;
         ss->field.owner = ns;
         ss->staticData = ns->staticAllocate(data);
-        ss->field.count = 1;
         if (ss->staticData == nullptr)
         {
             compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
@@ -312,12 +503,34 @@ namespace CPM
         ns->statics[name].field.name = name;
         CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
         ss->isconst = isConst;
-        ss->field.isPtr = isPtr;
-        ss->field.type = type;
+        // Reconstruct the canonical CPMType from the legacy flat triple. This
+        // helper exists because callers (readStatics/readStructFields/etc.)
+        // are still on the old API; once they are migrated to parseTypeExpr
+        // (step 4 follow-up) this addStatic overload can disappear in favour
+        // of one that takes CPMType directly.
+        if (isPtr)
+        {
+            ss->field.typeExpr.kind = CPM_TYPE_PTR;
+            ss->field.typeExpr.child.reset(new CPMType());
+            ss->field.typeExpr.child->kind = CPM_TYPE_BASE;
+            ss->field.typeExpr.child->base = type;
+        }
+        else if (count > 1)
+        {
+            ss->field.typeExpr.kind = CPM_TYPE_ARRAY;
+            ss->field.typeExpr.arrayCount = (int)count;
+            ss->field.typeExpr.child.reset(new CPMType());
+            ss->field.typeExpr.child->kind = CPM_TYPE_BASE;
+            ss->field.typeExpr.child->base = type;
+        }
+        else
+        {
+            ss->field.typeExpr.kind = CPM_TYPE_BASE;
+            ss->field.typeExpr.base = type;
+        }
         ss->field.owner = ns;
-        ss->field.count = count;
         ss->field.offset = 0;
-        if (ss->isconst && IsImmediateDataType(ss->field.type))
+        if (ss->isconst && IsImmediateDataType(ss->field.typeExpr.base))
         {
             ss->staticData = nullptr;
             ss->immediateData = 0;
@@ -446,26 +659,26 @@ namespace CPM
                     string typeName = typeNode->text;
                     if (typeName[0] == PtrPrefix)
                     {
-                        ss->field.isPtr = true;
+                        ss->field.legacyIsPtr() = true;
                         typeName = typeName.substr(1, typeName.size() - 1);
                     }
                     */
-                    //ss->field.type = resolveDataTypeName(typeNode, ss->field.isPtr, &sources[node->sourceFileName], owner);
+                    //ss->field.legacyType() = resolveDataTypeName(typeNode, ss->field.legacyIsPtr(), &sources[node->sourceFileName], owner);
                     //ss->field.owner = owner;
 
-                    if (ss->field.type == CPM_DATATYPE_UNDEFINED)
+                    if (ss->field.legacyType() == CPM_DATATYPE_UNDEFINED)
                     {
                         compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
                         noErrors = false;
                         return;
-                    } 
-                    else if (ss->field.type == CPM_DATATYPE_AMBIGUOUS)
+                    }
+                    else if (ss->field.legacyType() == CPM_DATATYPE_AMBIGUOUS)
                     {
                         compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
                         noErrors = false;
                         return;
                     }
-                    else if (ss->field.type == CPM_DATATYPE_VOID)
+                    else if (ss->field.legacyType() == CPM_DATATYPE_VOID)
                     {
                         compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
                         noErrors = false;
@@ -482,9 +695,9 @@ namespace CPM
                     if (valueNode)
                     {
                         // Single basic-type constants use immediate data to store their values
-                        if (!ss->isconst || ss->field.count > 1 || !IsImmediateDataType(ss->field.type))
-                            ss->staticData = ss->field.owner->staticAllocate(nullptr, sizeOfType(ss->field.type), ss->field.count);
-                        
+                        if (!ss->isconst || ss->field.legacyCount() > 1 || !IsImmediateDataType(ss->field.legacyType()))
+                            ss->staticData = ss->field.owner->staticAllocate(nullptr, sizeOfType(ss->field.legacyType()), ss->field.legacyCount());
+
                         if (ss->staticData)
                             parseLiteralValue(ss, ss->field, valueNode);
                         else
@@ -534,7 +747,7 @@ namespace CPM
         }
         for (map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.begin(); ist != structTypes.end(); ++ist)
         {
-            computeStructDataSize(ist->second, unordered_set<CPMDataType>());
+            computeStructDataSize(ist->second);
         }
     }
 
@@ -632,40 +845,33 @@ namespace CPM
                     sfield->owner = structSymbol->owner;
                     string typeName = typeNode->text;
 
-                    /*
-                    if (typeName[0] == PtrPrefix)
-                    {
-                        sfield->isPtr = true;
-                        typeName = typeName.substr(1, typeName.size() - 1);
-                    }
-                    */
-                    sfield->type = resolveDataTypeName(typeNode, sfield->isPtr, &sources[node->sourceFileName], structSymbol->owner);
+                    bool isPtr = false;
+                    CPMDataType fieldType = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], structSymbol->owner);
 
-                    if (sfield->type == CPM_DATATYPE_UNDEFINED)
+                    if (fieldType == CPM_DATATYPE_UNDEFINED)
                     {
                         compilerLog.Add(LOG_ERROR, "Undefined type '" + typeName + "'.", node->sourceFileName, node->lineNumber);
                         noErrors = false;
                         return;
                     }
-                    if (sfield->type == CPM_DATATYPE_AMBIGUOUS)
+                    if (fieldType == CPM_DATATYPE_AMBIGUOUS)
                     {
                         compilerLog.Add(LOG_ERROR, "Type reference '" + typeName + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->lineNumber);
                         noErrors = false;
                         return;
                     }
-                    if (sfield->type == CPM_DATATYPE_VOID)
+                    if (fieldType == CPM_DATATYPE_VOID)
                     {
                         compilerLog.Add(LOG_ERROR, "Void type is not allowed for structures fields.", node->sourceFileName, node->lineNumber);
                         noErrors = false;
                         return;
                     }
 
+                    int count = 1;
                     if (countNode)
-                    {
-                        sfield->count = parseArraySizeDecl(countNode, structSymbol->owner);
-                    }
-                    else
-                        sfield->count = 1;
+                        count = parseArraySizeDecl(countNode, structSymbol->owner);
+
+                    sfield->setLegacyType(fieldType, isPtr, count);
 
                     if (sizeOfData(sfield) > DataMaxSize)
                     {
@@ -718,7 +924,7 @@ namespace CPM
             {
                 if (sizeConst->isconst)
                 {
-                    if (IsIntDataType(sizeConst->field.type) && sizeConst->field.count == 1)
+                    if (IsIntDataType(sizeConst->field.legacyType()) && sizeConst->field.legacyCount() == 1)
                     {
                         int size = (int)sizeConst->immediateData;
                         if (size > 0)
@@ -759,6 +965,12 @@ namespace CPM
         }
     }
 
+    void CPMCompiler::computeStructDataSize(CPMStructSymbol* structSymbol)
+    {
+        unordered_set<CPMDataType> visitedStructs;
+        computeStructDataSize(structSymbol, visitedStructs);
+    }
+
     void CPMCompiler::computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs)
     {
         structSymbol->size = -1;
@@ -767,16 +979,16 @@ namespace CPM
         {
             int fieldSize = 0;
 
-            CPMDataType fieldType = ifield->second.type;
-            if (!ifield->second.isPtr && (fieldType == CPM_DATATYPE_BOOL || fieldType == CPM_DATATYPE_CHAR || fieldType == CPM_DATATYPE_INT8 || fieldType == CPM_DATATYPE_UINT8))
+            CPMDataType fieldType = ifield->second.legacyType();
+            if (!ifield->second.legacyIsPtr() && (fieldType == CPM_DATATYPE_BOOL || fieldType == CPM_DATATYPE_CHAR || fieldType == CPM_DATATYPE_INT8 || fieldType == CPM_DATATYPE_UINT8))
                 fieldSize = 1;
-            else if (ifield->second.isPtr || fieldType == CPM_DATATYPE_STRING || fieldType == CPM_DATATYPE_INT16 || fieldType == CPM_DATATYPE_UINT16)
+            else if (ifield->second.legacyIsPtr() || fieldType == CPM_DATATYPE_STRING || fieldType == CPM_DATATYPE_INT16 || fieldType == CPM_DATATYPE_UINT16)
                 fieldSize = 2;
             else if (fieldType >= CPM_DATATYPE_USER)
             {
                 unordered_set<CPMDataType>::iterator visitedStruct = visitedStructs.find(fieldType);
                 if (visitedStruct != visitedStructs.end())
-                {                    
+                {
                     compilerLog.Add(LOG_ERROR, "Circular struct declaration in '" + structSymbol->name + "." + ifield->first + "'.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
                     noErrors = false;
                     return;
@@ -790,7 +1002,7 @@ namespace CPM
                 fieldSize = structTypes[fieldType]->size;
             }
 
-            fieldSize *= ifield->second.count;
+            fieldSize *= ifield->second.legacyCount();
 
             if (structSymbol->isUnion)
             {
@@ -835,7 +1047,7 @@ namespace CPM
             if ((typeNode->type == CPM_ID || typeNode->type == CPM_REF) && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
             {
                 string typeName = typeNode->text;
-                
+
                 bool isPtr = false;
                 /*
                 if (typeName[0] == PtrPrefix)
@@ -867,9 +1079,8 @@ namespace CPM
                     for (int i = 1; i < argsNode->children.size() - 1; ++i)
                     {
                         CPMArgumentSignature argSign;
-                        //argSign.isRef = false;
-                        argSign.isPtr = false;
-                        argSign.count = 1;
+                        bool argIsPtr = false;
+                        int argCount = 1;
                         if (argNode->children.size() < 2 || argNode->children.size() > 5)
                         {
                             compilerLog.Add(LOG_ERROR, "Invalid function argument declaration syntax.", argNode->sourceFileName, argNode->lineNumber);
@@ -878,21 +1089,14 @@ namespace CPM
                         }
 
                         string argType = argNode->children[0]->text;
-                        /*
-                        if (argType[0] == PtrPrefix)
-                        {
-                            argSign.isPtr = true;
-                            argType = argType.substr(1, argType.size() - 1);
-                        }
-                        */
-                        argSign.type = resolveDataTypeName(argNode->children[0], argSign.isPtr, &sources[node->sourceFileName], owner);
-                        if (argSign.type == CPM_DATATYPE_UNDEFINED)
+                        CPMDataType argBaseType = resolveDataTypeName(argNode->children[0], argIsPtr, &sources[node->sourceFileName], owner);
+                        if (argBaseType == CPM_DATATYPE_UNDEFINED)
                         {
                             compilerLog.Add(LOG_ERROR, "Undefined type '" + argType + "'.", argNode->sourceFileName, argNode->lineNumber);
                             noErrors = false;
                             return;
                         }
-                        if (argSign.type == CPM_DATATYPE_AMBIGUOUS)
+                        if (argBaseType == CPM_DATATYPE_AMBIGUOUS)
                         {
                             compilerLog.Add(LOG_ERROR, "Type reference '" + argType + "' is ambiguous in this context. See the message above.", argNode->sourceFileName, argNode->lineNumber);
                             noErrors = false;
@@ -909,7 +1113,7 @@ namespace CPM
                                 if (argNode->children[2]->text == R_ARRAY)
                                 {
                                     countNode = argNode->children[3];
-                                    argSign.count = parseArraySizeDecl(countNode, owner);
+                                    argCount = parseArraySizeDecl(countNode, owner);
                                 }
                                 else
                                 {
@@ -923,7 +1127,7 @@ namespace CPM
                             {
                                 argSign.isRef = true;
                             }
-                            
+
                             else*/ if (argNode->children.size() != 4)
                             {
                                 compilerLog.Add(LOG_ERROR, "Invalid symbol attribute '" + argNode->children[argNode->children.size() - 1]->text + "' for argument " + argSign.name + " .", argNode->sourceFileName, argNode->lineNumber);
@@ -932,6 +1136,7 @@ namespace CPM
                             }
                         }
 
+                        argSign.setLegacyType(argBaseType, argIsPtr, argCount);
                         signature.arguments.push_back(argSign);
 
                         if (argsNode->type == CPM_EXPR)
@@ -946,8 +1151,22 @@ namespace CPM
                     owner->functions[signature].signature = signature;
                     CPMFunctionSymbol* func = &owner->functions[signature];
                     func->owner = owner;
-                    func->type = type;
-                    func->isPtr = isPtr;
+                    // Build returnType from the legacy flat triple (type/isPtr).
+                    // For a function, "array of T" return is invalid (an array
+                    // return type makes no sense without an enclosing struct),
+                    // so we only need the BASE/PTR distinction here.
+                    if (isPtr)
+                    {
+                        func->returnType.kind = CPM_TYPE_PTR;
+                        func->returnType.child.reset(new CPMType());
+                        func->returnType.child->kind = CPM_TYPE_BASE;
+                        func->returnType.child->base = type;
+                    }
+                    else
+                    {
+                        func->returnType.kind = CPM_TYPE_BASE;
+                        func->returnType.base = type;
+                    }
                     func->compiler = this;
                     func->bodyNode = bodyNode;
                     func->arguments.resize(signature.arguments.size());
@@ -957,12 +1176,10 @@ namespace CPM
                         func->arguments[i].name = signature.arguments[i].name;
                         compilerLog.Add(" " + func->arguments[i].name + ":");
                         func->arguments[i].owner = owner;
-                        func->arguments[i].count = signature.arguments[i].count;
-                        compilerLog.Add("[" + to_string(func->arguments[i].count) + "]");
-                        func->arguments[i].type = signature.arguments[i].type;
-                        compilerLog.Add(to_string(func->arguments[i].type));
-                        func->arguments[i].isPtr = signature.arguments[i].isPtr;
-                        if (signature.arguments[i].isPtr)
+                        func->arguments[i].typeExpr = signature.arguments[i].typeExpr;
+                        compilerLog.Add("[" + to_string(func->arguments[i].legacyCount()) + "]");
+                        compilerLog.Add(to_string(func->arguments[i].legacyType()));
+                        if (func->arguments[i].legacyIsPtr())
                             compilerLog.Add(PtrPrefix);
                         //if (signature.arguments[i].isRef)
                         //    compilerLog.Add("&");
@@ -1069,10 +1286,15 @@ namespace CPM
 
     int CPMCompiler::sizeOfData(CPMDataSymbol* dataSymbol)
     {
-        if (dataSymbol->isPtr)
-            return 2 * dataSymbol->count;
-        else
-            return sizeOfType(dataSymbol->type)*dataSymbol->count;
+        // Prefer the recursive sizeOfTypeExpr when the shape is one it handles
+        // natively (PTR / ARRAY of BASE); fall back to the legacy flat formula
+        // for the BASE case to keep sizeOfType(CPMDataType) as the primitive
+        // size oracle.
+        if (dataSymbol->typeExpr.isArray())
+            return dataSymbol->typeExpr.arrayCount * sizeOfTypeExpr(*dataSymbol->typeExpr.child);
+        if (dataSymbol->typeExpr.isPtr())
+            return 2;
+        return sizeOfType(dataSymbol->typeExpr.base);
     }
 
     void CPMCompiler::buildStructLayout(CPMStructSymbol* structSymbol)
@@ -1131,6 +1353,221 @@ namespace CPM
             }
         }
         return "<undefined>";
+    }
+
+    // Internal helper: try to match `typeName` (which may include a
+    // namespace-qualified `NS.Name` form) against a primitive or a
+    // user-defined struct type, returning the matching CPMDataType and
+    // setting `foundNS` to the owning namespace on success.
+    bool CPMCompiler::resolveBaseTypeName(const string& typeName, CPMSourceFile* sourceFile,
+                                    CPMNamespace* currentNS,
+                                    CPMDataType& outBase, CPMNamespace*& outOwnerNS)
+    {
+        outOwnerNS = nullptr;
+
+        // Primitives. `string` stays a special primitive per spec §3 footnote.
+        if      (typeName == "void")    { outBase = CPM_DATATYPE_VOID;    return true; }
+        else if (typeName == "bool")    { outBase = CPM_DATATYPE_BOOL;    return true; }
+        else if (typeName == "char")    { outBase = CPM_DATATYPE_CHAR;    return true; }
+        else if (typeName == "uint8")   { outBase = CPM_DATATYPE_UINT8;   return true; }
+        else if (typeName == "uint16")  { outBase = CPM_DATATYPE_UINT16;  return true; }
+        else if (typeName == "int8")    { outBase = CPM_DATATYPE_INT8;    return true; }
+        else if (typeName == "int16")   { outBase = CPM_DATATYPE_INT16;   return true; }
+        else if (typeName == "string")  { outBase = CPM_DATATYPE_STRING;  return true; }
+
+        // Struct lookup: try the current namespace, then using-list, then global.
+        // Caller pre-split any NS.Name into namespace + local name; for the
+        // plain unqualified form here, we walk the standard scope order.
+
+        // Single-segment name: walk scope chain.
+        if (currentNS)
+        {
+            map<string, CPMDataType>::iterator idt = currentNS->datatypes.find(typeName);
+            if (idt != currentNS->datatypes.end())
+            {
+                outBase = idt->second;
+                outOwnerNS = currentNS;
+                return true;
+            }
+        }
+        // Global namespace:
+        {
+            CPMNamespace* gns = namespaces[GlobalNamespace];
+            map<string, CPMDataType>::iterator idt = gns->datatypes.find(typeName);
+            if (idt != gns->datatypes.end())
+            {
+                outBase = idt->second;
+                outOwnerNS = gns;
+                return true;
+            }
+        }
+        // Using-list:
+        for (size_t i = 0; i < sourceFile->usingNamespaces.size(); ++i)
+        {
+            const string& ns = sourceFile->usingNamespaces[i];
+            map<string, CPMNamespace*>::iterator ins = namespaces.find(ns);
+            if (ins == namespaces.end()) continue;
+            map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(typeName);
+            if (idt != ins->second->datatypes.end())
+            {
+                outBase = idt->second;
+                outOwnerNS = ins->second;
+                return true;
+            }
+        }
+        // Ambiguity check across using-list + global: multiple namespaces'
+        // datatypes equal? Today's behaviour (mirrors the old resolveDataTypeName)
+        // is "last match wins"; the spec wants ambiguity to be an error, but
+        // that tightening is deferred to a later step to keep this commit
+        // purely additive.
+        return false;
+    }
+
+    bool CPMCompiler::parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    {
+        if (!node) return false;
+
+        // Case 1: (T ptr) or (T array n) — a CPM_EXPR.
+        if (node->type == CPM_EXPR)
+        {
+            // At minimum: inner-type-expr, modifier keyword. For "array" we
+            // also need a count.
+            if (node->children.size() < 2)
+            {
+                compilerLog.Add(LOG_ERROR, "Malformed type expression.", node->sourceFileName, node->lineNumber);
+                return false;
+            }
+
+            CPMSyntaxTreeNode* innerNode = node->children[0];
+            CPMSyntaxTreeNode* modifierNode = node->children[1];
+            if (modifierNode->type != CPM_ID)
+            {
+                compilerLog.Add(LOG_ERROR, "Expected 'ptr' or 'array' in type expression.", modifierNode->sourceFileName, modifierNode->lineNumber);
+                return false;
+            }
+
+            const string& modifier = modifierNode->text;
+
+            if (modifier == R_PTR)
+            {
+                CPMType inner;
+                if (!parseTypeExpr(innerNode, inner, sourceFile, currentNS))
+                    return false;
+                // `void ptr` is illegal — pointers to void don't make sense
+                // on an 8080 target (a pointer is always a 16-bit address to
+                // *something* typed).
+                if (inner.isVoid())
+                {
+                    compilerLog.Add(LOG_ERROR, "Pointer to void is not allowed.", node->sourceFileName, node->lineNumber);
+                    return false;
+                }
+                out.kind = CPM_TYPE_PTR;
+                out.child.reset(new CPMType(std::move(inner)));
+                return true;
+            }
+
+            if (modifier == R_ARRAY)
+            {
+                if (node->children.size() < 3)
+                {
+                    compilerLog.Add(LOG_ERROR, "Array type expression requires a count, e.g. `(uint8 array 10)`.", node->sourceFileName, node->lineNumber);
+                    return false;
+                }
+                CPMSyntaxTreeNode* countNode = node->children[2];
+                int count = parseArraySizeDecl(countNode, currentNS);
+                if (count <= 0)
+                {
+                    // parseArraySizeDecl already logged.
+                    return false;
+                }
+                CPMType inner;
+                if (!parseTypeExpr(innerNode, inner, sourceFile, currentNS))
+                    return false;
+                // `void array n` is also nonsensical.
+                if (inner.isVoid())
+                {
+                    compilerLog.Add(LOG_ERROR, "Array of void is not allowed.", node->sourceFileName, node->lineNumber);
+                    return false;
+                }
+                out.kind = CPM_TYPE_ARRAY;
+                out.arrayCount = count;
+                out.base = CPM_DATATYPE_VOID;
+                out.child.reset(new CPMType(std::move(inner)));
+                return true;
+            }
+
+            compilerLog.Add(LOG_ERROR, "Unknown type modifier '" + modifier + "'. Expected 'ptr' or 'array'.", modifierNode->sourceFileName, modifierNode->lineNumber);
+            return false;
+        }
+
+        // Case 2: a bare CPM_ID naming a primitive or unqualified struct.
+        if (node->type == CPM_ID)
+        {
+            CPMDataType base;
+            CPMNamespace* ownerNS = nullptr;
+            if (!resolveBaseTypeName(node->text, sourceFile, currentNS, base, ownerNS))
+            {
+                compilerLog.Add(LOG_ERROR, "Unknown type '" + node->text + "'.", node->sourceFileName, node->lineNumber);
+                return false;
+            }
+            out.kind = CPM_TYPE_BASE;
+            out.base = base;
+            return true;
+        }
+
+        // Case 3: a CPM_REF joining `NS.Name` — qualified struct access. Per
+        // the parser's CPMSD_REF detector, a 2-child CPM_REF has children
+        // [nsID, localID].
+        if (node->type == CPM_REF && node->children.size() == 2)
+        {
+            const string& nsName = node->children[0]->text;
+            const string& localName = node->children[1]->text;
+
+            // Primitives are never namespace-qualified.
+            if (localName == "void" || localName == "bool" || localName == "char" ||
+                localName == "uint8" || localName == "uint16" ||
+                localName == "int8" || localName == "int16" || localName == "string")
+            {
+                compilerLog.Add(LOG_ERROR, "Primitive type '" + localName + "' cannot be namespace-qualified.", node->sourceFileName, node->lineNumber);
+                return false;
+            }
+
+            map<string, CPMNamespace*>::iterator ins = namespaces.find(nsName);
+            if (ins == namespaces.end())
+            {
+                compilerLog.Add(LOG_ERROR, "Unknown namespace '" + nsName + "' in type reference.", node->sourceFileName, node->lineNumber);
+                return false;
+            }
+            map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(localName);
+            if (idt == ins->second->datatypes.end())
+            {
+                compilerLog.Add(LOG_ERROR, "Type '" + localName + "' not found in namespace '" + nsName + "'.", node->sourceFileName, node->lineNumber);
+                return false;
+            }
+            out.kind = CPM_TYPE_BASE;
+            out.base = idt->second;
+            return true;
+        }
+
+        compilerLog.Add(LOG_ERROR, "Unexpected node type in type expression.", node->sourceFileName, node->lineNumber);
+        return false;
+    }
+
+    int CPMCompiler::sizeOfTypeExpr(const CPMType& type, CPMNamespace* currentNS)
+    {
+        switch (type.kind)
+        {
+        case CPM_TYPE_VOID:
+            return 0;
+        case CPM_TYPE_BASE:
+            return sizeOfType(type.base);
+        case CPM_TYPE_PTR:
+            return 2; // Fridge pointer width is 16-bit.
+        case CPM_TYPE_ARRAY:
+            if (!type.child) return 0;
+            return type.arrayCount * sizeOfTypeExpr(*type.child, currentNS);
+        }
+        return 0;
     }
 
     CPMDataType CPMCompiler::resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
@@ -1240,7 +1677,7 @@ namespace CPM
             {
                 for (; nameCounter < parsedName.size(); ++nameCounter)
                 {
-                    if (result->field.type >= CPM_DATATYPE_USER)
+                    if (result->field.legacyType() >= CPM_DATATYPE_USER)
                     {
                         result->field
                     }
@@ -1339,7 +1776,7 @@ namespace CPM
 
         return true;
     }
-    
+
     int CPMCompiler::staticEvalNum(vector<CPMUnfoldedExpressionNode> &unfolded, bool& ok, CPMNamespace* currentNS, bool silent)
     {
         ok = true;
@@ -1357,7 +1794,7 @@ namespace CPM
                     {
                         if (sym->isconst)
                         {
-                            if (IsIntDataType(sym->field.type) && sym->field.count == 1)
+                            if (IsIntDataType(sym->field.legacyType()) && sym->field.legacyCount() == 1)
                             {
                                 evalStack.push((int)sym->immediateData);
                             }
@@ -1509,7 +1946,7 @@ namespace CPM
     {
         if (valueNode->type == CPM_BLOCK)
         {
-            CPMStructSymbol* structInstance = structTypes[field.type];//new CPMStructSymbol(*structTypes[field.type]);//(FRIDGE_WORD*)malloc(structsymbol->size);           
+            CPMStructSymbol* structInstance = structTypes[field.legacyType()];//new CPMStructSymbol(*structTypes[field.legacyType()]);//(FRIDGE_WORD*)malloc(structsymbol->size);
             //field.data[index] = (FRIDGE_WORD*)structInstance;
 
             for (int i = 1; i < valueNode->children.size() - 1; ++i)
@@ -1524,7 +1961,7 @@ namespace CPM
                     if (fi != structInstance->fields.end())
                     {
                         CPMDataSymbol sfield = fi->second;
-                        sfield.offset += field.offset + index * sizeOfType(field.type);
+                        sfield.offset += field.offset + index * sizeOfType(field.legacyType());
                         parseLiteralValue(symbol, sfield, fieldValue);
                     }
                     else
@@ -1553,15 +1990,15 @@ namespace CPM
 
     bool CPMCompiler::parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode)
     {
-        if (field.count > 1)
+        if (field.legacyCount() > 1)
         {
-            if (valueNode->type != CPM_BLOCK && !(field.type == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR))
+            if (valueNode->type != CPM_BLOCK && !(field.legacyType() == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR))
             {
                 compilerLog.Add(LOG_ERROR, "Invalid literal array syntax.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
-            if (valueNode->children.size() != field.count + 2)
+            if (valueNode->children.size() != field.legacyCount() + 2)
             {
                 compilerLog.Add(LOG_ERROR, "Declared items count does not match array size.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
@@ -1572,19 +2009,19 @@ namespace CPM
         //symbol->data.resize(symbol->count);
 
         CPMSyntaxTreeNode* itemNode = valueNode;
-        for (int index = 0; index < field.count; ++index)
+        for (int index = 0; index < field.legacyCount(); ++index)
         {
-            if (field.count > 1)
+            if (field.legacyCount() > 1)
                 itemNode = valueNode->children[index + 1];
 
-            if (IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
+            if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
             {
                 if (!parseLiteralNumber(symbol, field, itemNode, index))
                     return false;
             }
             else
             {
-                if (field.count > 1 && valueNode->type == CPM_BLOCK) {
+                if (field.legacyCount() > 1 && valueNode->type == CPM_BLOCK) {
                     if (itemNode->children.size() == 1)
                         itemNode = itemNode->children[0];
                     else
@@ -1595,17 +2032,17 @@ namespace CPM
                     }
                 }
 
-                if (field.type == CPM_DATATYPE_STRING)
+                if (field.legacyType() == CPM_DATATYPE_STRING)
                 {
                     if (!parseAndAllocateLiteralString(symbol, field, itemNode, index))
                         return false;
                 }
-                else if (field.type == CPM_DATATYPE_CHAR)
+                else if (field.legacyType() == CPM_DATATYPE_CHAR)
                 {
                     if (!parseLiteralChar(symbol, field, itemNode, index))
                         return false;
                 }
-                else if (field.type >= CPM_DATATYPE_USER)
+                else if (field.legacyType() >= CPM_DATATYPE_USER)
                 {
                     if (!parseLiteralStruct(symbol, field, itemNode, index))
                         return false;
@@ -1619,7 +2056,7 @@ namespace CPM
     bool CPMCompiler::parseLiteralNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index, bool autoType)
     {
         if (!autoType)
-            CPM_ASSERT(IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
+            CPM_ASSERT(IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
 
         if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_REF || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
         {
@@ -1645,26 +2082,26 @@ namespace CPM
                 if (val >= UINT8_Min)
                 {
                     if (val < UINT8_Max)
-                        field.type = CPM_DATATYPE_UINT8;
+                        field.typeExpr.base = CPM_DATATYPE_UINT8;
                     else
-                        field.type = CPM_DATATYPE_UINT16;
+                        field.typeExpr.base = CPM_DATATYPE_UINT16;
                 }
                 else
                 {
                     if (val >= INT8_Min)
-                        field.type = CPM_DATATYPE_INT8;
+                        field.typeExpr.base = CPM_DATATYPE_INT8;
                     else
-                        field.type = CPM_DATATYPE_INT16;
+                        field.typeExpr.base = CPM_DATATYPE_INT16;
                 }
             }
 
-            if (field.type == CPM_DATATYPE_BOOL)
+            if (field.legacyType() == CPM_DATATYPE_BOOL)
                 val = val > 0 ? 1 : 0;
 
             bool outofrange = false;
-            if (!field.isPtr)
+            if (!field.legacyIsPtr())
             {
-                switch (field.type)
+                switch (field.legacyType())
                 {
                 case CPM_DATATYPE_INT8:
                     if (val < INT8_Min || val > INT8_Max)
@@ -1698,13 +2135,13 @@ namespace CPM
             }
             else
             {
-                if (symbol->isconst && IsImmediateDataType(symbol->field.type) && field.count == 1)
+                if (symbol->isconst && IsImmediateDataType(symbol->field.legacyType()) && field.legacyCount() == 1)
                     symbol->immediateData = val;
                 else
                 {
                     CPM_ASSERT(symbol->staticData);
 
-                    int typeSize = sizeOfType(field.type);
+                    int typeSize = sizeOfType(field.legacyType());
 
                     if (typeSize == 1)
                         field.owner->staticWrite(field.offset + index*typeSize, (FRIDGE_WORD)val);
@@ -1725,7 +2162,7 @@ namespace CPM
 
     bool CPMCompiler::parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(field.type == CPM_DATATYPE_STRING);
+        CPM_ASSERT(field.legacyType() == CPM_DATATYPE_STRING);
 
         if (valueNode->type == CPM_STR)
         {
@@ -1765,7 +2202,7 @@ namespace CPM
 
     bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(field.type == CPM_DATATYPE_CHAR);
+        CPM_ASSERT(field.legacyType() == CPM_DATATYPE_CHAR);
         FRIDGE_WORD val;
         if (valueNode->type == CPM_STR && valueNode->text.size() == 3)
         {
@@ -1795,7 +2232,7 @@ namespace CPM
             return false;
         }
 
-        if (symbol->isconst && IsImmediateDataType(symbol->field.type) && field.count == 1)
+        if (symbol->isconst && IsImmediateDataType(symbol->field.legacyType()) && field.legacyCount() == 1)
             symbol->immediateData = val;
         else
         {
@@ -1805,11 +2242,11 @@ namespace CPM
 
         return true;
     }
-    
+
     /*
     void CPMCompiler::writeStaticNum(CPMStaticSymbol* symbol, int value)
     {
-        switch (symbol->field.type)
+        switch (symbol->field.legacyType())
         {
         case CPM_DATATYPE_INT16:
             symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_INT16));
@@ -1848,8 +2285,8 @@ namespace CPM
     }
 
     string CPMCompiler::printStaticValue(CPMStaticSymbol* symbol, CPMDataSymbol& field)
-    {        
-        string s = GetTypeName(field.type) + " " + field.name + " = ";
+    {
+        string s = GetTypeName(field.legacyType()) + " " + field.name + " = ";
 
         if (symbol->staticData == nullptr)
         {
@@ -1857,25 +2294,25 @@ namespace CPM
             return s;
         }
 
-        if (field.count > 1)
+        if (field.legacyCount() > 1)
             s += "(";
 
-        for (int i = 0; i < field.count; ++i)
+        for (int i = 0; i < field.legacyCount(); ++i)
         {
-            if (IsIntDataType(field.type) || field.isPtr || field.type == CPM_DATATYPE_BOOL)
+            if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
                 s += printStaticNumber(symbol, field, i);
-            else if (symbol->field.type == CPM_DATATYPE_STRING)
+            else if (symbol->field.legacyType() == CPM_DATATYPE_STRING)
                 s += printStaticString(symbol, field, i);
-            else if (symbol->field.type == CPM_DATATYPE_CHAR)
+            else if (symbol->field.legacyType() == CPM_DATATYPE_CHAR)
                 s += printStaticChar(symbol, field, i);
-            else if (symbol->field.type >= CPM_DATATYPE_USER)
+            else if (symbol->field.legacyType() >= CPM_DATATYPE_USER)
                 s += printStaticStruct(symbol, field, i);
 
-            if (i < field.count-1)
+            if (i < field.legacyCount()-1)
                 s += "; ";
         }
 
-        if (field.count > 1)
+        if (field.legacyCount() > 1)
             s += ")";
         return s;
     }
@@ -1883,7 +2320,7 @@ namespace CPM
     string CPMCompiler::printStaticNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         int val = 0;
-        size_t typeSize = sizeOfType(field.type);
+        size_t typeSize = sizeOfType(field.legacyType());
         if (typeSize == 1)
             val = symbol->staticData[field.offset + index];
         else if (typeSize == 2)
@@ -1908,16 +2345,16 @@ namespace CPM
     string CPMCompiler::printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         string s = "(";
-        CPMStructSymbol* ss = structTypes[field.type];
-        
+        CPMStructSymbol* ss = structTypes[field.legacyType()];
+
         //CPMStructSymbol* structInstance = (CPMStructSymbol*)symbol->data[index];
-        FRIDGE_DWORD typeSize = sizeOfType(field.type);
+        FRIDGE_DWORD typeSize = sizeOfType(field.legacyType());
         for (map<string, CPMDataSymbol>::iterator fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
         {
             CPMDataSymbol sfield = fi->second;
             sfield.offset += field.offset + typeSize * index;
             s += printStaticValue(symbol, sfield) + "; ";
-        }        
+        }
 
         s += ")";
         return s;
@@ -1932,7 +2369,7 @@ namespace CPM
             for (map<string, CPMStaticSymbol>::iterator ssi = nsi->second->statics.begin(); ssi != nsi->second->statics.end(); ++ssi)
             {
                 compilerLog.Add("   " + printStaticValue(&ssi->second, ssi->second.field) + "\n");
-            }            
+            }
         }
     }
 
@@ -1944,14 +2381,4 @@ namespace CPM
         }
     }
 
-    bool IsIntDataType(CPMDataType dtype)
-    {
-        return dtype == CPM_DATATYPE_UINT8 || dtype == CPM_DATATYPE_UINT16 || dtype == CPM_DATATYPE_INT8 || dtype == CPM_DATATYPE_INT16;
-    }
-
-    // 1-2 byte primitive type
-    bool IsImmediateDataType(CPMDataType dtype)
-    {
-        return IsIntDataType(dtype) || dtype == CPM_DATATYPE_BOOL || dtype == CPM_DATATYPE_CHAR;
-    }
 }

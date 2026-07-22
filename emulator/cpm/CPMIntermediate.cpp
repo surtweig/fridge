@@ -3,6 +3,7 @@
 #include "CPMCompiler.h"
 #include <iostream>
 #include <fstream>
+#include <cstring>
 
 namespace CPM
 {
@@ -49,7 +50,7 @@ namespace CPM
 
         //memcpy(mergedCode, code, size);
         //offset += size;
-        
+
         for (int i = 0; i < merge.size(); ++i)
         {
             if (merge[i] == nullptr)
@@ -141,7 +142,7 @@ namespace CPM
                         // --- search in types
                         // --- search in intristic
                         // --- search in functions (OwnerFunction()->compiler->resolveFunctionSymbol(opname)
-                        // 
+                        //
                         // create node (line, ownerFunction)
                         //
                         // node->procreate
@@ -200,7 +201,7 @@ namespace CPM
             FRIDGE_DWORD pushOffset = stackSize;
             FRIDGE_DWORD popOffset = ~stackSize + 1;
 #else
-            FRIDGE_DWORD pushOffset = ~stackSize + 1; 
+            FRIDGE_DWORD pushOffset = ~stackSize + 1;
             FRIDGE_DWORD popOffset = stackSize;
 #endif
             vector<CPMRelativeCodeChunk*> ccs;
@@ -284,14 +285,14 @@ namespace CPM
         : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
         CPM_SEMANTIC_ASSERT(parent->SyntaxNode()->type == CPM_BLOCK);
-        
+
         if (syntaxNode->children.size() >= 2 || syntaxNode->children.size() <= 5)
         {
             CPMSemanticBlock* blockParent = (CPMSemanticBlock*)parent;
             CPMSyntaxTreeNode* nameNode = syntaxNode->children[1];
             CPMSyntaxTreeNode* valueNode = nullptr;
             CPMSyntaxTreeNode* arraySizeNode = nullptr;
-            
+
             if (syntaxNode->children.size() == 3)
                 valueNode = syntaxNode->children[2];
             else if (syntaxNode->children.size() == 5)
@@ -378,8 +379,8 @@ namespace CPM
         destination = nullptr;
         srcExpr = nullptr;
         destExpr = nullptr;
-        literalSource = false;
-        staticDest = false;
+        literalSource = nullptr;
+        staticDest = nullptr;
         procreate();
     }
 
@@ -393,21 +394,21 @@ namespace CPM
             ccs.push_back(children[i]->GenerateCode());
 
         CPMRelativeCodeChunk* ccAssign = nullptr;
-        if ((destination->type >= CPM_DATATYPE_BOOL &&
-            destination->type <= CPM_DATATYPE_STRING) || destination->isPtr)
+        if ((destination->legacyType() >= CPM_DATATYPE_BOOL &&
+            destination->legacyType() <= CPM_DATATYPE_STRING) || destination->legacyIsPtr())
         {
             int destSize = OwnerFunction()->compiler->sizeOfData(destination);
             CPM_SEMANTIC_ASSERT_MESSAGE(destSize == 1 || destSize == 2, "Simple type invalid data size");
             AsmLog()->Tab()->Add("Assign simple type");
             if (!staticDest)
             {
-                AsmLog()->Add(" local ")->Add(OwnerFunction()->compiler->GetTypeName(destination->type))->Add(" ")->Add(destination->name);
+                AsmLog()->Add(" local ")->Add(OwnerFunction()->compiler->GetTypeName(destination->legacyType()))->Add(" ")->Add(destination->name);
                 if (literalSource)
                 {
                     AsmLog()->Add(" to literal ");
                     if (destSize == 1)
                     {
-                        FRIDGE_WORD literalVal = (FRIDGE_WORD)source->data[0];
+                        FRIDGE_WORD literalVal = (FRIDGE_WORD)literalSource->staticData[0];
                         AsmLog()->Add(literalVal);
                         FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
                         ccAssign = new CPMRelativeCodeChunk(
@@ -420,7 +421,7 @@ namespace CPM
                     }
                     else if (destSize == 2)
                     {
-                        FRIDGE_DWORD literalVal = (FRIDGE_DWORD)source->data[0];
+                        FRIDGE_DWORD literalVal = (FRIDGE_DWORD)literalSource->staticData[0];
                         AsmLog()->Add(literalVal);
                         FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
                         ccAssign = new CPMRelativeCodeChunk(
@@ -433,7 +434,7 @@ namespace CPM
                             }
                         );
                     }
-                    
+
                 }
             }
         }
@@ -450,8 +451,8 @@ namespace CPM
     void CPMOperator_Assign::procreate()
     {
         CPM_SEMANTIC_ASSERT(blockParent);
-        staticDest = false;
-        literalSource = false;
+        staticDest = nullptr;
+        literalSource = nullptr;
         CPMSyntaxTreeNode* node = SyntaxNode();
         if (node->children.size() == 3)
         {
@@ -472,7 +473,7 @@ namespace CPM
                         if (!ss->isconst)
                         {
                             destination = &ss->field;
-                            staticDest = true;
+                            staticDest = ss;
                         }
                         else
                         {
@@ -494,7 +495,7 @@ namespace CPM
                     Error();
                     return;
                 }
-                else if (destination->count > 1)
+                else if (destination->legacyCount() > 1)
                 {
                     CompilerLog()->Add(LOG_ERROR, "Implicit array assignment is not implemented.", destNode->sourceFileName, destNode->lineNumber);
                     Error();
@@ -537,13 +538,13 @@ namespace CPM
             }
             else if (sourceNode->type == CPM_NUM)
             {
-                source = new CPMDataSymbol();
-                source->count = 1;
-                source->data.resize(1);
-                blockParent->addLiteral(source);
-                if (OwnerFunction()->compiler->parseLiteralNumber(source, sourceNode, 0, true))
+                literalSource = new CPMStaticSymbol();
+                literalSource->immediateData = 0;
+                source = &literalSource->field;
+                blockParent->addLiteral(literalSource);
+                if (OwnerFunction()->compiler->parseLiteralNumber(literalSource, literalSource->field, sourceNode, 0, true))
                 {
-                    literalSource = true;
+                    //literalSource = true;
                 }
                 else
                 {
@@ -554,15 +555,17 @@ namespace CPM
             }
             else if (sourceNode->type == CPM_EXPR)
             {
-                source = new CPMDataSymbol();
-                blockParent->addLiteral(source);
-                if (OwnerFunction()->compiler->parseLiteralNumber(source, sourceNode, 0, true))
+                literalSource = new CPMStaticSymbol();
+                literalSource->immediateData = 0;
+                source = &literalSource->field;
+                blockParent->addLiteral(literalSource);
+                if (OwnerFunction()->compiler->parseLiteralNumber(literalSource, literalSource->field, sourceNode, 0, true))
                 {
-                    literalSource = true;
+                    //literalSource = true;
                 }
                 else
                 {
-
+                    // TODO literal struct
                 }
             }
             else
@@ -571,7 +574,7 @@ namespace CPM
                 Error();
                 return;
             }
-            
+
         }
         else
         {
@@ -597,7 +600,7 @@ namespace CPM
             {
                 CPMFunctionSymbol* funsym = &fi->second;
                 funsym->globalAddress = offset;
-                
+
                 CPMFunctionSemanticBlock* funblock = new CPMFunctionSemanticBlock(funsym);
                 if (!compiler->NoErrors())
                     break;
@@ -618,7 +621,7 @@ namespace CPM
                 if (si->second.importSource < 0 && !si->second.isconst)
                 {
                     si->second.field.globalAddress = offset;
-                    offset += si->second.field.serialize(staticData);
+                    // TODO!!! //offset += si->second.field.serialize(staticData);
                     compiler->AsmDebugOutput()->Tab()->Add(nslist[nsi]->name)->Add(".")->Add(si->second.field.name)->
                         Add(" ")->Add(offset - si->second.field.globalAddress)->Add(" bytes at ")->AddHex(si->second.field.globalAddress)->Add("\n");
                 }

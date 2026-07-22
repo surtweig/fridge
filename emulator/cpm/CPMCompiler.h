@@ -11,6 +11,7 @@
 #include <vector>
 #include <unordered_set>
 #include <stack>
+#include <memory>
 
 using namespace std;
 
@@ -47,6 +48,46 @@ namespace CPM
 
     bool IsIntDataType(CPMDataType dtype);
 
+    // Recursive type-expr. Replaces the (CPMDataType type; bool isPtr; int count)
+    // triple that was scattered across CPMDataSymbol / CPMArgumentSignature /
+    // CPMFunctionSymbol. Note: `string` stays a special primitive
+    // (CPM_DATATYPE_STRING); an explicit `(char ptr)` typed by the user is a
+    // different CPMType and does NOT share the string literal pool.
+    enum CPMTypeKind
+    {
+        CPM_TYPE_VOID,
+        CPM_TYPE_BASE,    // a primitive or named struct
+        CPM_TYPE_PTR,     // (T ptr)
+        CPM_TYPE_ARRAY,   // (T array n)
+    };
+
+    struct CPMType
+    {
+        CPMTypeKind              kind;
+        CPMDataType              base;        // valid for CPM_TYPE_BASE; CPM_DATATYPE_VOID for CPM_TYPE_VOID
+        int                      arrayCount;  // valid for CPM_TYPE_ARRAY (const-folded)
+        std::unique_ptr<CPMType> child;       // target type for CPM_TYPE_PTR / CPM_TYPE_ARRAY
+
+        CPMType();
+        ~CPMType();
+        CPMType(const CPMType& other);
+        CPMType& operator=(const CPMType& other);
+        CPMType& operator=(CPMType&& other) = default;
+        CPMType(CPMType&& other) = default;
+
+        bool operator==(const CPMType& o) const;
+        bool operator!=(const CPMType& o) const { return !(*this == o); }
+        bool operator<(const CPMType& o) const;   // for map keys (signatures)
+
+        bool isVoid()      const { return kind == CPM_TYPE_VOID; }
+        bool isPtr()       const { return kind == CPM_TYPE_PTR; }
+        bool isArray()     const { return kind == CPM_TYPE_ARRAY; }
+        bool isBase()      const { return kind == CPM_TYPE_BASE; }
+        bool isPrimitive() const { return kind == CPM_TYPE_BASE && base != CPM_DATATYPE_USER && base != CPM_DATATYPE_VOID; }
+        bool isStruct()    const { return kind == CPM_TYPE_BASE && base == CPM_DATATYPE_USER; }
+        bool isString()    const { return kind == CPM_TYPE_BASE && base == CPM_DATATYPE_STRING; }
+    };
+
     const string R_INCLUDE = "include";
     const string R_USING = "using";
     const string R_IMPORT = "imports";
@@ -56,18 +97,22 @@ namespace CPM
     const string R_STATIC = "static";
 	const string R_CONST = "const";
     const string R_ARRAY = "array";
+    const string R_PTR = "ptr";
+    const string R_AT = "at";
+    const string R_ADDR = "addr";
+    const string R_CAST = "cast";
     const string R_NULL = "null";
-    const string R_REF = "ref";
+    const string R_REF = "ref";          // LEGACY: removed in step 7
     const string GlobalNamespace = "global";
-    const char PtrPrefix = '#';
-    const char RefPrefix = '&';
+    const char PtrPrefix = '#';          // LEGACY: removed in step 7
+    const char RefPrefix = '&';          // LEGACY: removed in step 7
     const char ServiceSymbol = '$';
     const string OP_ASSIGN = "=";
 
     struct CPMSourceFile
     {
         string name;
-        
+
         CPMParser* parser;
         vector<string> usingNamespaces;
     };
@@ -77,9 +122,7 @@ namespace CPM
     struct CPMDataSymbol
     {
         string name;
-        CPMDataType type;
-        bool isPtr;
-        int count;
+        CPMType typeExpr;          // was: CPMDataType type; bool isPtr; int count;
         FRIDGE_DWORD offset;
         FRIDGE_RAM_ADDR globalAddress;
         CPMNamespace* owner;
@@ -87,6 +130,19 @@ namespace CPM
         CPMDataSymbol();
         //FRIDGE_RAM_ADDR serialize(vector<FRIDGE_WORD>& output);
         ~CPMDataSymbol();
+
+        // ---- Legacy accessors (transitional, to be removed in step 4b) ----
+        // These compute the old flat view from the recursive CPMType. They
+        // only make sense for the legacy-supported shapes (BASE, PTR, ARRAY
+        // of BASE/PTR). For the new fully-nested forms they return a best-
+        // effort approximation; new code should prefer typeExpr directly.
+        CPMDataType legacyType() const;   // the "element" base type id
+        bool        legacyIsPtr() const;  // true iff top-level kind is PTR
+        int         legacyCount() const;  // 1 for non-arrays, arrayCount for arrays
+        // Reconstruct typeExpr from the legacy flat triple. Used by the
+        // un-migrated detect/read functions; once they call parseTypeExpr
+        // directly this helper disappears.
+        void setLegacyType(CPMDataType base, bool isPtr, int count);
     };
 
     struct CPMStaticSymbol
@@ -117,10 +173,13 @@ namespace CPM
     struct CPMArgumentSignature
     {
         string name;
-        CPMDataType type;
-        int count;
-        bool isPtr;
-        //bool isRef;
+        CPMType typeExpr;          // was: CPMDataType type; int count; bool isPtr;
+
+        // ---- Legacy accessors (transitional) ----
+        CPMDataType legacyType() const;
+        bool        legacyIsPtr() const;
+        int         legacyCount() const;
+        void setLegacyType(CPMDataType base, bool isPtr, int count);
     };
 
     struct CPMFunctionSignature
@@ -138,8 +197,7 @@ namespace CPM
     {
         CPMFunctionSignature signature;
         vector<CPMDataSymbol> arguments;
-        bool isPtr;
-        CPMDataType type;
+        CPMType returnType;          // was: bool isPtr; CPMDataType type;
         CPMNamespace* owner;
         CPMCompiler* compiler;
         FRIDGE_RAM_ADDR globalAddress;
@@ -196,7 +254,7 @@ namespace CPM
         {
             //CPM_ASSERT(count > 0);
             if (staticBufferSize < DataMaxSize-count+1)
-            {       
+            {
                 int pos = staticBufferSize;
                 for (size_t i = 0; i < count; ++i)
                     staticBuffer[staticBufferSize++] = data;
@@ -300,6 +358,7 @@ namespace CPM
         void detectStruct(CPMSyntaxTreeNode* node, CPMNamespace* owner);
         CPMDataType registerStructDataType(CPMStructSymbol* structSymbol);
         void readStructFields(CPMStructSymbol* structSymbol);
+        void computeStructDataSize(CPMStructSymbol* structSymbol);
         void computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs);
         void buildStructLayout(CPMStructSymbol* structSymbol);
 
@@ -335,6 +394,27 @@ namespace CPM
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         CPMDataType resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        // Recursive type-expr parser per spec §3. Recognises:
+        //   - bare primitive/struct name (CPM_ID)
+        //   - qualified NS.Name (CPM_REF with two ID children)
+        //   - (T ptr)        (CPM_EXPR with children [type-expr, "ptr"])
+        //   - (T array n)    (CPM_EXPR with children [type-expr, "array", n])
+        // On success returns true and fills `out`; on failure returns false
+        // and emits an error to compilerLog. Does not modify `out` on failure.
+        // Exists in parallel with the legacy resolveDataTypeName during the
+        // migration; step 4 replaces the legacy walker and deletes it.
+        bool parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        // Helper for parseTypeExpr: resolve a bare type name (from a CPM_ID
+        // already split out of any NS.Name qualifier) to a primitive or a
+        // user-defined struct CPMDataType, walking the regular scope chain.
+        // Returns true and sets outBase/outOwnerNS on success.
+        bool resolveBaseTypeName(const string& typeName, CPMSourceFile* sourceFile,
+                                 CPMNamespace* currentNS,
+                                 CPMDataType& outBase, CPMNamespace*& outOwnerNS);
+        // Recursive size-of for the new CPMType. Returns the size in bytes
+        // (1 for uint8/char/bool, 2 for uint16/int16/string/pointers,
+        // sum-of-fields for structs, count*childSize for arrays).
+        int sizeOfTypeExpr(const CPMType& type, CPMNamespace* currentNS = NULL);
         CPMStaticSymbol* resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
         CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         int parseNum(const string& num);
