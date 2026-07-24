@@ -324,6 +324,18 @@ namespace CPM
                 return nullptr;
         }
 
+        string staticReadString(FRIDGE_DWORD addr)
+        {
+            string s = "";
+            for (int i = addr; i < staticBufferSize; ++i)
+            {
+                if (staticBuffer[i] == 0)
+                    break;
+                s += staticBuffer[i];
+            }
+            return s;
+        }
+
         void staticWrite(FRIDGE_DWORD addr, FRIDGE_WORD data)
         {
             staticBuffer[addr] = data;

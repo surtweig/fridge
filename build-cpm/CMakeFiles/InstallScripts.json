@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/zuzu/repos/fridge/build-cpm/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -4,6 +4,11 @@ project(cpm LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Default to Debug so GDB breakpoints work out of the box
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
+endif()
+
 # CPM source files (Frion compiler)
 set(CPM_SOURCES
     cpm.cpp
@@ -15,10 +20,10 @@ set(CPM_SOURCES
 
 add_executable(cpm ${CPM_SOURCES})
 
-# Include paths: project root for fridge.h, local dir for peer headers
+# Include paths: repo root include/ for fridge.h, local dir for peer headers
 target_include_directories(cpm PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
 
 # Not a Windows build — don't pull in tchar.h / SDKDDKVer.h

@@ -1,0 +1,3 @@
+/home/zuzu/repos/fridge/build-cpm/CMakeFiles/cpm.dir
+/home/zuzu/repos/fridge/build-cpm/CMakeFiles/edit_cache.dir
+/home/zuzu/repos/fridge/build-cpm/CMakeFiles/rebuild_cache.dir

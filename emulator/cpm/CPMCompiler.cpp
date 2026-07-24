@@ -780,7 +780,7 @@ namespace CPM
                         compilerLog.Add("imported from ")->AddHex((FRIDGE_DWORD)ss->importSource);
                     else if (ss->isconst)
                         if (ss->field.legacyType() == CPM_DATATYPE_STRING)
-                            compilerLog.Add("const string ")->Add(ss->immediateData);
+                            compilerLog.Add("const string ")->Add(owner->staticReadString(ss->immediateData));
                         else
                             compilerLog.Add("const ")->Add(ss->immediateData);
                     else
