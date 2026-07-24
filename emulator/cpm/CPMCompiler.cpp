@@ -1,3 +1,4 @@
+#include "fridge.h"
 #include "stdafx.h"
 #include "CPMCompiler.h"
 #include "CPMIntermediate.h"
@@ -250,6 +251,7 @@ namespace CPM
         importSource = -1;
         staticData = nullptr;
         immediateData = 0;
+        declNode = nullptr;
     }
 
     CPMStructSymbol::CPMStructSymbol()
@@ -337,9 +339,9 @@ namespace CPM
         addNumStatic("FRIDGE_DEV_KEYBOARD_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_KEYBOARD_ID);
 
         readNamespaces();
-        readStatics(true);
+        readStatics(1);
         readStructs();
-        readStatics(false);
+        readStatics(2);
         readFunctions();
 
         CPMIntermediate im(this);
@@ -472,6 +474,8 @@ namespace CPM
                 compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
                 Error();
             }
+            else
+                ss->field.offset = (FRIDGE_DWORD)ns->getStaticRelativeAddress(ss->staticData);
         }
         else
         {
@@ -489,11 +493,38 @@ namespace CPM
         ss->field.typeExpr.kind = CPM_TYPE_BASE;
         ss->field.typeExpr.base = CPM_DATATYPE_STRING;
         ss->field.owner = ns;
-        ss->staticData = ns->staticAllocate(data);
-        if (ss->staticData == nullptr)
+
+        FRIDGE_WORD* sdata = ns->staticAllocate(data);
+        if (sdata == nullptr)
         {
             compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
             Error();
+            return ss;
+        }
+        size_t sdataOffset = ns->getStaticRelativeAddress(sdata);
+
+        if (isConst)
+        {
+            // Const string: the value (relative address of the chars) is
+            // known at compile time, so the symbol is immediate.
+            ss->staticData = nullptr;
+            ss->immediateData = (int)sdataOffset;
+        }
+        else
+        {
+            // Static string variable: a 2-byte slot in the buffer holding the
+            // relative address of the chars (patched to absolute at code
+            // generation via staticStrings).
+            ss->staticData = ns->staticAllocate(nullptr, sizeOfType(CPM_DATATYPE_STRING), 1);
+            if (ss->staticData == nullptr)
+            {
+                compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
+                Error();
+                return ss;
+            }
+            ss->field.offset = (FRIDGE_DWORD)ns->getStaticRelativeAddress(ss->staticData);
+            ns->staticWrite(ss->field.offset, (FRIDGE_DWORD)sdataOffset);
+            ss->staticStrings.push_back(ss->field.offset);
         }
         return ss;
     }
@@ -530,7 +561,15 @@ namespace CPM
         }
         ss->field.owner = ns;
         ss->field.offset = 0;
-        if (ss->isconst && IsImmediateDataType(ss->field.typeExpr.base))
+
+        bool isString = ss->field.typeExpr.kind == CPM_TYPE_BASE && ss->field.typeExpr.base == CPM_DATATYPE_STRING;
+        // Pointers and 1-2 byte primitives fold into immediateData; strings
+        // fold to the relative address of their chars. Arrays and structs
+        // always need buffer storage.
+        bool canFold = ss->isconst && count == 1 &&
+            (isPtr || isString || (ss->field.typeExpr.kind == CPM_TYPE_BASE && IsImmediateDataType(ss->field.typeExpr.base)));
+
+        if (canFold)
         {
             ss->staticData = nullptr;
             ss->immediateData = 0;
@@ -549,6 +588,8 @@ namespace CPM
                     compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
                     Error();
                 }
+                else
+                    ss->field.offset = (FRIDGE_DWORD)ns->getStaticRelativeAddress(ss->staticData);
             }
             else
             {
@@ -560,24 +601,29 @@ namespace CPM
         return ss;
     }
 
-    void CPMCompiler::readStatics(bool isConst)
+    void CPMCompiler::readStatics(int phase)
     {
         for (map<string, CPMNamespace*>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
         {
             CPMNamespace* ns = ins->second;
             for (int i = 0; i < ns->nodes.size(); i++)
-                detectStatic(ns->nodes[i], ns, isConst);
+                detectStatic(ns->nodes[i], ns, phase);
         }
     }
 
-    void CPMCompiler::detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, bool isConst)
+    void CPMCompiler::detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, int phase)
     {
         if (node->type != CPM_LINE || node->children.size() == 0)
             return;
         if (node->children[0]->type != CPM_ID)
             return;
-        if ((isConst && node->children[0]->text != R_CONST) || (!isConst && node->children[0]->text != R_STATIC))
+
+        bool declIsConst = node->children[0]->text == R_CONST;
+        bool declIsStatic = node->children[0]->text == R_STATIC;
+        if (!declIsConst && !declIsStatic)
             return;
+        if (phase == 1 && !declIsConst)
+            return; // the first pass reads constants only
 
         bool isInvalid = false;
 
@@ -587,7 +633,6 @@ namespace CPM
         }
         else
         {
-            CPMSyntaxTreeNode* declNode = node->children[0];
             CPMSyntaxTreeNode* typeNode = node->children[1];
             CPMSyntaxTreeNode* nameNode = node->children[2];
             CPMSyntaxTreeNode* countNode = NULL;
@@ -595,42 +640,104 @@ namespace CPM
             CPMSyntaxTreeNode* importSourceNode = NULL;
             if (nameNode->type == CPM_ID && (typeNode->type == CPM_ID || typeNode->type == CPM_REF))
             {
-                map<string, CPMStaticSymbol>::iterator iss = owner->statics.find(nameNode->text);
-                if (iss == owner->statics.end())
-                {
-                    bool isArray = false;
-                    bool isImported = false;
-                    int count = 1;
-                    int importSource = 0;
+                bool isArray = false;
+                bool isImported = false;
+                int count = 1;
+                int importSource = 0;
 
-                    if (node->children.size() >= 4)
+                // Grammar (see test.cpm header comment):
+                //   decl T name;                         (3 children)
+                //   decl T name value;                   (4)
+                //   decl T name array N;                 (5)
+                //   decl T name imports addr;            (5)
+                //   decl T name array N value;           (6)
+                //   decl T name array N imports addr;    (7)
+                if (node->children.size() == 4)
+                {
+                    if (node->children[3]->text == R_ARRAY || node->children[3]->text == R_IMPORT)
+                        isInvalid = true;
+                    else
+                        valueNode = node->children[3];
+                }
+                else if (node->children.size() == 5)
+                {
+                    if (node->children[3]->text == R_ARRAY)
                     {
-                        if (node->children[3]->text == R_ARRAY)
-                        {
-                            isArray = true;
-                            countNode = node->children[4];
-                        }
-                        else
-                            if (node->children[3]->text == R_IMPORT)
-                            {
-                                isImported = true;
-                                importSourceNode = node->children[4];
-                            }
-                            else
-                                valueNode = node->children[3];
+                        isArray = true;
+                        countNode = node->children[4];
                     }
-                    if (node->children.size() == 7)
+                    else if (node->children[3]->text == R_IMPORT)
                     {
-                        if (node->children[6]->text == R_IMPORT)
-                        {
-                            isImported = true;
-                            importSourceNode = node->children[7];
-                        }
-                        else
-                            isInvalid = true;
+                        isImported = true;
+                        importSourceNode = node->children[4];
                     }
-                    if (node->children.size() == 6)
+                    else
+                        isInvalid = true;
+                }
+                else if (node->children.size() == 6)
+                {
+                    if (node->children[3]->text == R_ARRAY)
+                    {
+                        isArray = true;
+                        countNode = node->children[4];
                         valueNode = node->children[5];
+                    }
+                    else
+                        isInvalid = true;
+                }
+                else if (node->children.size() == 7)
+                {
+                    if (node->children[3]->text == R_ARRAY && node->children[5]->text == R_IMPORT)
+                    {
+                        isArray = true;
+                        countNode = node->children[4];
+                        isImported = true;
+                        importSourceNode = node->children[6];
+                    }
+                    else
+                        isInvalid = true;
+                }
+
+                if (!isInvalid)
+                {
+                    map<string, CPMStaticSymbol>::iterator iss = owner->statics.find(nameNode->text);
+                    if (iss != owner->statics.end())
+                    {
+                        if (iss->second.declNode == node)
+                            return; // already processed in the first pass
+
+                        if (phase == 2)
+                        {
+                            compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' is already declared in " + owner->name + " namespace.", node->sourceFileName, nameNode->lineNumber);
+                            noErrors = false;
+                        }
+                        return;
+                    }
+
+                    bool isPtr = false;
+                    CPMDataType stype = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
+
+                    if (phase == 1 && (stype < CPM_DATATYPE_BOOL || stype >= CPM_DATATYPE_USER))
+                        return; // struct types are unknown before readStructs(); defer to the second pass
+
+                    if (stype == CPM_DATATYPE_UNDEFINED)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    }
+                    else if (stype == CPM_DATATYPE_AMBIGUOUS)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    }
+                    else if (stype == CPM_DATATYPE_VOID)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
+                        noErrors = false;
+                        return;
+                    }
 
                     if (isArray)
                     {
@@ -651,39 +758,8 @@ namespace CPM
                     else
                         importSource = -1;
 
-                    bool isPtr = false;
-                    CPMDataType stype = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
-                    CPMStaticSymbol* ss = addStatic(nameNode->text, owner, isConst, isPtr, stype, count, importSource);
-
-                    /*
-                    string typeName = typeNode->text;
-                    if (typeName[0] == PtrPrefix)
-                    {
-                        ss->field.legacyIsPtr() = true;
-                        typeName = typeName.substr(1, typeName.size() - 1);
-                    }
-                    */
-                    //ss->field.legacyType() = resolveDataTypeName(typeNode, ss->field.legacyIsPtr(), &sources[node->sourceFileName], owner);
-                    //ss->field.owner = owner;
-
-                    if (ss->field.legacyType() == CPM_DATATYPE_UNDEFINED)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    else if (ss->field.legacyType() == CPM_DATATYPE_AMBIGUOUS)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    else if (ss->field.legacyType() == CPM_DATATYPE_VOID)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
+                    CPMStaticSymbol* ss = addStatic(nameNode->text, owner, declIsConst, isPtr, stype, count, importSource);
+                    ss->declNode = node;
 
                     if (sizeOfData(&ss->field) > DataMaxSize)
                     {
@@ -692,34 +768,23 @@ namespace CPM
                         return;
                     }
 
+                    // addStatic has already decided immediate-vs-buffer-backed
+                    // and allocated buffer storage; here we only fill in values.
                     if (valueNode)
-                    {
-                        // Single basic-type constants use immediate data to store their values
-                        if (!ss->isconst || ss->field.legacyCount() > 1 || !IsImmediateDataType(ss->field.legacyType()))
-                            ss->staticData = ss->field.owner->staticAllocate(nullptr, sizeOfType(ss->field.legacyType()), ss->field.legacyCount());
-
-                        if (ss->staticData)
-                            parseLiteralValue(ss, ss->field, valueNode);
-                        else
-                        {
-                            compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '", node->sourceFileName, node->lineNumber)->Add(ss->field.owner->name)->Add(".")->Add(ss->field.name)->Add("'");
-                            Error();
-                        }
-                    }
+                        parseLiteralValue(ss, ss->field, valueNode);
 
                     compilerLog.Add(LOG_MESSAGE, "Static symbol " + nameNode->text + " in " + owner->name + "; data = ", node->sourceFileName, nameNode->lineNumber);
                     if (ss->staticData != nullptr)
-                        compilerLog.AddHex((FRIDGE_DWORD)(ss->staticData - ss->field.owner->staticBuffer));
+                        compilerLog.AddHex((FRIDGE_DWORD)ss->field.offset);
                     else if (ss->importSource >= 0)
                         compilerLog.Add("imported from ")->AddHex((FRIDGE_DWORD)ss->importSource);
+                    else if (ss->isconst)
+                        if (ss->field.legacyType() == CPM_DATATYPE_STRING)
+                            compilerLog.Add("const string ")->Add(ss->immediateData);
+                        else
+                            compilerLog.Add("const ")->Add(ss->immediateData);
                     else
                         compilerLog.Add("<null>");
-                }
-                else
-                {
-                    compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' is already declared in " + owner->name + " namespace.", node->sourceFileName, nameNode->lineNumber);
-                    noErrors = false;
-                    return;
                 }
             }
             else
@@ -728,8 +793,12 @@ namespace CPM
 
         if (isInvalid)
         {
-            compilerLog.Add(LOG_ERROR, "Invalid static or const declaration syntax.", node->sourceFileName, node->children[0]->lineNumber);
-            noErrors = false;
+            // Malformed declarations are reported once, in the second pass.
+            if (phase == 2)
+            {
+                compilerLog.Add(LOG_ERROR, "Invalid static or const declaration syntax.", node->sourceFileName, node->children[0]->lineNumber);
+                noErrors = false;
+            }
         }
     }
 
@@ -1662,8 +1731,8 @@ namespace CPM
                 ns = ins->second;
                 nameCounter++;
             }
-            map<string, CPMStaticSymbol>::iterator iss = ins->second->statics.find(nameNode->children[nameCounter]->text);
-            if (iss != ins->second->statics.end())
+            map<string, CPMStaticSymbol>::iterator iss = ns->statics.find(nameNode->children[nameCounter]->text);
+            if (iss != ns->statics.end())
             {
                 result = &iss->second;
                 nameCounter++;
@@ -1946,9 +2015,22 @@ namespace CPM
     {
         if (valueNode->type == CPM_BLOCK)
         {
-            CPMStructSymbol* structInstance = structTypes[field.legacyType()];//new CPMStructSymbol(*structTypes[field.legacyType()]);//(FRIDGE_WORD*)malloc(structsymbol->size);
-            //field.data[index] = (FRIDGE_WORD*)structInstance;
+            map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.find(field.legacyType());
+            if (ist == structTypes.end())
+            {
+                compilerLog.Add(LOG_ERROR, "Unknown structure type '" + GetTypeName(field.legacyType()) + "'.", valueNode->sourceFileName, valueNode->lineNumber);
+                noErrors = false;
+                return false;
+            }
+            CPMStructSymbol* structInstance = ist->second;
 
+            // Nested fields are not separate CPMStaticSymbols: each field is a
+            // copy of the struct layout entry whose offset is accumulated onto
+            // the parent's, yielding the field's absolute offset inside the
+            // namespace static buffer. All writes land in the shared symbol's
+            // buffer storage (or, for string fields, register their slot in
+            // the shared symbol's staticStrings), so the recursion below
+            // cannot clobber the symbol's immediate data.
             for (int i = 1; i < valueNode->children.size() - 1; ++i)
             {
                 CPMSyntaxTreeNode* fieldLine = valueNode->children[i];
@@ -1962,6 +2044,11 @@ namespace CPM
                     {
                         CPMDataSymbol sfield = fi->second;
                         sfield.offset += field.offset + index * sizeOfType(field.legacyType());
+                        // The field's layout entry belongs to the struct's
+                        // namespace, which may differ from the namespace the
+                        // static was declared in; redirect writes and name
+                        // resolution to the symbol's own buffer.
+                        sfield.owner = symbol->field.owner;
                         parseLiteralValue(symbol, sfield, fieldValue);
                     }
                     else
@@ -2135,13 +2222,16 @@ namespace CPM
             }
             else
             {
-                if (symbol->isconst && IsImmediateDataType(symbol->field.legacyType()) && field.legacyCount() == 1)
+                // Immediate symbols (const scalars, const pointers, literals)
+                // store the value itself; buffer-backed symbols store it at
+                // the field's offset in the namespace static buffer. The
+                // decision depends only on the symbol's storage class, not on
+                // the (possibly nested struct) field being written.
+                if (symbol->staticData == nullptr)
                     symbol->immediateData = val;
                 else
                 {
-                    CPM_ASSERT(symbol->staticData);
-
-                    int typeSize = sizeOfType(field.legacyType());
+                    int typeSize = field.legacyIsPtr() ? (int)sizeof(FRIDGE_DWORD) : sizeOfType(field.legacyType());
 
                     if (typeSize == 1)
                         field.owner->staticWrite(field.offset + index*typeSize, (FRIDGE_WORD)val);
@@ -2171,10 +2261,24 @@ namespace CPM
             FRIDGE_WORD* sdata = ns->staticAllocate(s);
             if (sdata)
             {
-                size_t sdataOffset = sdata - symbol->staticData;
+                size_t sdataOffset = ns->getStaticRelativeAddress(sdata);//sdata - symbol->staticData;
                 CPM_ASSERT(sdataOffset < FRIDGE_MAX_DWORD);
-                ns->staticWrite(field.offset, (FRIDGE_DWORD)sdataOffset);
-                symbol->staticStrings.push_back(field.offset); // Actual string addresses will be resolved at code generation stage
+
+                if (symbol->staticData == nullptr)
+                {
+                    // Const string: the symbol's value is the relative address
+                    // of the chars, resolved to absolute at code generation.
+                    symbol->immediateData = (int)sdataOffset;
+                }
+                else
+                {
+                    // A 2-byte pointer slot (a static string variable or a
+                    // string field inside a buffer-backed struct) holds the
+                    // relative address of the chars.
+                    FRIDGE_DWORD slotOffset = field.offset + index * sizeOfType(CPM_DATATYPE_STRING);
+                    ns->staticWrite(slotOffset, (FRIDGE_DWORD)sdataOffset);
+                    symbol->staticStrings.push_back(slotOffset); // Actual string addresses will be resolved at code generation stage
+                }
             }
             else
             {
@@ -2219,12 +2323,12 @@ namespace CPM
             }
             val = (FRIDGE_WORD)ccode;
         }
-        /*
         else if (valueNode->type == CPM_CHAR)
         {
+            // Item node of a quoted string used as a char array initializer
+            // (e.g. `char text array 5 "12345"`).
             val = (FRIDGE_WORD)valueNode->text[0];
         }
-        */
         else
         {
             compilerLog.Add(LOG_ERROR, "Cannot parse '" + valueNode->text + "' as a char literal.", valueNode->sourceFileName, valueNode->lineNumber);
@@ -2232,13 +2336,10 @@ namespace CPM
             return false;
         }
 
-        if (symbol->isconst && IsImmediateDataType(symbol->field.legacyType()) && field.legacyCount() == 1)
+        if (symbol->staticData == nullptr)
             symbol->immediateData = val;
         else
-        {
-            CPM_ASSERT(symbol->staticData);
             field.owner->staticWrite(field.offset + index, val);
-        }
 
         return true;
     }
@@ -2290,7 +2391,12 @@ namespace CPM
 
         if (symbol->staticData == nullptr)
         {
-            s += to_string(symbol->immediateData);
+            // Immediate symbol: numbers and pointers print as values, const
+            // strings print from their chars in the namespace buffer.
+            if (field.legacyType() == CPM_DATATYPE_STRING && !field.legacyIsPtr())
+                s += string((char*)&(symbol->field.owner->staticBuffer[symbol->immediateData]));
+            else
+                s += to_string(symbol->immediateData);
             return s;
         }
 
@@ -2301,11 +2407,11 @@ namespace CPM
         {
             if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
                 s += printStaticNumber(symbol, field, i);
-            else if (symbol->field.legacyType() == CPM_DATATYPE_STRING)
+            else if (field.legacyType() == CPM_DATATYPE_STRING)
                 s += printStaticString(symbol, field, i);
-            else if (symbol->field.legacyType() == CPM_DATATYPE_CHAR)
+            else if (field.legacyType() == CPM_DATATYPE_CHAR)
                 s += printStaticChar(symbol, field, i);
-            else if (symbol->field.legacyType() >= CPM_DATATYPE_USER)
+            else if (field.legacyType() >= CPM_DATATYPE_USER)
                 s += printStaticStruct(symbol, field, i);
 
             if (i < field.legacyCount()-1)
@@ -2320,26 +2426,25 @@ namespace CPM
     string CPMCompiler::printStaticNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         int val = 0;
-        size_t typeSize = sizeOfType(field.legacyType());
+        size_t typeSize = field.legacyIsPtr() ? sizeof(FRIDGE_DWORD) : sizeOfType(field.legacyType());
         if (typeSize == 1)
-            val = symbol->staticData[field.offset + index];
+            val = field.owner->staticBuffer[field.offset + index];
         else if (typeSize == 2)
-            val = FRIDGE_DWORD_HL(symbol->staticData[field.offset + 2*index],
-                                  symbol->staticData[field.offset + 2*index + 1]);
+            val = FRIDGE_DWORD_HL(field.owner->staticBuffer[field.offset + 2*index],
+                                  field.owner->staticBuffer[field.offset + 2*index + 1]);
         return to_string(val);
     }
 
     string CPMCompiler::printStaticString(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
-        //return (char*)symbol->data[index];
-        FRIDGE_DWORD soffset = FRIDGE_DWORD_HL(symbol->staticData[field.offset + 2 * index],
-                                               symbol->staticData[field.offset + 2 * index + 1]);
-        return string((char*)&(symbol->staticData[soffset]));
+        FRIDGE_DWORD soffset = FRIDGE_DWORD_HL(field.owner->staticBuffer[field.offset + 2 * index],
+                                               field.owner->staticBuffer[field.offset + 2 * index + 1]);
+        return string((char*)&(field.owner->staticBuffer[soffset]));
     }
 
     string CPMCompiler::printStaticChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
-        return string(1, (char)symbol->staticData[field.offset + index]);
+        return string(1, (char)field.owner->staticBuffer[field.offset + index]);
     }
 
     string CPMCompiler::printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
@@ -2347,12 +2452,12 @@ namespace CPM
         string s = "(";
         CPMStructSymbol* ss = structTypes[field.legacyType()];
 
-        //CPMStructSymbol* structInstance = (CPMStructSymbol*)symbol->data[index];
         FRIDGE_DWORD typeSize = sizeOfType(field.legacyType());
         for (map<string, CPMDataSymbol>::iterator fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
         {
             CPMDataSymbol sfield = fi->second;
             sfield.offset += field.offset + typeSize * index;
+            sfield.owner = symbol->field.owner;
             s += printStaticValue(symbol, sfield) + "; ";
         }
 

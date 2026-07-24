@@ -123,6 +123,13 @@ namespace CPM
     {
         string name;
         CPMType typeExpr;          // was: CPMDataType type; bool isPtr; int count;
+        // `offset` is context-dependent:
+        //  - for a top-level static/const symbol: byte offset of the symbol's
+        //    data inside owner->staticBuffer (its relative address, the value
+        //    code generation bases absolute addresses on);
+        //  - for a struct layout field (CPMStructSymbol::fields): offset of the
+        //    field inside the struct (running sum of preceding field sizes);
+        //  - for a function local: offset inside the stack frame.
         FRIDGE_DWORD offset;
         FRIDGE_RAM_ADDR globalAddress;
         CPMNamespace* owner;
@@ -145,14 +152,33 @@ namespace CPM
         void setLegacyType(CPMDataType base, bool isPtr, int count);
     };
 
+    // Compile-time representative of every static, const and literal in the
+    // program. Storage invariant:
+    //
+    //  - staticData == nullptr  <=> the symbol's value is immediate, i.e.
+    //    fully known at compile time and stored in immediateData. This covers
+    //    consts of simple types (numbers, chars, bools, pointers), const
+    //    strings (immediateData holds the *relative* address of the chars in
+    //    owner->staticBuffer) and ad-hoc literal symbols.
+    //
+    //  - staticData != nullptr  <=> the symbol is buffer-backed: its data
+    //    lives in field.owner->staticBuffer at byte offset field.offset, and
+    //    staticData == field.owner->staticBuffer + field.offset is just the
+    //    host-side convenience pointer to the same location. All statics,
+    //    const arrays and const structs are buffer-backed.
+    //
+    // Struct instance data is flat inside the buffer; nested fields are
+    // addressed by accumulating the layout offsets onto the parent offset
+    // (see parseLiteralStruct) — no nested CPMStaticSymbols are spawned.
     struct CPMStaticSymbol
     {
         CPMDataSymbol field;
         bool isconst;
         int importSource;
         FRIDGE_WORD* staticData;
-        int immediateData; // This is used to store value of single basic-type constants
-        vector<FRIDGE_DWORD> staticStrings; // stores relative addresses of all statically allocated string fields (not data)
+        int immediateData; // value of immediate symbols (see invariant above)
+        vector<FRIDGE_DWORD> staticStrings; // buffer offsets of all 2-byte slots holding string addresses (patched to absolute at code generation)
+        CPMSyntaxTreeNode* declNode; // declaration node; distinguishes "already processed" from a duplicate declaration across the two read passes
 
         CPMStaticSymbol();
     };
@@ -238,7 +264,7 @@ namespace CPM
             if (staticBufferSize + size <= DataMaxSize)
             {
                 int pos = staticBufferSize;
-                for (size_t i = 0; i < count; ++i)
+                for (size_t i = 0; i < size; ++i)
                     if (data)
                         staticBuffer[staticBufferSize++] = data[i];
                     else
@@ -362,8 +388,14 @@ namespace CPM
         void computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs);
         void buildStructLayout(CPMStructSymbol* structSymbol);
 
-        void readStatics(bool isConst);
-        void detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, bool isConst);
+        // Statics are read in two phases around readStructs():
+        //  - phase 1 processes const declarations whose type resolves to a
+        //    primitive, so their values can size struct array fields;
+        //    anything else (struct-typed consts, statics) is silently deferred;
+        //  - phase 2 processes statics and the deferred consts, performing all
+        //    validation and error reporting exactly once per node.
+        void readStatics(int phase);
+        void detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, int phase);
 
         void readFunctions();
         void detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner);

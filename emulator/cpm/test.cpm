@@ -60,6 +60,12 @@ union uint16Union
     uint8pair bytes;
 );
 
+struct person
+(
+    string name;
+    uint8 age;
+);
+
 static char charTest "x";
 
 static string stringTest "zuzu";
@@ -68,9 +74,21 @@ static char textTest array 5 "12345";//("1"; "2"; "3");//"1234567890";
 
 const uint8 intArraySize (+ 2 3);
 
+const uint16 constAnswer 42;
+
+const string helloConst "Hello, const!";
+
 static uint8 MyStaticArray array intArraySize (0; + 1 1; 2; 3; 4);
 
 static X2AL.Zuzu MyStaticZuzu (a 5; b 10; c 15);
+
+const X2AL.Zuzu constZuzu (a 1; b 2; c 3);
+
+static string stringArrayTest array 2 ("ab"; "cd");
+
+static person me (name "zuzu"; age 36);
+
+const person nobody (name "none"; age 0);
 
 struct intArray
 (   
