@@ -9,6 +9,7 @@
 #include "CPMParser.h"
 #include <map>
 #include <vector>
+#include <deque>
 #include <unordered_set>
 #include <stack>
 #include <memory>
@@ -228,6 +229,12 @@ namespace CPM
         CPMCompiler* compiler;
         FRIDGE_RAM_ADDR globalAddress;
         CPMSyntaxTreeNode* bodyNode;
+        // Compile-time representatives of every literal used in this function's
+        // body. Stored by value in a deque so &literals.back() stays valid while
+        // more literals are appended. Numbers/chars are immediate; string
+        // literals keep their chars in owner->staticBuffer and the relative
+        // address in immediateData (see CPMStaticSymbol invariant).
+        deque<CPMStaticSymbol> literals;
     };
 
     struct CPMNamespace
@@ -469,6 +476,12 @@ namespace CPM
         bool parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
         bool parseLiteralStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
+        // Create the compile-time representative for a literal used inside a
+        // function body and append it to func->literals. Numbers/chars fold
+        // into immediateData; string chars are appended to the function's
+        // owner-namespace static buffer and the relative address kept in
+        // immediateData. Returns nullptr on error (already logged).
+        CPMStaticSymbol* addLiteral(CPMFunctionSymbol* func, CPMSyntaxTreeNode* valueNode);
         //static vector<string> ParseSymbolName(const string& name);
         string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
     };

@@ -529,6 +529,77 @@ namespace CPM
         return ss;
     }
 
+    CPMStaticSymbol* CPMCompiler::addLiteral(CPMFunctionSymbol* func, CPMSyntaxTreeNode* valueNode)
+    {
+        if (!func || !valueNode)
+            return nullptr;
+
+        func->literals.push_back(CPMStaticSymbol());
+        CPMStaticSymbol* lit = &func->literals.back();
+        lit->isconst = true;
+        lit->importSource = -1;
+        lit->staticData = nullptr;
+        lit->immediateData = 0;
+        lit->declNode = valueNode;
+        lit->field.name = string(1, ServiceSymbol) + "lit" + to_string(func->literals.size() - 1);
+        lit->field.owner = func->owner;
+        lit->field.offset = 0;
+
+        if (valueNode->type == CPM_NUM || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
+        {
+            lit->field.typeExpr.kind = CPM_TYPE_BASE;
+            lit->field.typeExpr.base = CPM_DATATYPE_UINT8;
+            if (!parseLiteralNumber(lit, lit->field, valueNode, 0, true))
+            {
+                // parseLiteralNumber already logged the failure.
+                func->literals.pop_back();
+                return nullptr;
+            }
+            return lit;
+        }
+
+        if (valueNode->type == CPM_CHARLIT)
+        {
+            lit->field.typeExpr.kind = CPM_TYPE_BASE;
+            lit->field.typeExpr.base = CPM_DATATYPE_CHAR;
+            if (valueNode->text.empty())
+            {
+                compilerLog.Add(LOG_ERROR, "Empty char literal.", valueNode->sourceFileName, valueNode->lineNumber);
+                Error();
+                func->literals.pop_back();
+                return nullptr;
+            }
+            lit->immediateData = (unsigned char)valueNode->text[0];
+            return lit;
+        }
+
+        if (valueNode->type == CPM_STR)
+        {
+            // Legacy single-char double-quoted form used as a char literal.
+            if (valueNode->text.size() == 3)
+            {
+                lit->field.typeExpr.kind = CPM_TYPE_BASE;
+                lit->field.typeExpr.base = CPM_DATATYPE_CHAR;
+                lit->immediateData = (unsigned char)valueNode->text[1];
+                return lit;
+            }
+
+            lit->field.typeExpr.kind = CPM_TYPE_BASE;
+            lit->field.typeExpr.base = CPM_DATATYPE_STRING;
+            if (!parseAndAllocateLiteralString(lit, lit->field, valueNode, 0))
+            {
+                func->literals.pop_back();
+                return nullptr;
+            }
+            return lit;
+        }
+
+        compilerLog.Add(LOG_ERROR, "Unsupported literal form '" + valueNode->text + "'.", valueNode->sourceFileName, valueNode->lineNumber);
+        Error();
+        func->literals.pop_back();
+        return nullptr;
+    }
+
     CPMStaticSymbol* CPMCompiler::addStatic(string name, CPMNamespace* ns, bool isConst, bool isPtr, CPMDataType type, FRIDGE_DWORD count, int importSource)
     {
         ns->statics[name].field.name = name;

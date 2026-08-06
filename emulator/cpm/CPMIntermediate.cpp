@@ -408,7 +408,7 @@ namespace CPM
                     AsmLog()->Add(" to literal ");
                     if (destSize == 1)
                     {
-                        FRIDGE_WORD literalVal = (FRIDGE_WORD)literalSource->staticData[0];
+                        FRIDGE_WORD literalVal = (FRIDGE_WORD)literalSource->immediateData;
                         AsmLog()->Add(literalVal);
                         FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
                         ccAssign = new CPMRelativeCodeChunk(
@@ -421,7 +421,7 @@ namespace CPM
                     }
                     else if (destSize == 2)
                     {
-                        FRIDGE_DWORD literalVal = (FRIDGE_DWORD)literalSource->staticData[0];
+                        FRIDGE_DWORD literalVal = (FRIDGE_DWORD)literalSource->immediateData;
                         AsmLog()->Add(literalVal);
                         FRIDGE_DWORD offset = ~(FRIDGE_DWORD)(blockParent->StackOffset() - destination->offset) + 1;
                         ccAssign = new CPMRelativeCodeChunk(
@@ -536,37 +536,21 @@ namespace CPM
                     return;
                 }
             }
-            else if (sourceNode->type == CPM_NUM)
+            else if (sourceNode->type == CPM_NUM || sourceNode->type == CPM_EXPR
+                || sourceNode->type == CPM_STR || sourceNode->type == CPM_CHARLIT)
             {
-                literalSource = new CPMStaticSymbol();
-                literalSource->immediateData = 0;
-                source = &literalSource->field;
-                blockParent->addLiteral(literalSource);
-                if (OwnerFunction()->compiler->parseLiteralNumber(literalSource, literalSource->field, sourceNode, 0, true))
+                literalSource = OwnerFunction()->compiler->addLiteral(OwnerFunction(), sourceNode);
+                if (literalSource == nullptr)
                 {
-                    //literalSource = true;
-                }
-                else
-                {
-                    CompilerLog()->Add(LOG_ERROR, "Cannot parse number literal '" + sourceNode->text + "'.", sourceNode->sourceFileName, sourceNode->lineNumber);
+                    // addLiteral already logged; EXPR may still be a non-foldable form.
+                    if (sourceNode->type == CPM_EXPR)
+                    {
+                        // TODO non-const expression / literal struct as assign source
+                    }
                     Error();
                     return;
                 }
-            }
-            else if (sourceNode->type == CPM_EXPR)
-            {
-                literalSource = new CPMStaticSymbol();
-                literalSource->immediateData = 0;
                 source = &literalSource->field;
-                blockParent->addLiteral(literalSource);
-                if (OwnerFunction()->compiler->parseLiteralNumber(literalSource, literalSource->field, sourceNode, 0, true))
-                {
-                    //literalSource = true;
-                }
-                else
-                {
-                    // TODO literal struct
-                }
             }
             else
             {
