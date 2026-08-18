@@ -142,6 +142,36 @@ namespace CPM
         virtual void procreate();
     };
 
+    // ── Step 5 placeholders: parse-only recognition of the new reserved
+    //    expression operators (spec §5.1/§5.2/§5.3). Each constructor
+    //    validates the operator's arity; codegen is empty (returns nullptr)
+    //    and is filled in by step 10. These are exposed at the statement
+    //    level via CPMSemanticBlock::procreate(); sub-expression lowering
+    //    follows in step 10 together with CPMSematicExpression.
+    class CPMOperator_At : public CPMExecutableSemanticNode
+    {
+    public:
+        CPMOperator_At(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        virtual CPMRelativeCodeChunk* GenerateCode();
+        virtual void procreate() {};
+    };
+
+    class CPMOperator_Addr : public CPMExecutableSemanticNode
+    {
+    public:
+        CPMOperator_Addr(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        virtual CPMRelativeCodeChunk* GenerateCode();
+        virtual void procreate() {};
+    };
+
+    class CPMOperator_Cast : public CPMExecutableSemanticNode
+    {
+    public:
+        CPMOperator_Cast(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        virtual CPMRelativeCodeChunk* GenerateCode();
+        virtual void procreate() {};
+    };
+
     class CPMIntermediate
     {
     private:

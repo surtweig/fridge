@@ -176,6 +176,18 @@ namespace CPM
                             {
                                 children.push_back(new CPMOperator_Assign(this, line));
                             }
+                            else if (opname->text == R_AT)
+                            {
+                                children.push_back(new CPMOperator_At(this, line));
+                            }
+                            else if (opname->text == R_ADDR)
+                            {
+                                children.push_back(new CPMOperator_Addr(this, line));
+                            }
+                            else if (opname->text == R_CAST)
+                            {
+                                children.push_back(new CPMOperator_Cast(this, line));
+                            }
                         }
                     }
                     else
@@ -565,6 +577,76 @@ namespace CPM
             CompilerLog()->Add(LOG_ERROR, "Invalid '=' operator syntax.", node->sourceFileName, node->lineNumber);
             Error();
         }
+    }
+
+    // ---- Step 5 placeholder operators: at / addr / cast ---------------------
+    // Each ctor validates arity per spec §5.1/§5.2/§5.3 and bails out on
+    // mismatch. Codegen is deferred to step 10; GenerateCode returns nullptr
+    // for now (the host's CPMRelativeCodeChunk merge accepts null chunks — see
+    // CPMRelativeCodeChunk(vector<…>) ctor at line 35 and
+    // CPMSemanticBlock::GenerateCode at line 219).
+
+    CPMOperator_At::CPMOperator_At(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+        : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
+    {
+        // Spec §5.2: `(at aggregate index)` (array index) | `(at ptr)` (deref).
+        int operands = (int)syntaxNode->children.size() - 1;
+        if (operands != 1 && operands != 2)
+        {
+            CompilerLog()->Add(LOG_ERROR, "Operator 'at' takes 1 or 2 operands (got ",
+                syntaxNode->sourceFileName, syntaxNode->lineNumber)->Add(operands)->Add(").");
+            Error();
+            return;
+        }
+        // TODO step 10: resolve aggregate/index sub-expressions and lower.
+    }
+
+    CPMRelativeCodeChunk* CPMOperator_At::GenerateCode()
+    {
+        // TODO step 10: emit array-index / pointer-deref code.
+        return nullptr;
+    }
+
+    CPMOperator_Addr::CPMOperator_Addr(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+        : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
+    {
+        // Spec §5.3: `(addr lvalue)` — exactly one operand.
+        int operands = (int)syntaxNode->children.size() - 1;
+        if (operands != 1)
+        {
+            CompilerLog()->Add(LOG_ERROR, "Operator 'addr' takes exactly 1 operand (got ",
+                syntaxNode->sourceFileName, syntaxNode->lineNumber)->Add(operands)->Add(").");
+            Error();
+            return;
+        }
+        // TODO step 10: validate the operand is an lvalue and compute its address.
+    }
+
+    CPMRelativeCodeChunk* CPMOperator_Addr::GenerateCode()
+    {
+        // TODO step 10: emit address-of code.
+        return nullptr;
+    }
+
+    CPMOperator_Cast::CPMOperator_Cast(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
+        : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
+    {
+        // Spec §5.1: `(cast type-expr expr)` — exactly two operands.
+        int operands = (int)syntaxNode->children.size() - 1;
+        if (operands != 2)
+        {
+            CompilerLog()->Add(LOG_ERROR, "Operator 'cast' takes exactly 2 operands (got ",
+                syntaxNode->sourceFileName, syntaxNode->lineNumber)->Add(operands)->Add(").");
+            Error();
+            return;
+        }
+        // TODO step 10: parse the type-expr operand and emit a narrowing/widening.
+    }
+
+    CPMRelativeCodeChunk* CPMOperator_Cast::GenerateCode()
+    {
+        // TODO step 10: emit numeric/ptr narrowing per the type-expr operand.
+        return nullptr;
     }
 
     CPMIntermediate::CPMIntermediate(CPMCompiler* compiler)

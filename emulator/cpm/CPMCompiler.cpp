@@ -575,15 +575,9 @@ namespace CPM
 
         if (valueNode->type == CPM_STR)
         {
-            // Legacy single-char double-quoted form used as a char literal.
-            if (valueNode->text.size() == 3)
-            {
-                lit->field.typeExpr.kind = CPM_TYPE_BASE;
-                lit->field.typeExpr.base = CPM_DATATYPE_CHAR;
-                lit->immediateData = (unsigned char)valueNode->text[1];
-                return lit;
-            }
-
+            // Spec §5.6: double-quoted `"..."` is always a `string` literal;
+            // the legacy length-1 `"x"`-as-char overload is removed. Char
+            // values use the single-quoted `CPM_CHARLIT` form handled above.
             lit->field.typeExpr.kind = CPM_TYPE_BASE;
             lit->field.typeExpr.base = CPM_DATATYPE_STRING;
             if (!parseAndAllocateLiteralString(lit, lit->field, valueNode, 0))
@@ -2084,64 +2078,97 @@ namespace CPM
 
     bool CPMCompiler::parseLiteralStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
+        if (valueNode->type != CPM_BLOCK && valueNode->type != CPM_EXPR)
+        {
+            compilerLog.Add(LOG_ERROR, "Invalid literal struct syntax.", valueNode->sourceFileName, valueNode->lineNumber);
+            noErrors = false;
+            return false;
+        }
+
+        map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.find(field.legacyType());
+        if (ist == structTypes.end())
+        {
+            compilerLog.Add(LOG_ERROR, "Unknown structure type '" + GetTypeName(field.legacyType()) + "'.", valueNode->sourceFileName, valueNode->lineNumber);
+            noErrors = false;
+            return false;
+        }
+        CPMStructSymbol* structInstance = ist->second;
+
+        // Nested fields are not separate CPMStaticSymbols: each field is a
+        // copy of the struct layout entry whose offset is accumulated onto
+        // the parent's, yielding the field's absolute offset inside the
+        // namespace static buffer. All writes land in the shared symbol's
+        // buffer storage (or, for string fields, register their slot in
+        // the shared symbol's staticStrings), so the recursion below
+        // cannot clobber the symbol's immediate data.
+        //
+        // Two syntactic shapes are accepted for the literal struct:
+        //   * legacy ';'-separated CPM_BLOCK: children = '(' LINE(name,value)
+        //     LINE(name,value) … ')'. The surrounding '(' / ')' tokens are
+        //     skipped; each LINE holds two children (the field name and the
+        //     field value). Kept until test.cpm is rewritten in step 9.
+        //   * new ','-separated CPM_EXPR: children = name ',' value ',' name
+        //     ',' value … (no surrounding parens; comma CPM_CHAR tokens are
+        //     filtered out, then the remaining elements are paired up).
+        vector<pair<CPMSyntaxTreeNode*, CPMSyntaxTreeNode*>> fieldInits;
+
         if (valueNode->type == CPM_BLOCK)
         {
-            map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.find(field.legacyType());
-            if (ist == structTypes.end())
-            {
-                compilerLog.Add(LOG_ERROR, "Unknown structure type '" + GetTypeName(field.legacyType()) + "'.", valueNode->sourceFileName, valueNode->lineNumber);
-                noErrors = false;
-                return false;
-            }
-            CPMStructSymbol* structInstance = ist->second;
-
-            // Nested fields are not separate CPMStaticSymbols: each field is a
-            // copy of the struct layout entry whose offset is accumulated onto
-            // the parent's, yielding the field's absolute offset inside the
-            // namespace static buffer. All writes land in the shared symbol's
-            // buffer storage (or, for string fields, register their slot in
-            // the shared symbol's staticStrings), so the recursion below
-            // cannot clobber the symbol's immediate data.
-            for (int i = 1; i < valueNode->children.size() - 1; ++i)
+            for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
             {
                 CPMSyntaxTreeNode* fieldLine = valueNode->children[i];
-                if (fieldLine->type == CPM_LINE && fieldLine->children.size() == 2)
-                {
-                    CPMSyntaxTreeNode* fieldName = fieldLine->children[0];
-                    CPMSyntaxTreeNode* fieldValue = fieldLine->children[1];
-
-                    map<string, CPMDataSymbol>::iterator fi = structInstance->fields.find(fieldName->text);
-                    if (fi != structInstance->fields.end())
-                    {
-                        CPMDataSymbol sfield = fi->second;
-                        sfield.offset += field.offset + index * sizeOfType(field.legacyType());
-                        // The field's layout entry belongs to the struct's
-                        // namespace, which may differ from the namespace the
-                        // static was declared in; redirect writes and name
-                        // resolution to the symbol's own buffer.
-                        sfield.owner = symbol->field.owner;
-                        parseLiteralValue(symbol, sfield, fieldValue);
-                    }
-                    else
-                    {
-                        compilerLog.Add(LOG_ERROR, "Structure " + structInstance->name + " does not contain '" + fieldName->text + "' field.", fieldLine->sourceFileName, fieldLine->lineNumber);
-                        noErrors = false;
-                        return false;
-                    }
-                }
-                else
+                if (fieldLine->type != CPM_LINE || fieldLine->children.size() != 2)
                 {
                     compilerLog.Add(LOG_ERROR, "Unexpected syntax in literal struct declaration.", fieldLine->sourceFileName, fieldLine->lineNumber);
                     noErrors = false;
                     return false;
                 }
+                fieldInits.push_back(make_pair(fieldLine->children[0], fieldLine->children[1]));
             }
         }
-        else
+        else // CPM_EXPR
         {
-            compilerLog.Add(LOG_ERROR, "Invalid literal struct syntax.", valueNode->sourceFileName, valueNode->lineNumber);
-            noErrors = false;
-            return false;
+            vector<CPMSyntaxTreeNode*> elements;
+            for (size_t i = 0; i < valueNode->children.size(); ++i)
+            {
+                CPMSyntaxTreeNode* c = valueNode->children[i];
+                if (c->type == CPM_CHAR && c->text.size() == 1 && c->text[0] == CPM_OPERAND_DELIM)
+                    continue;
+                elements.push_back(c);
+            }
+            if (elements.size() % 2 != 0)
+            {
+                compilerLog.Add(LOG_ERROR, "Unexpected syntax in literal struct declaration.", valueNode->sourceFileName, valueNode->lineNumber);
+                noErrors = false;
+                return false;
+            }
+            for (size_t i = 0; i + 1 < elements.size(); i += 2)
+                fieldInits.push_back(make_pair(elements[i], elements[i + 1]));
+        }
+
+        for (size_t i = 0; i < fieldInits.size(); ++i)
+        {
+            CPMSyntaxTreeNode* fieldName  = fieldInits[i].first;
+            CPMSyntaxTreeNode* fieldValue = fieldInits[i].second;
+
+            map<string, CPMDataSymbol>::iterator fi = structInstance->fields.find(fieldName->text);
+            if (fi != structInstance->fields.end())
+            {
+                CPMDataSymbol sfield = fi->second;
+                sfield.offset += field.offset + index * sizeOfType(field.legacyType());
+                // The field's layout entry belongs to the struct's
+                // namespace, which may differ from the namespace the
+                // static was declared in; redirect writes and name
+                // resolution to the symbol's own buffer.
+                sfield.owner = symbol->field.owner;
+                parseLiteralValue(symbol, sfield, fieldValue);
+            }
+            else
+            {
+                compilerLog.Add(LOG_ERROR, "Structure " + structInstance->name + " does not contain '" + fieldName->text + "' field.", fieldName->sourceFileName, fieldName->lineNumber);
+                noErrors = false;
+                return false;
+            }
         }
         return true;
     }
@@ -2150,64 +2177,120 @@ namespace CPM
     {
         if (field.legacyCount() > 1)
         {
-            if (valueNode->type != CPM_BLOCK && !(field.legacyType() == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR))
+            // Array literal — valueNode must be either:
+            //   * legacy ';'-separated CPM_BLOCK: children = '(' LINE … LINE ')'.
+            //   * new     ','-separated CPM_EXPR : children = elem ',' elem … (no
+            //     surrounding parens; the interleaved comma CPM_CHAR tokens are
+            //     dropped before addressing elements).
+            //   * legacy char-array-from-string shortcut `char text array N
+            //     "…N…"` (spec §5.6 removes it; kept until step 9 rewrites
+            //     test.cpm): here valueNode is a CPM_STR whose raw char
+            //     children are the per-element bytes.
+            vector<CPMSyntaxTreeNode*> elements;
+            if (valueNode->type == CPM_BLOCK)
+            {
+                for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
+                    elements.push_back(valueNode->children[i]);
+            }
+            else if (valueNode->type == CPM_EXPR)
+            {
+                for (size_t i = 0; i < valueNode->children.size(); ++i)
+                {
+                    CPMSyntaxTreeNode* c = valueNode->children[i];
+                    if (c->type == CPM_CHAR && c->text.size() == 1 && c->text[0] == CPM_OPERAND_DELIM)
+                        continue;
+                    elements.push_back(c);
+                }
+            }
+            else if (field.legacyType() == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR)
+            {
+                for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
+                    elements.push_back(valueNode->children[i]);
+            }
+            else
             {
                 compilerLog.Add(LOG_ERROR, "Invalid literal array syntax.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
-            if (valueNode->children.size() != field.legacyCount() + 2)
+
+            if (elements.size() != (size_t)field.legacyCount())
             {
                 compilerLog.Add(LOG_ERROR, "Declared items count does not match array size.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
-        }
 
-        //symbol->data.resize(symbol->count);
-
-        CPMSyntaxTreeNode* itemNode = valueNode;
-        for (int index = 0; index < field.legacyCount(); ++index)
-        {
-            if (field.legacyCount() > 1)
-                itemNode = valueNode->children[index + 1];
-
-            if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
+            for (int index = 0; index < field.legacyCount(); ++index)
             {
-                if (!parseLiteralNumber(symbol, field, itemNode, index))
-                    return false;
-            }
-            else
-            {
-                if (field.legacyCount() > 1 && valueNode->type == CPM_BLOCK) {
-                    if (itemNode->children.size() == 1)
-                        itemNode = itemNode->children[0];
-                    else
-                    {
-                        compilerLog.Add(LOG_ERROR, "Invalid array item syntax.", itemNode->sourceFileName, itemNode->lineNumber);
-                        noErrors = false;
+                CPMSyntaxTreeNode* itemNode = elements[index];
+
+                if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
+                {
+                    if (!parseLiteralNumber(symbol, field, itemNode, index))
                         return false;
+                }
+                else
+                {
+                    // Legacy BLOCK entries are CPM_LINE wraps around a single
+                    // value (e.g. `("ab")` becomes LINE([STR("ab")])).
+                    // Unwrap them so the per-type parser sees a leaf; the new
+                    // EXPR form already yields leaf nodes directly.
+                    if (itemNode->type == CPM_LINE)
+                    {
+                        if (itemNode->children.size() == 1)
+                            itemNode = itemNode->children[0];
+                        else
+                        {
+                            compilerLog.Add(LOG_ERROR, "Invalid array item syntax.", itemNode->sourceFileName, itemNode->lineNumber);
+                            noErrors = false;
+                            return false;
+                        }
+                    }
+
+                    if (field.legacyType() == CPM_DATATYPE_STRING)
+                    {
+                        if (!parseAndAllocateLiteralString(symbol, field, itemNode, index))
+                            return false;
+                    }
+                    else if (field.legacyType() == CPM_DATATYPE_CHAR)
+                    {
+                        if (!parseLiteralChar(symbol, field, itemNode, index))
+                            return false;
+                    }
+                    else if (field.legacyType() >= CPM_DATATYPE_USER)
+                    {
+                        if (!parseLiteralStruct(symbol, field, itemNode, index))
+                            return false;
                     }
                 }
-
-                if (field.legacyType() == CPM_DATATYPE_STRING)
-                {
-                    if (!parseAndAllocateLiteralString(symbol, field, itemNode, index))
-                        return false;
-                }
-                else if (field.legacyType() == CPM_DATATYPE_CHAR)
-                {
-                    if (!parseLiteralChar(symbol, field, itemNode, index))
-                        return false;
-                }
-                else if (field.legacyType() >= CPM_DATATYPE_USER)
-                {
-                    if (!parseLiteralStruct(symbol, field, itemNode, index))
-                        return false;
-                }
             }
+
+            return true;
         }
 
+        // Scalar (count <= 1).
+        CPMSyntaxTreeNode* itemNode = valueNode;
+        if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
+        {
+            if (!parseLiteralNumber(symbol, field, itemNode, 0))
+                return false;
+        }
+        else if (field.legacyType() == CPM_DATATYPE_STRING)
+        {
+            if (!parseAndAllocateLiteralString(symbol, field, itemNode, 0))
+                return false;
+        }
+        else if (field.legacyType() == CPM_DATATYPE_CHAR)
+        {
+            if (!parseLiteralChar(symbol, field, itemNode, 0))
+                return false;
+        }
+        else if (field.legacyType() >= CPM_DATATYPE_USER)
+        {
+            if (!parseLiteralStruct(symbol, field, itemNode, 0))
+                return false;
+        }
         return true;
     }
 
@@ -2374,13 +2457,22 @@ namespace CPM
             return false;
         }
     }
-
-    bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
+bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
         CPM_ASSERT(field.legacyType() == CPM_DATATYPE_CHAR);
+
         FRIDGE_WORD val;
-        if (valueNode->type == CPM_STR && valueNode->text.size() == 3)
+        if (valueNode->type == CPM_CHARLIT)
         {
+            // `'x'`: text carries the single quotes (mirrors CPM_STR shape),
+            // so the enclosed char is text[1]. Spec §5.6 makes single quotes
+            // the only char-literal form.
+            if (valueNode->text.size() != 3)
+            {
+                compilerLog.Add(LOG_ERROR, "Invalid char literal.", valueNode->sourceFileName, valueNode->lineNumber);
+                noErrors = false;
+                return false;
+            }
             val = (FRIDGE_WORD)valueNode->text[1];
         }
         else if (valueNode->type == CPM_NUM)
@@ -2397,7 +2489,9 @@ namespace CPM
         else if (valueNode->type == CPM_CHAR)
         {
             // Item node of a quoted string used as a char array initializer
-            // (e.g. `char text array 5 "12345"`).
+            // (e.g. the legacy `char text array 5 "12345"` shortcut). Spec
+            // §5.6 removes the implicit string→char-array coercion; this
+            // branch is kept only until test.cpm is rewritten in step 9.
             val = (FRIDGE_WORD)valueNode->text[0];
         }
         else
