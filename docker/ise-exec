@@ -1,0 +1,21 @@
+#!/bin/bash
+# Container entrypoint: source the ISE environment, then exec the command.
+# Note: settings64.sh interprets $1 as the install location, so pass it
+# explicitly - the entrypoint's own positional args must not leak into it.
+
+if [ -f /opt/Xilinx/14.7/ISE_DS/settings64.sh ]; then
+    # shellcheck disable=SC1091
+    source /opt/Xilinx/14.7/ISE_DS/settings64.sh /opt/Xilinx/14.7/ISE_DS >/dev/null 2>&1
+fi
+
+# The container may run with an arbitrary host UID that has no writable HOME.
+if [ ! -w "${HOME:-/}" ]; then
+    export HOME=/tmp/ise-home
+    mkdir -p "$HOME"
+fi
+
+if [ "$#" -eq 0 ]; then
+    exec /bin/bash
+fi
+
+exec "$@"

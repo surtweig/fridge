@@ -1,0 +1,13 @@
+#!/bin/bash
+# Digilent Adept djtgcfg - JTAG programming for the Atlys' onboard USB-JTAG
+# (Digilent FX2 protocol, VID:PID 1443:0007). openFPGALoader cannot drive
+# this interface.
+#
+# Prefers the system-wide install (done by setup-system.sh); falls back to the
+# user-space extraction in vendor/adept-root.
+if command -v djtgcfg >/dev/null 2>&1 && [ "$(command -v djtgcfg)" != "$0" ]; then
+    exec djtgcfg "$@"
+fi
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/vendor/adept-root"
+export LD_LIBRARY_PATH="$ROOT/usr/lib/digilent/adept${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$ROOT/usr/bin/djtgcfg" "$@"

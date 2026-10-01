@@ -1,0 +1,4 @@
+vhdl work "video_pattern.vhd"
+vhdl work "tmds_encoder.vhd"
+vhdl work "tmds_serializer.vhd"
+vhdl work "hdmi.vhd"

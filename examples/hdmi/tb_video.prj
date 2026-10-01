@@ -1,0 +1,3 @@
+vhdl work "video_pattern.vhd"
+vhdl work "tmds_encoder.vhd"
+vhdl work "tb_video.vhd"

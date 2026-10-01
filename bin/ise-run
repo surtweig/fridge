@@ -1,0 +1,27 @@
+#!/bin/bash
+# Run an ISE tool inside the ise:14.7 container against the current directory.
+set -e
+
+IMAGE="${ISE_IMAGE:-ise:14.7}"
+LICENSE_MAC="${ISE_LICENSE_MAC:-08:00:27:68:c9:35}"
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+LICENSE="$ROOT/licenses/Xilinx.lic"
+
+TTY_FLAGS=""
+if [ -t 0 ] && [ -t 1 ]; then
+    TTY_FLAGS="-it"
+fi
+
+LICENSE_OPTS=()
+if [ -f "$LICENSE" ]; then
+    LICENSE_OPTS+=(-v "$LICENSE:/opt/Xilinx.lic:ro" -e XILINXD_LICENSE_FILE=/opt/Xilinx.lic)
+    LICENSE_OPTS+=(--mac-address "$LICENSE_MAC")
+fi
+
+exec docker run --rm $TTY_FLAGS \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp/ise-home \
+    "${LICENSE_OPTS[@]}" \
+    -v "$PWD:$PWD" \
+    -w "$PWD" \
+    "$IMAGE" "$@"

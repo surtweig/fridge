@@ -1,0 +1,2 @@
+vhdl work "tmds_serializer.vhd"
+vhdl work "tb_serializer.vhd"

@@ -1,0 +1,15 @@
+# Digilent Atlys rev.C - pin constraints (from Digilent AtlysGeneral.ucf / Atlys ISE GPIO demo)
+# Board part: XC6SLX45-3CSG324C
+
+NET "clk" LOC = "L15"; # Bank = 1, Pin name = IO_L42P_GCLK7_M1UDM, Type = GCLK, Sch name = GCLK
+NET "clk" TNM_NET = clk;
+TIMESPEC TS_clk = PERIOD "clk" 100 MHz HIGH 50%;
+
+NET "led<0>" LOC = "U18"; # Bank = 1, Sch name = LD0
+NET "led<1>" LOC = "M14"; # Bank = 1, Sch name = LD1
+NET "led<2>" LOC = "N14"; # Bank = 1, Sch name = LD2
+NET "led<3>" LOC = "L14"; # Bank = 1, Sch name = LD3
+NET "led<4>" LOC = "M13"; # Bank = 1, Sch name = LD4
+NET "led<5>" LOC = "D4";  # Bank = 0, Sch name = HSWAP/LD5
+NET "led<6>" LOC = "P16"; # Bank = 1, Sch name = LD6
+NET "led<7>" LOC = "N12"; # Bank = 2, Sch name = M1/LD7

@@ -1,0 +1,21 @@
+# Digilent Atlys revision C, dedicated HDMI OUT connector.
+NET "clk" LOC = "L15" | IOSTANDARD = LVCMOS33;
+NET "clk" TNM_NET = "clk";
+TIMESPEC "TS_clk" = PERIOD "clk" 10 ns HIGH 50%;
+NET "reset_button" LOC = "T15" | IOSTANDARD = LVCMOS33;
+NET "reset_button" TIG;
+# Lock loss asserts reset asynchronously; release is synchronized separately
+# in each domain. Only this asynchronous reset path is excluded from timing.
+NET "clock_fault" TIG;
+NET "led<0>" LOC = "U18" | IOSTANDARD = LVCMOS33;
+NET "led<1>" LOC = "M14" | IOSTANDARD = LVCMOS33;
+NET "led<2>" LOC = "N14" | IOSTANDARD = LVCMOS33;
+NET "led<3>" LOC = "L14" | IOSTANDARD = LVCMOS33;
+NET "tmds_clk_p" LOC = "B6" | IOSTANDARD = TMDS_33;
+NET "tmds_clk_n" LOC = "A6" | IOSTANDARD = TMDS_33;
+NET "tmds_p<0>" LOC = "D8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<0>" LOC = "C8" | IOSTANDARD = TMDS_33;
+NET "tmds_p<1>" LOC = "C7" | IOSTANDARD = TMDS_33;
+NET "tmds_n<1>" LOC = "A7" | IOSTANDARD = TMDS_33;
+NET "tmds_p<2>" LOC = "B8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<2>" LOC = "A8" | IOSTANDARD = TMDS_33;

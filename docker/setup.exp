@@ -1,0 +1,25 @@
+#!/usr/bin/expect
+# Drives the ISE 14.7 batch installer through its EULA/Enter prompts.
+# Must be started with cwd = /tmp/install (where the extracted installer and
+# the batchxsetup config file live).
+
+set timeout 2
+
+spawn /tmp/install/bin/lin64/batchxsetup -batch config
+
+set GO 1
+while {$GO > 0} {
+    expect "Press Enter key to continue" { send "\r" } timeout { set GO 0 }
+}
+
+expect "I accept and agree to the terms and conditions above." { send "y\r" }
+
+set GO 1
+while {$GO > 0} {
+    expect "Press Enter key to continue" { send "\r" } timeout { set GO 0 }
+}
+
+expect "I accept and agree to the terms and conditions above." { send "y\r" }
+
+set timeout -1
+expect eof

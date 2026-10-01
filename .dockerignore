@@ -1,0 +1,7 @@
+# Keep the build context small: only docker/ and ISE/ are needed by the Dockerfile.
+examples/
+bin/
+ISE/README*
+*.md
+setup-host.sh
+.gitignore

@@ -1,0 +1,4 @@
+vhdl work "FridgeGlobals.vhd"
+vhdl work "video_timing.vhd"
+vhdl work "fridge_gpu.vhd"
+vhdl work "tb_gpu.vhd"

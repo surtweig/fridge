@@ -1,0 +1,23 @@
+################################################################################
+# Copyright (c) 1995-2013 Xilinx, Inc.  All rights reserved.
+################################################################################
+# batchxsetup configuration: ISE WebPACK (free).
+# WebPACK covers XC6SLX4 - XC6SLX75T, so the Atlys XC6SLX45 needs no license.
+
+destination_dir=/opt/Xilinx
+
+downloadlocation_dir=/tmp/
+
+# &Import tool preferences from previous version
+copy_preferences=N
+
+# &Use multiple CPU cores for faster installation
+use_multiple_cores=Y
+
+application=Acquire or Manage a License Key::0
+
+package=ISE WebPACK::1
+application=setupEnv.sh::0
+application=Install Linux System Generator Info XML::0
+application=Ensure Linux System Generator Symlinks::0
+application=Install Cable Drivers::0
