@@ -75,9 +75,11 @@ is active low.
 1. `ir_VPRE` now latches the swap mode (A) and frame offsets (HL) into new
    outputs `GPU_PRESENT_MODE`/`GPU_FRAME_OFFSET` alongside the trigger pulse;
    previously VPRE only pulsed a trigger and dropped A/HL.
-2. `ir_VMODE` decodes `mode(0)` instead of `mode(7)`, matching `fridge.h`
-   (A=0 EGA, A=1 TEXT). The old bit-7 encoding required A=0x80 and disagreed
-   with the emulator.
+2. `ir_VMODE` decodes `mode(7)` per `fridge.h` (A=0 EGA, A=1 TEXT): `XCM2_WORD`
+   is `unsigned(0 to 7)`, so index 7 is the A=0x01 bit and index 0 is the
+   0x80 bit. An earlier revision of this file decoded `mode(0)` (inverted);
+   it was corrected after the bit indexing was validated in simulation
+   (`examples/keyboard/tb_system` now locks the A=0x01 -> TEXT decode).
 3. `INX_DE`/`INX_HL`/`DCX_DE`/`DCX_HL` dispatched to scrambled register pairs
    (`rD,rH` and `rE,rL` instead of `rD,rE` and `rH,rL`) — an upstream bug
    breaking HL-pointer loops; fixed to match `fridge.h`.

@@ -1,0 +1,4 @@
+vhdl work "FridgeGlobals.vhd"
+vhdl work "ps2_receiver.vhd"
+vhdl work "fridge_keyboard.vhd"
+vhdl work "tb_keyboard.vhd"

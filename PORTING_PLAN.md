@@ -32,7 +32,7 @@
    program. Simulation, synthesis, and timing all pass.
 3. **HDMI/GPU integration, complete:** connect the initial framebuffer/GPU path to the
    validated HDMI pipeline, keeping the standalone demo as a reference.
-4. **Keyboard:** confirm the PIC32 PS/2 bridge on hardware, then add PS/2
+4. **Keyboard:** confirm the USB-host PIC32 PS/2 bridge on hardware, then add PS/2
    reception and a 32-entry keyboard FIFO with defined overflow behavior.
 5. **Flash ROM:** implement read-only ROM access using 256-byte streams.
    Establish a safe programming procedure that protects configuration and
@@ -108,12 +108,62 @@
   the frame-buffer crossing is inside dual-clock BRAM ports.
 - `examples/hdmi` and `examples/cpu` regressions pass unchanged.
 - FridgeCPU fixes in `examples/gpu` (documented in its README): VPRE now
-  forwards swap mode and offsets, VMODE decodes A bit 0 per `fridge.h`, and
-  the scrambled INX/DCX register-pair dispatch (INX_HL wrote rE/rL) is
-  corrected.
+  forwards swap mode and offsets, VMODE decodes A bit 0 per `fridge.h` (see
+  the correction below), and the scrambled INX/DCX register-pair dispatch
+  (INX_HL wrote rE/rL) is corrected.
+- VMODE decode correction (stage 4): `XCM2_WORD` is `unsigned(0 to 7)`, so
+  A bit 0 is index 7; the stage 3 revision decoded `mode(0)` (the 0x80 bit),
+  making A=1 select EGA against `fridge.h`. `examples/gpu` is corrected to
+  `mode(7)` (bit indexing validated in simulation) and
+  `examples/keyboard/tb_system` locks the A=0x01 -> TEXT decode through the
+  CPU.
 - Boot image draws 16 horizontal color bars via VFSA, presents with VPRE and
   halts.
 - Hardware display verified on the Atlys: the monitor shows the 16 color bars
   filling the centered 960x640 window with 160/40 px blue margins, and the
   LED pattern matches (halted, heartbeat, clock locks, frame activity).
   Step 3 hardware gate recorded from the actual board.
+- Stage 4 bridge situation confirmed from documentation (hardware gate still
+  open): the "Host" USB-A port (J13) is served by a PIC24FJ192 (master UCF
+  net names say "PIC32"; the Atlys manual revC sec. 11 names the part) that
+  converts one USB keyboard/mouse to PS/2 protocol on four FPGA pins.
+  Keyboard: K_CLK = P17, K_DAT = N15 (bank 1, 3.3 V); the master UCF's
+  USBCLK/USBSDI SPI names are a stale earlier-revision mapping. No external
+  pull-ups on the lines (UCF `PULLUP` required); PS/2 clock 10-16.7 kHz.
+- PS/2 reception and the 32-entry keyboard FIFO implemented under
+  `examples/keyboard`: `ps2_receiver.vhd` (11-bit frames, odd parity,
+  start/stop checks, 150 us idle watchdog), `fridge_keyboard.vhd`
+  (scan-code-set-2 decoder with E0/F0 prefixes, Pause swallow, Shift and
+  CapsLock event-time folding per `keymap.h`, 32-entry FIFO), and a live
+  key-event tape demo on the CPU/GPU/HDMI system reading events via `IIN 3`.
+- Keyboard FIFO contract defined (README): `IIN 3` pops the oldest event,
+  empty read returns 0x00 and is a no-op; on overflow the new event is
+  dropped (buffered order preserved) and a sticky OVERFLOW flag rises until
+  reset (LED3; CPU-visible status reserved). Documented divergences from the
+  emulator: drop-newest instead of the emulator ring's silent overwrite,
+  and full US Shift folding for punctuation.
+- FridgeCPU device-bus fixes in `examples/keyboard` (README): DEVICE_DATA is
+  now truly bidirectional (CPU drives only during IOUT), `ir_IIN` captures
+  the resolved port value (it previously read an undriven internal signal),
+  and DEVICE_READ is a one-cycle decode of CPU_DEVICE_READ instead of a
+  level that latched until the next write. IOUT write timing is not
+  validated (no write strobe yet); only the IIN path is.
+- Simulation passes: `tb_ps2_receiver` (valid frames at 15/10 kHz, all 256
+  bytes, parity/start/stop rejection, watchdog recovery), `tb_keyboard`
+  (make/break, Shift/CapsLock/keypad/extended/Pause handling, empty-read
+  semantics, device-select guard, 32-entry order, drop-newest overflow,
+  sticky RX_ERROR) and `tb_system` (real boot image: 19200 fill writes,
+  typed PS/2 traffic -> 6 tape events `E1 61 C2 42 B1 8A` in order, VMODE
+  A-bit-0 TEXT->EGA decode, VPRE MANUAL_11, continuous IIN polling, tape
+  pixel colors on display). See `examples/keyboard/README.md`.
+- ISE synthesis, place/route, bitstream and post-route timing pass with zero
+  errors and all constraints met. Max pixel domain 11.84 ns against the
+  13.47 ns requirement (74.25 MHz); CPU domain 57 ns against 100 ns.
+  BRAM: 64 RAMB16BWER (32 CPU RAM + 32 frame buffers).
+  Bitstream: `examples/keyboard/keyboard.bit`.
+- `examples/hdmi`, `examples/cpu` and `examples/gpu` regressions pass
+  unchanged (the `examples/gpu` VMODE decode correction re-verified there).
+- Stage 4 hardware gate remains open: the PIC24 bridge behavior on this
+  board (PS/2 traffic on P17/N15 from a USB keyboard on J13, JP11 open) is
+  to be recorded from the actual board with the `examples/keyboard`
+  bitstream; documentation evidence is recorded above.

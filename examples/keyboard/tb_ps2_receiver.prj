@@ -1,0 +1,2 @@
+vhdl work "ps2_receiver.vhd"
+vhdl work "tb_ps2_receiver.vhd"

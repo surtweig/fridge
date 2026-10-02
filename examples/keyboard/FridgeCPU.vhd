@@ -90,6 +90,7 @@ architecture main of FridgeCPU is
      signal interruptsEnabled, interruptRequested, interruptInProgress : std_logic:= '0';
      signal interruptAddr : XCM2_WORD;
      signal deviceData, deviceSel : XCM2_WORD;
+     signal deviceDataIn : XCM2_WORD;
      signal PC, nextPC : XCM2_DWORD;
      signal SP, nextSP : XCM2_DWORD;
      signal rA, rB, rC, rD, rE, rH, rL, rF : XCM2_WORD;
@@ -1234,12 +1235,6 @@ begin
           GPU_FRAME_OFFSET <= gpuFrameOffset;
           GPU_BACK_DATA <= gpuBackData;
           
-          if (state = CPU_DEVICE_READ) then
-               DEVICE_READ <= '1';
-          elsif (state = CPU_DEVICE_WRITE) then
-               DEVICE_READ <= '0';
-          end if;
-               
           if rising_edge(CLK_MAIN) then
                if RESET = '0' then
                
@@ -1632,7 +1627,7 @@ begin
                     when EI => ir_EnableInterrupt('1', interruptsEnabled, state, buf_nextState);
                     when DI => ir_EnableInterrupt('0', interruptsEnabled, state, buf_nextState);
                     
-                    when IIN => ir_IIN(rA, IRArg0, deviceSel, deviceData, state, buf_nextState);
+                    when IIN => ir_IIN(rA, IRArg0, deviceSel, deviceDataIn, state, buf_nextState);
                     when IOUT => ir_IOUT(rA, IRArg0, deviceSel, deviceData, state, buf_nextState);
                     
                     --when VFCLR => ir_Trigger(gpuBackClr, state, buf_nextState);
@@ -1676,7 +1671,22 @@ begin
      RAM_WRITE_DATA <= memWriteBuffer;
      RAM_WRITE_ENABLED <= memWriteEnabled;
      DEVICE_SEL <= deviceSel;
-     DEVICE_DATA <= deviceData;
+     -- DEVICE_READ is a pure decode of the FSM state: high for exactly the
+     -- one CPU_DEVICE_READ cycle (the old in-process assignment latched and
+     -- held the level until the next device write). Devices must present
+     -- read data from the start of the state (the CPU captures it at the
+     -- mid-state falling edge) and may advance their read side at the
+     -- rising edge that ends the state.
+     DEVICE_READ <= '1' when state = CPU_DEVICE_READ else '0';
+     -- DEVICE_DATA: the CPU drives it only while writing (IOUT); devices
+     -- drive it while DEVICE_READ is asserted (IIN). Without the tri-state
+     -- the CPU and a device would fight over the bus during reads. The
+     -- write value is rA, valid for the whole CPU_DEVICE_WRITE state.
+     -- deviceDataIn follows the resolved port value so IIN sees what the
+     -- selected device drives. (IOUT device-write timing is not exercised
+     -- by this stage; only the IIN read path is validated.)
+     deviceDataIn <= DEVICE_DATA;
+     DEVICE_DATA <= rA when state = CPU_DEVICE_WRITE else (others => 'Z');
      DEBUG_PC <= PC;
      DEBUG_CURRENT_IR <= currentIRCode;
 
