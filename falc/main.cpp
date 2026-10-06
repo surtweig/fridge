@@ -31,18 +31,32 @@ int main(int argc, char* argv[])
         std::cout << "Starting with " << fname << " in the root directory " << dir << ".\n";
 
         bool writeVHDL = false;
-        if (argc >= 4)
+        bool writeVHDLAggregate = false;
+        for (int a = 3; a < argc; a++)
         {
-            std::string arg3(argv[3]);
-            if (arg3 == "-vhdl")
+            std::string arg(argv[a]);
+            if (arg == "-vhdl")
                 writeVHDL = true;
+            else if (arg == "-vhdl-aggregate")
+                writeVHDLAggregate = true;
+            else
+            {
+                std::cout << "Unknown option '" << arg << "'.\n"
+                          << "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate]\n";
+                return 1;
+            }
+        }
+        if (writeVHDL && writeVHDLAggregate)
+        {
+            std::cout << "Use either -vhdl or -vhdl-aggregate, not both.\n";
+            return 1;
         }
 
-        FridgeAssemblyLanguageCompiler falc(dir, fname, outfilename, std::vector<std::string>(), &std::cout, writeVHDL);
+        FridgeAssemblyLanguageCompiler falc(dir, fname, outfilename, std::vector<std::string>(), &std::cout, writeVHDL, writeVHDLAggregate);
     }
     else
     {
-        std::cout << "Usage: falc <input file> <output file> [-vhdl for additional VHDL output]\n";
+        std::cout << "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate]\n";
     }
 
     return 0;

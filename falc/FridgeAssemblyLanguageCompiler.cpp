@@ -3,10 +3,12 @@
 
 #define FALC_ERR_LOC "[" << currentSourceFile << " : " << currentLineNumber << "] "
 
-FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL)
+FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL, bool saveVHDLAggregate)
 {
     this->errstr = errstr;
     this->includeFolders = includeFolders;
+    mainSourceName = sourceFileName;
+    mainSourcePath = sourceRootFolder + sourceFileName;
     currentLineNumber = -1;
     currentSourceFile = "none";
     offset = 0;
@@ -38,7 +40,9 @@ FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRoot
                         if (outputFile.length() > 0)
                         {
                             saveObjectCode(outputFile);
-                            if (saveVHDL)
+                            if (saveVHDLAggregate)
+                                saveObjectCodeVHDLAggregate(outputFile + ".vhd");
+                            else if (saveVHDL)
                                 saveObjectCodeVHDL(outputFile + ".vhd");
                         }
                         noerrors = true;
@@ -145,6 +149,242 @@ bool FridgeAssemblyLanguageCompiler::saveObjectCodeVHDL(string outputFile)
     }
     myfile << "\nothers => X\"00\"";
     myfile.close();
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// VHDL aggregate emitter
+//
+// Writes a complete FridgeRAMBootImage package whose RAMBootImage constant is
+// an address-indexed aggregate in the same style as the hand-maintained boot
+// images of the FPGA examples:
+//
+//     16#00# => MVI_A,        -- MVI A, 1
+//     16#01# => X"01",
+//
+// Opcode bytes are written as FridgeIRCodes symbolic names, operand and
+// resource bytes as hex literals. Each instruction carries the text of the
+// source line it was assembled from, and comment-only lines of the main
+// source file are reproduced as VHDL comments above the code they precede.
+// ----------------------------------------------------------------------------
+
+static string falcTrimSpace(const string& raw)
+{
+    size_t b = raw.find_first_not_of(" \t\r\n");
+    if (b == string::npos)
+        return string();
+    size_t e = raw.find_last_not_of(" \t\r\n");
+    return raw.substr(b, e - b + 1);
+}
+
+// Source text of a line without its trailing // comment, trimmed.
+static string falcTrimComment(const string& raw)
+{
+    size_t c = raw.find("//");
+    return falcTrimSpace(c == string::npos ? raw : raw.substr(0, c));
+}
+
+static string falcHexByte(FRIDGE_WORD v)
+{
+    stringstream stream;
+    stream << "X\"" << uppercase << setfill('0') << setw(2) << hex << (int)v << "\"";
+    return stream.str();
+}
+
+static string falcHexAddress(FRIDGE_RAM_ADDR v, int digits)
+{
+    stringstream stream;
+    stream << "16#" << uppercase << setfill('0') << setw(digits) << hex << (int)v << "#";
+    return stream.str();
+}
+
+bool FridgeAssemblyLanguageCompiler::saveObjectCodeVHDLAggregate(string outputFile)
+{
+    if (objectCode == nullptr)
+    {
+        logerrout("No object code to save.");
+        return false;
+    }
+
+    ofstream myfile(outputFile, ios::out);
+    if (!myfile.is_open())
+    {
+        *errstr << FALC_ERR_LOC << "[ERROR]   Cannot open file '" << outputFile << "'. \n";
+        return false;
+    }
+
+    // Source text and line number per address. Directives (`entry`, `main`,
+    // `offset`, ...) carry no address of their own -- they keep the default 0
+    // assigned during preprocessing -- so they are skipped here; otherwise an
+    // `entry foo` before the first instruction would claim address 0 and hide
+    // the instruction that actually lives there. Among the statements that do
+    // share an address, the last one wins: `entry foo` is followed by the
+    // statement it labels, and that statement's text is the useful one.
+    //
+    // `lines[].address` is assigned before the jump prologue is prepended to
+    // the object code, so when a prologue is emitted the source addresses
+    // trail the code by its 3 bytes and have to be shifted (the emulator's
+    // falc frontend corrects the same way). A prologue is emitted exactly
+    // when main does not sit at the offset.
+    int preambleShift = (mainEntry == offset) ? 0 : 3;
+    map<FRIDGE_RAM_ADDR, string> addrText;
+    map<FRIDGE_RAM_ADDR, int> addrLine;
+    for (vector<ParsedLine>::iterator iline = lines.begin(); iline != lines.end(); ++iline)
+    {
+        if (KeywordIDs.find(iline->words[0]) != KeywordIDs.end())
+            continue;
+        string text = falcTrimComment(iline->rawText);
+        if (text.empty())
+            continue;
+        FRIDGE_RAM_ADDR addr = (FRIDGE_RAM_ADDR)(iline->address + preambleShift);
+        addrText[addr] = text;
+        // Comment placement is keyed on line numbers, which are only
+        // comparable inside one file. Statements pulled in from include files
+        // therefore do not claim a comment slot: comments written in the main
+        // source are placed against the main source's own statements.
+        if (iline->sourceFile == mainSourceName)
+            addrLine[addr] = iline->lineNumber;
+    }
+
+    // Comment-only lines of the main source file, in line order.
+    vector< pair<int, string> > comments;
+    {
+        ifstream src(mainSourcePath.c_str());
+        string line;
+        int lineNumber = 1;
+        while (getline(src, line))
+        {
+            if (falcTrimComment(line).empty())
+            {
+                string text = falcTrimSpace(line);
+                if (text.size() >= 2 && text[0] == '/' && text[1] == '/')
+                    comments.push_back(make_pair(lineNumber, falcTrimSpace(text.substr(2))));
+            }
+            lineNumber++;
+        }
+    }
+
+    // Resource name per start address, for data-section comments, plus the
+    // line number of the `static` directive so that comments written above a
+    // resource are emitted above it.
+    map<FRIDGE_RAM_ADDR, string> resourceNames;
+    for (map<string, StaticResourceInfo>::iterator ires = resources.begin(); ires != resources.end(); ++ires)
+    {
+        resourceNames[ires->second.address] = ires->first;
+        for (vector<ParsedLine>::iterator iline = lines.begin(); iline != lines.end(); ++iline)
+        {
+            if (iline->words[0] == R_STATICRESOURCE && iline->words.size() >= 2 && iline->words[1] == ires->first)
+            {
+                addrLine[ires->second.address] = iline->lineNumber;
+                break;
+            }
+        }
+    }
+
+    int addressDigits = (offset + programSize > 0x100) ? 4 : 2;
+
+    myfile << "library ieee;\n"
+           << "use ieee.std_logic_1164.all;\n"
+           << "use ieee.numeric_std.all;\n"
+           << "use work.FridgeGlobals.all;\n"
+           << "use work.FridgeIRCodes.all;\n"
+           << "\n"
+           << "package FridgeRAMBootImage is\n"
+           << "\n"
+           << "constant RAMBootImage : XCM2_RAM :=\n"
+           << "(\n"
+           << "     -- Generated by falc from " << mainSourcePath << ".\n"
+           << "     -- Do not edit: change the source program and re-run falc.\n"
+           << "     --\n"
+           << "     -- addr  bytes          instruction\n";
+
+    int extraSize = 0;
+    size_t nextComment = 0;
+    for (int i = 0; i < (int)programSize; i++)
+    {
+        FRIDGE_RAM_ADDR addr = (FRIDGE_RAM_ADDR)(offset + i);
+        FRIDGE_WORD byte = objectCode[i];
+        bool isData = (i >= (int)resOrigin);
+        bool instructionStart = false;
+        string name;
+
+        if (!isData)
+        {
+            if (extraSize == 0)
+            {
+                instructionStart = true;
+                map<FRIDGE_WORD, string>::iterator iname = IRNames.find(byte);
+                if (iname != IRNames.end())
+                    name = iname->second;
+                for (int ircode = byte; ircode >= 0; ircode--)
+                {
+                    map<FRIDGE_WORD, InstructionSignature>::iterator isig = IRSigs.find((FRIDGE_WORD)ircode);
+                    if (isig != IRSigs.end())
+                    {
+                        extraSize = isig->second.extraSize;
+                        break;
+                    }
+                }
+            }
+            else
+                extraSize--;
+        }
+
+        // Reproduce the source comments that precede this unit of code.
+        if (instructionStart || (isData && resourceNames.find(addr) != resourceNames.end()))
+        {
+            int limit = -1;
+            map<FRIDGE_RAM_ADDR, int>::iterator aline = addrLine.find(addr);
+            if (aline != addrLine.end())
+                limit = aline->second;
+            while (nextComment < comments.size() && comments[nextComment].first <= limit)
+            {
+                myfile << "     --" << (comments[nextComment].second.empty() ? "" : " ")
+                       << comments[nextComment].second << "\n";
+                nextComment++;
+            }
+        }
+
+        string value = (instructionStart && !name.empty()) ? name : falcHexByte(byte);
+        string comment;
+        if (instructionStart)
+        {
+            map<FRIDGE_RAM_ADDR, string>::iterator atext = addrText.find(addr);
+            if (atext != addrText.end())
+                comment = atext->second;
+            else if (!name.empty())
+                comment = name;
+        }
+        else if (isData)
+        {
+            map<FRIDGE_RAM_ADDR, string>::iterator iname = resourceNames.find(addr);
+            if (iname != resourceNames.end())
+                comment = "static " + iname->second;
+        }
+
+        string entry = "     " + falcHexAddress(addr, addressDigits) + " => " + value + ",";
+        if (!comment.empty())
+        {
+            while (entry.size() < 29)
+                entry += ' ';
+            entry += "-- " + comment;
+        }
+        myfile << entry << "\n";
+    }
+
+    // Anything the source says after the last unit of code.
+    while (nextComment < comments.size())
+    {
+        myfile << "     --" << (comments[nextComment].second.empty() ? "" : " ")
+               << comments[nextComment].second << "\n";
+        nextComment++;
+    }
+
+    myfile << "     others => X\"00\"\n"
+           << ");\n"
+           << "end FridgeRAMBootImage;\n";
+    myfile.close();
+    logout("VHDL aggregate is saved to " + outputFile);
     return true;
 }
 

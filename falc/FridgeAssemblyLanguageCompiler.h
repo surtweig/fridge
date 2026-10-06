@@ -83,6 +83,8 @@ private:
     FRIDGE_RAM_ADDR programSize;
     FRIDGE_RAM_ADDR resOrigin;
     FRIDGE_WORD* objectCode;
+    string mainSourceName;
+    string mainSourcePath;
 
     static unordered_set<string> KeywordIDs;
     static unordered_set<string> JumpIRIDs;
@@ -105,6 +107,7 @@ private:
     bool generateObjectCode();
     bool saveObjectCode(string outputFile);
     bool saveObjectCodeVHDL(string outputFile);
+    bool saveObjectCodeVHDLAggregate(string outputFile);
 
     bool parseDec(string* word, FRIDGE_WORD& value);
     bool parseHex(string* word, FRIDGE_WORD& value);
@@ -118,7 +121,8 @@ private:
 public:
     FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName,
                                    string outputFile,
-                                   vector<string> includeFolders, ostream* errstr, bool saveVHDL = false);
+                                   vector<string> includeFolders, ostream* errstr,
+                                   bool saveVHDL = false, bool saveVHDLAggregate = false);
     FRIDGE_WORD* getObjectCode() { return objectCode; }
     FRIDGE_RAM_ADDR getOffset() { return offset; }
     FRIDGE_RAM_ADDR getProgramSize() { return programSize; }

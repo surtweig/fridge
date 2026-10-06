@@ -45,13 +45,13 @@ subroutine mul_dc
         MOV D, A
         JNC mul_dc.next
                
-        MOV A, H          // H += B
-        ADD B
-        MOV H, A       
-        
-        MOV A, L          // L += C
-        ADD C
+        MOV A, L          // HL += BC: low byte first, then the high byte
+        ADD C             // with the carry out of the low addition
         MOV L, A
+
+        MOV A, H
+        ADC B
+        MOV H, A
 
     entry mul_dc.next       
         RTC
