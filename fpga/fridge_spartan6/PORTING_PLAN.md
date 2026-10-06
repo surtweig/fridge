@@ -75,7 +75,7 @@
    divergences. Acceptance: recompile the Stage 5 ROM-paint boot image from
    `.falc` source byte-identically, and run the simulation and hardware gates
    against the generated images.
-7. **Advanced GPU — TEXT and VPAL complete:** implement the text video mode that the
+7. **Advanced GPU — TEXT/VPAL hardware complete; framebuffer/sprites implemented:** implement the text video mode that the
    Stage 3/4 GPU left as a stub (`VMODE` A=1 renders black). Contract taken
    from `fridgemulib.c` / `fridge.h` / the upstream DE0-CV adapter: a 40x20
    grid of 2-byte cells in the ordinary frame store at byte address
@@ -83,16 +83,18 @@
    `(background << 4) | foreground` palette indices; 6x8 font, one byte per
    glyph column, MSB = top row; pixel color = foreground where the glyph bit
    is set, else background, through the same RGB888 palette EGA uses. The
-   CPU writes cells with plain `VFSA` stores (`VFSI` pending; both use the
-   same mode-agnostic ABI). Frame offsets (`VPRE` HL) are ignored in text scanout, matching the emulator.
+   CPU writes cells with `VFSA` or `VFSI` stores; both use the
+   same mode-agnostic ABI. Frame offsets (`VPRE` HL) are ignored in text scanout, matching the emulator.
    Deliverable: font ROM, text scanout in the GPU, a demo program written in
    Fridge Assembly through the Stage 6 toolchain, and the simulation +
    ISE/timing + hardware gates, all complete for TEXT. `VPAL` is implemented
    under `examples/palette` with an acknowledged RGB888 update shared by
    TEXT/EGA, invalid-index no-ops and a `.falc` animation demo; its hardware
-   gate is complete. Remaining advanced-GPU work
-   (`VFSI`/`VFSAC`/`VFLA`/`VFLAC`, then sprites) follows; sprite memory is
-   limited to 32 KB on hardware (16 RAMB16BWER; see Agreed Target).
+   gate is complete. Canonical `rtl/` now implements `VFSI`/`VFSAC`/`VFLA`/`VFLAC`
+   and `VS2F`/`VSSA`/`VSSI`/`VSLA`/`VSS`/`VSD`, with all sprite compositing modes.
+   Sprite memory is limited to 32 KB (16 RAMB16BWER; see Agreed Target).
+   [GPU.md](GPU.md) defines the ABI and renderer; the new
+   [graphics demo](programs/graphics/README.md) awaits its hardware gate.
 
 ## Cross-stage System Integration
 
@@ -105,14 +107,15 @@
   typed TEXT, keyboard mode switching and live palette updates while ROM and
   keyboard share the CPU I/O interface.
 - Canonical unit/integration tests, implementation/timing and board gates are
-  recorded separately in [INTEGRATION.md](INTEGRATION.md). All 11 canonical
+  recorded separately in [INTEGRATION.md](INTEGRATION.md). All 14 canonical
   testbenches pass, including warm/mid-ROM reset recovery, and the combined
-  bitstream meets all timing constraints. The combined-system board gate is
-  pending.
+  bitstream meets all timing constraints. The user tested the combined demo
+  on the Atlys and confirmed it works on 2026-10-07; the combined-system
+  board gate is complete.
 - Existing examples and their hardware results remain milestone snapshots
-  during validation. Future GPU/peripheral development belongs in shared
-  `rtl/`; conversion of old demos to that implementation follows board
-  verification.
+  as historical validation targets. Future GPU/peripheral development belongs
+  in shared `rtl/`; conversion of old demos to that implementation can now
+  follow the completed board verification.
 
 ## Source Limitations
 
@@ -452,3 +455,26 @@
   `examples/palette/palette.bit` on the Atlys and confirmed the demo works
   (reported 2026-10-06). TEXT and VPAL are complete; framebuffer access
   instructions and sprites remain.
+
+- Stage 7 framebuffer access and sprites implemented in canonical `rtl/`
+  (2026-10-07): `VFSI`, `VFSAC`, `VFLA`, `VFLAC`, `VS2F`, `VSSA`, `VSSI`,
+  `VSLA`, `VSS`, `VSD`. Explicit acknowledged command/readback path; mode-agnostic
+  byte access, nibble-preserving pixel stores, 32 KiB sprite RAM, 64 descriptors,
+  four overlapping sprites per pixel, all eight modes, odd-width packed rows,
+  clipping and frame offsets. [GPU.md](GPU.md) records bounds and the deliberate
+  divergences from the emulator's sprite bugs and invalid-access behavior.
+- All 14 canonical suites pass, including independent full-frame sprite checks,
+  the 64-hit line-cache stress case, register/flag/boundary checks, reset during
+  a GPU request, and the real graphics boot program with keyboard controls and
+  warm reset. Final affected suites were rerun after correcting the dual-clock
+  GPU RAM ports to WRITE_FIRST (Spartan-6 AR34533).
+- Fresh `integration` and `graphics` synthesis/implementation/bitstream/timing
+  pass with zero setup/hold errors. Both use 80 RAMB16BWERs plus one RAMB8BWER;
+  all 48 GPU RAM primitives have verified WRITE_FIRST ports. CPU remains 10 MHz.
+  Timing/resource details and logs are in [GPU.md](GPU.md).
+- Stage 7 framebuffer/sprite hardware gate pending: load
+  `.local/build/graphics/fridge.bit` with `make PROGRAM=graphics load`, then
+  verify the startup PASS screen, TEXT/EGA switching, WASD movement, M mode
+  cycling, clipping and reset using [the demo guide](programs/graphics/README.md).
+  Step 7 is complete once this new board gate passes. The earlier combined
+  integration/TEXT/palette hardware confirmations remain separate.

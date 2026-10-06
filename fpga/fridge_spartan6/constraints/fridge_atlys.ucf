@@ -58,3 +58,17 @@ NET "ps2_clk" TIG;
 NET "ps2_dat" LOC = "N15" | IOSTANDARD = LVCMOS33;
 NET "ps2_dat" PULLUP;
 NET "ps2_dat" TIG;
+
+# Sprite descriptors use the same held-payload/acknowledgement protocol.
+INST "system/video/sprites/req_meta" TNM = "cdc_sprite_pixel";
+TIMESPEC "TS_sprite_req" = FROM "cpu_clk_raw" TO "cdc_sprite_pixel" TIG;
+INST "system/video/sprites/ack_meta" TNM = "cdc_sprite_cpu";
+TIMESPEC "TS_sprite_ack" = FROM "pixel_raw" TO "cdc_sprite_cpu" TIG;
+INST "system/video/sprites/hold_*" TNM = "sprite_payload";
+INST "system/video/sprites/widths*" TNM = "sprite_descriptors";
+INST "system/video/sprites/heights*" TNM = "sprite_descriptors";
+INST "system/video/sprites/bases*" TNM = "sprite_descriptors";
+INST "system/video/sprites/modes*" TNM = "sprite_descriptors";
+INST "system/video/sprites/posx*" TNM = "sprite_descriptors";
+INST "system/video/sprites/posy*" TNM = "sprite_descriptors";
+TIMESPEC "TS_sprite_payload" = FROM "sprite_payload" TO "sprite_descriptors" 20 ns DATAPATHONLY;

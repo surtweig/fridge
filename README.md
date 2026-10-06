@@ -23,7 +23,11 @@ mode scaled to 720p60 HDMI. ROM, keyboard and programmable palette demos are
 included. The shared `falc/` assembler and `x2al_std/` library generate the
 program images; no separate Fridge checkout is needed. The combined system
 and interactive demo are documented in
-[`INTEGRATION.md`](fpga/fridge_spartan6/INTEGRATION.md); its board gate is pending.
+[`INTEGRATION.md`](fpga/fridge_spartan6/INTEGRATION.md); the user verified the
+combined demo on the Atlys on 2026-10-07. Advanced framebuffer access and
+sprites are implemented in shared RTL; the new
+[`graphics` demo](fpga/fridge_spartan6/programs/graphics/README.md) passes
+simulation and timing and awaits its board test.
 
 ```bash
 make -C fpga/fridge_spartan6 regen
@@ -57,4 +61,3 @@ hardware contracts, verification gates and remaining GPU work.
 
 ### ROM
 * SD card (16 MB maximum)
-

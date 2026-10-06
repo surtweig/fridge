@@ -39,7 +39,10 @@ with demo controls in [programs/integration/README.md](programs/integration/READ
 milestone snapshots. [Migration notes](MIGRATION.md) record the history import
 and relocation verification.
 The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/` remains
-untouched while the new layout is verified on the board.
+untouched and retained; the combined demo in the new layout passed its board gate.
+The new [framebuffer/sprite demo](programs/graphics/README.md) uses
+`make PROGRAM=graphics all timing` / `make PROGRAM=graphics load`. Its board
+gate is pending; [GPU.md](GPU.md) describes the instruction/rendering contract.
 
 ## Layout
 

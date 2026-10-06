@@ -8,6 +8,7 @@ BOARD = Path(__file__).resolve().parent.parent
 RTL = BOARD / "rtl"
 COMMON = [RTL / "core/FridgeGlobals.vhd", RTL / "core/FridgeIRCodes.vhd"]
 GPU = [RTL / "video/FridgeRasterFont.vhd", RTL / "video/video_timing.vhd",
+       RTL / "video/fridge_gpu_commands.vhd", RTL / "video/fridge_sprites.vhd",
        RTL / "video/fridge_gpu.vhd"]
 CPU = [RTL / "core/FridgeRAM.vhd", RTL / "core/FridgeCPU.vhd"]
 KEYBOARD = [RTL / "devices/ps2_receiver.vhd", RTL / "devices/fridge_keyboard.vhd"]
@@ -16,6 +17,9 @@ PASS = {
     "cpu": "PASS: CPU/RAM smoke test",
     "gpu": "PASS: GPU framebuffer/scan-out tests",
     "palette": "PASS: programmable palette/CDC tests",
+    "graphics": "PASS: framebuffer and sprite board demo",
+    "sprites": "PASS: sprite scanout and compositing",
+    "access": "PASS: advanced GPU CPU ABI",
     "contract": "PASS: VPAL CPU ABI",
     "ps2_receiver": "PASS: PS/2 receiver tests",
     "keyboard": "PASS: keyboard decoder/FIFO tests",
@@ -39,25 +43,25 @@ def test(suite):
     print(f"Running {suite}; log: {logpath}", flush=True)
     with logpath.open("w") as log:
         sources = COMMON.copy()
-        if suite == "system":
-            run(["python3", BOARD / "tools/prepare-build.py", "integration", dest], dest, log)
+        if suite in ("system", "graphics"):
+            run(["python3", BOARD / "tools/prepare-build.py", ("integration" if suite == "system" else "graphics"), dest], dest, log)
             sources += [dest / "FridgeRAMBootImage.vhd", dest / "FridgeROMImage.vhd",
                         RTL / "core/FridgeSystemDebug.vhd", *GPU, *CPU, *KEYBOARD, *ROM,
                         RTL / "fridge_system.vhd"]
-            bench = BOARD / "sim/integration/tb_system.vhd"
+            bench = BOARD / "sim/integration" / f"tb_{suite}.vhd"
         else:
             bench = BOARD / "sim/units" / f"tb_{suite}.vhd"
             if suite == "cpu":
                 sources += [BOARD / "examples/cpu/FridgeRAMBootImage.vhd", *CPU]
-            elif suite == "contract":
+            elif suite in ("contract", "access"):
                 generated = dest / "contract.bin.vhd"
                 generated.unlink(missing_ok=True)
-                run([BOARD / "tools/falc", BOARD / "examples/palette/src/vpal_contract.falc",
+                run([BOARD / "tools/falc", (BOARD / "examples/palette/src/vpal_contract.falc" if suite == "contract" else BOARD / "sim/programs/gpu_access.falc"),
                      dest / "contract.bin", "-vhdl-aggregate"], dest, log)
                 if not generated.is_file():
                     raise RuntimeError("falc did not generate the VPAL contract image")
                 sources += [generated, *GPU, *CPU]
-            elif suite in ("gpu", "palette"):
+            elif suite in ("gpu", "palette", "sprites"):
                 sources += GPU
             elif suite == "keyboard":
                 sources += KEYBOARD
@@ -99,6 +103,7 @@ def main():
     suites = list(PASS) if args.suite in ("all", "units") else [args.suite]
     if args.suite == "units":
         suites.remove("system")
+        suites.remove("graphics")
     for suite in suites:
         test(suite)
 

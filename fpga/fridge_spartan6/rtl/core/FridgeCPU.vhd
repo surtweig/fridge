@@ -41,6 +41,15 @@ port (
      GPU_PRESENT_MODE : out XCM2_WORD;
      GPU_FRAME_OFFSET : out XCM2_DWORD;
 
+     -- A held request and explicit return path for advanced GPU operations.
+     GPU_COMMAND_VALID : out std_logic := '0';
+     GPU_COMMAND_CODE : out XCM2_WORD := X"00";
+     GPU_COMMAND_A, GPU_COMMAND_B, GPU_COMMAND_C : out XCM2_WORD := X"00";
+     GPU_COMMAND_HL, GPU_COMMAND_BC : out XCM2_DWORD := X"0000";
+     GPU_COMMAND_ARG0, GPU_COMMAND_ARG1 : out XCM2_WORD := X"00";
+     GPU_COMMAND_READY : in std_logic := '1';
+     GPU_COMMAND_RESULT : in XCM2_WORD := X"00";
+
      GPU_BACK_STORE : out std_logic;
      GPU_BACK_LOAD : out std_logic;
      GPU_BACK_ADDR : out XCM2_DWORD;
@@ -125,6 +134,8 @@ architecture main of FridgeCPU is
      signal gpuPaletteIndex : XCM2_WORD := X"00";
      signal gpuPaletteRGB : std_logic_vector(23 downto 0) := (others => '0');
      signal gpuModeSwitch : std_logic_vector(0 to 1):= ('0', '0');
+
+     signal gpuCommandValid : std_logic := '0';
 
      signal debugStepPressed : std_logic:= '0';
 
@@ -1277,6 +1288,7 @@ begin
 
      process (CLK_MAIN) is
           variable buf_nextPC : XCM2_DWORD:= X"0000";
+          variable buf_gpuHL : XCM2_DWORD;
           variable buf_nextSP : XCM2_DWORD:= X"FFFF";
           variable buf_nextState : CPUState:= CPU_INVALID;
           variable buf_currentIRCode : XCM2_WORD:= X"00";
@@ -1291,6 +1303,15 @@ begin
           end if;
 
           INTE <= interruptsEnabled;
+          GPU_COMMAND_VALID <= gpuCommandValid;
+          GPU_COMMAND_CODE <= currentIRCode;
+          GPU_COMMAND_A <= rA;
+          GPU_COMMAND_B <= rB;
+          GPU_COMMAND_C <= rC;
+          GPU_COMMAND_HL <= XCM2_DWORD_HL(rH, rL);
+          GPU_COMMAND_BC <= XCM2_DWORD_HL(rB, rC);
+          GPU_COMMAND_ARG0 <= IRArg0;
+          GPU_COMMAND_ARG1 <= IRArg1;
           GPU_BACK_CLR <= gpuBackClr;
           GPU_BACK_STORE <= gpuBackStore;
           GPU_BACK_LOAD <= gpuBackLoad;
@@ -1354,6 +1375,7 @@ begin
                     memAddrBuffer <= X"0000";
                     memWriteBuffer <= X"00";
                     memWriteEnabled <= '0';
+                    gpuCommandValid <= '0';
                     gpuBackStore <= '0';
                     gpuBackLoad <= '0';
                     gpuPresentTrigger <= '0';
@@ -1404,7 +1426,7 @@ begin
 
                     buf_nextPC := PC + 1;
 
-                    if (buf_currentIRCode >= LXI_BC and buf_currentIRCode <= SHLD) or (buf_currentIRCode >= JMP and buf_currentIRCode <= CM) or (buf_currentIRCode = DAI)
+                    if (buf_currentIRCode >= LXI_BC and buf_currentIRCode <= SHLD) or (buf_currentIRCode >= JMP and buf_currentIRCode <= CM) or (buf_currentIRCode = DAI) or buf_currentIRCode = VFSI or buf_currentIRCode = VSSI
                     then
                          -- 3byte instructions
                          if (state = CPU_FETCH_IR) then
@@ -1726,6 +1748,29 @@ begin
                     when VMODE => ir_VMODE(gpuModeSwitch, rA, state, buf_nextState);
                     when VPAL => ir_VPAL(rA, rB, rC, rD, gpuPaletteSwitch, gpuPaletteIndex, gpuPaletteRGB, GPU_PALETTE_READY, state, buf_nextState);
                     when VFSA => ir_VFSA(rA, rH, rL, gpuBackStore, gpuBackLoad, gpuBackAddr, gpuBackData, state, buf_nextState);
+
+                    when VFSI | VFSAC | VFLA | VFLAC | VS2F | VSSA | VSSI | VSLA | VSS | VSD =>
+                         if state = CPU_EXECUTE_IR then
+                              gpuCommandValid <= '1';
+                              buf_nextState := CPU_EXECUTE_IR_STAGE_2;
+                         elsif state = CPU_EXECUTE_IR_STAGE_2 then
+                              if GPU_COMMAND_READY = '1' then
+                                   gpuCommandValid <= '0';
+                                   if currentIRCode = VFLA or currentIRCode = VFLAC or currentIRCode = VSLA then
+                                        rA <= GPU_COMMAND_RESULT;
+                                   elsif (currentIRCode = VFSI and XCM2_DWORD_HL(rH, rL) < 19199) or
+                                         (currentIRCode = VSSI and XCM2_DWORD_HL(rH, rL) < 32767) then
+                                        gpuBackAddr <= XCM2_DWORD_HL(rH, rL) + 2;
+                                        -- Use a variable: signal assignments are not visible until this edge ends.
+                                        buf_gpuHL := XCM2_DWORD_HL(rH, rL) + 2;
+                                        rH <= buf_gpuHL(0 to 7);
+                                        rL <= buf_gpuHL(8 to 15);
+                                   end if;
+                                   buf_nextState := CPU_EXECUTE_IR_STAGE_3;
+                              end if;
+                         elsif state = CPU_EXECUTE_IR_STAGE_3 then
+                              buf_nextState := CPU_FETCH_IR;
+                         end if;
 
                     when PAM16C => ir_PAM16C(rA, rB, rC, rD, rE, rH, rL, PAM16_COMMAND_READY, PAM16_COMMAND_ENABLED, PAM16_COMMAND_CODE, PAM16_DATA_WRITE, PAM16_DATA_READ, state, buf_nextState);
 

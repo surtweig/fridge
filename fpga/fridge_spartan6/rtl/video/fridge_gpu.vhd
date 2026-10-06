@@ -15,6 +15,13 @@ entity fridge_gpu is
         RESET : in std_logic;
         COMMAND_RESET : in std_logic;
 
+        COMMAND_VALID : in std_logic := '0';
+        COMMAND_CODE, COMMAND_A, COMMAND_B, COMMAND_C : in XCM2_WORD := X"00";
+        COMMAND_HL, COMMAND_BC : in XCM2_DWORD := X"0000";
+        COMMAND_ARG0, COMMAND_ARG1 : in XCM2_WORD := X"00";
+        COMMAND_READY : out std_logic := '0';
+        COMMAND_RESULT : out XCM2_WORD := X"00";
+
         FRAME_STORE : in std_logic;
         FRAME_ADDR : in XCM2_DWORD;
         FRAME_DATA : in XCM2_WORD;
@@ -132,7 +139,72 @@ architecture rtl of fridge_gpu is
     signal py_r : integer range 0 to 749 := 0;
     signal text_r : std_logic := '1';
     signal rgb : std_logic_vector(23 downto 0);
+    signal command_frame_addr, sprite_addr : XCM2_DWORD;
+    signal command_frame_write, sprite_write, desc_valid, desc_ready, desc_define : std_logic;
+    signal command_frame_out, command_frame_in, sprite_out, sprite_in : XCM2_WORD;
+    signal command_rd0_hi, command_rd0_lo, command_rd1_hi, command_rd1_lo : XCM2_WORD;
+    signal desc_id, desc_b, desc_c : XCM2_WORD;
+    signal desc_hl : XCM2_DWORD;
+    signal port_addr : XCM2_DWORD;
+    signal port_data : XCM2_WORD;
+    signal overlay : std_logic_vector(27 downto 0);
+    type rgb_pipe_t is array(0 to 4) of std_logic_vector(23 downto 0);
+    type overlay_pipe_t is array(0 to 3) of std_logic_vector(27 downto 0);
+    type x_pipe_t is array(0 to 4) of integer range 0 to 1649;
+    type y_pipe_t is array(0 to 4) of integer range 0 to 749;
+    signal blend_rgb : rgb_pipe_t;
+    signal blend_overlay : overlay_pipe_t;
+    signal blend_x : x_pipe_t; signal blend_y : y_pipe_t;
+    signal blend_hs, blend_vs, blend_act : std_logic_vector(0 to 4);
+    function composite(base, source : std_logic_vector(23 downto 0);
+                       mode : std_logic_vector(2 downto 0);
+                       index : std_logic_vector(3 downto 0)) return std_logic_vector is
+        variable result : std_logic_vector(23 downto 0);
+        variable a, b, v : integer;
+    begin
+        result := base;
+        case mode is
+            when "001" => result := source;
+            when "010" => if index /= "0000" then result := source; end if;
+            when "011" | "100" =>
+                for i in 0 to 2 loop
+                    a := to_integer(unsigned(base(i*8+7 downto i*8)));
+                    b := to_integer(unsigned(source(i*8+7 downto i*8)));
+                    if mode = "011" then v := a+b; if v > 255 then v := 255; end if;
+                    else v := a-b; if v < 0 then v := 0; end if; end if;
+                    result(i*8+7 downto i*8) := std_logic_vector(to_unsigned(v, 8));
+                end loop;
+            when "101" => result := base and source;
+            when "110" => result := base or source;
+            when "111" => result := base xor source;
+            when others => null;
+        end case;
+        return result;
+    end;
 begin
+    commands : entity work.fridge_gpu_commands
+        port map(CLK => COMMAND_CLK, RESET => COMMAND_RESET, VALID => COMMAND_VALID,
+                 CODE => COMMAND_CODE, A => COMMAND_A, B => COMMAND_B, C => COMMAND_C,
+                 HL => COMMAND_HL, BC => COMMAND_BC, ARG0 => COMMAND_ARG0, ARG1 => COMMAND_ARG1,
+                 READY => COMMAND_READY, RESULT => COMMAND_RESULT,
+                 FRAME_ADDR => command_frame_addr, FRAME_WRITE => command_frame_write,
+                 FRAME_OUT => command_frame_out, FRAME_IN => command_frame_in,
+                 SPR_ADDR => sprite_addr, SPR_WRITE => sprite_write, SPR_OUT => sprite_out,
+                 SPR_IN => sprite_in, DESC_VALID => desc_valid, DESC_READY => desc_ready,
+                 DESC_DEFINE => desc_define, DESC_ID => desc_id, DESC_B => desc_b,
+                 DESC_C => desc_c, DESC_HL => desc_hl);
+    sprites : entity work.fridge_sprites
+        port map(CLK => CLK, RESET => RESET, COMMAND_CLK => COMMAND_CLK, COMMAND_RESET => COMMAND_RESET,
+                 MEM_ADDR => sprite_addr, MEM_WRITE => sprite_write, MEM_IN => sprite_out, MEM_OUT => sprite_in,
+                 DESC_VALID => desc_valid, DESC_DEFINE => desc_define, DESC_READY => desc_ready,
+                 DESC_ID => desc_id, DESC_B => desc_b, DESC_C => desc_c, DESC_HL => desc_hl,
+                 RASTER_X => x, RASTER_Y => y, HOFF => disp_hoff, VOFF => disp_voff,
+                 LOOKUP_X => px_r, LOOKUP_Y => py_r, OVERLAY => overlay);
+    port_addr <= command_frame_addr when COMMAND_VALID = '1' else FRAME_ADDR;
+    port_data <= command_frame_out when COMMAND_VALID = '1' else FRAME_DATA;
+    command_frame_in <= command_rd1_hi when cmd_active = '1' and wr_lane = '0' else
+                        command_rd1_lo when cmd_active = '1' else
+                        command_rd0_hi when wr_lane = '0' else command_rd0_lo;
     PALETTE_READY <= '1' when COMMAND_RESET = '0' and pal_request = pal_ack_sync else '0';
 
     palette_command : process (COMMAND_CLK)
@@ -181,33 +253,32 @@ begin
     timing : entity work.video_timing
         port map (CLK, RESET, x, y, hs, vs, act);
 
-    wr_enable <= '1' when FRAME_STORE = '1' and COMMAND_RESET = '0'
-                           and to_integer(FRAME_ADDR) < FRAME_BYTES else '0';
+    wr_enable <= '1' when (FRAME_STORE = '1' or command_frame_write = '1') and COMMAND_RESET = '0'
+                           and to_integer(port_addr) < FRAME_BYTES else '0';
 
     -- Byte address A lands in word A/2: A even in the high lane, A odd in
     -- the low lane. FRAME_ADDR(0 to 14) is A/2 for A < 32768 and
     -- FRAME_ADDR(15) is A's low bit.
-    wr_word <= to_integer(FRAME_ADDR(0 to 14));
-    wr_lane <= FRAME_ADDR(15);
+    wr_word <= to_integer(port_addr(1 to 14));
+    wr_lane <= port_addr(15);
 
+    -- Each write port explicitly bypasses its new byte to infer WRITE_FIRST.
+    -- READ_FIRST dual-clock ports can corrupt memory on Spartan-6 (AR34533).
     wr_port : process (COMMAND_CLK)
     begin
         if rising_edge(COMMAND_CLK) then
-            if wr_enable = '1' then
-                if cmd_active = '1' then
-                    if wr_lane = '0' then
-                        frame1_hi(wr_word) <= FRAME_DATA;
-                    else
-                        frame1_lo(wr_word) <= FRAME_DATA;
-                    end if;
-                else
-                    if wr_lane = '0' then
-                        frame0_hi(wr_word) <= FRAME_DATA;
-                    else
-                        frame0_lo(wr_word) <= FRAME_DATA;
-                    end if;
-                end if;
-            end if;
+            if wr_enable = '1' and cmd_active = '0' and wr_lane = '0' then
+                frame0_hi(wr_word) <= port_data; command_rd0_hi <= port_data;
+            else command_rd0_hi <= frame0_hi(wr_word); end if;
+            if wr_enable = '1' and cmd_active = '0' and wr_lane = '1' then
+                frame0_lo(wr_word) <= port_data; command_rd0_lo <= port_data;
+            else command_rd0_lo <= frame0_lo(wr_word); end if;
+            if wr_enable = '1' and cmd_active = '1' and wr_lane = '0' then
+                frame1_hi(wr_word) <= port_data; command_rd1_hi <= port_data;
+            else command_rd1_hi <= frame1_hi(wr_word); end if;
+            if wr_enable = '1' and cmd_active = '1' and wr_lane = '1' then
+                frame1_lo(wr_word) <= port_data; command_rd1_lo <= port_data;
+            else command_rd1_lo <= frame1_lo(wr_word); end if;
         end if;
     end process;
 
@@ -453,17 +524,28 @@ begin
     -- ends here; the TMDS encoder's own logic is no longer part of the pixel
     -- domain's critical path. Every output is delayed together, so the raster
     -- alignment between colour, sync and position is unchanged.
+    -- One stage per overlapping sprite keeps RGB saturation and palette
+    -- selection off the same timing path. Raster metadata follows every stage.
     out_reg : process (CLK)
+        variable layer : std_logic_vector(6 downto 0);
     begin
         if rising_edge(CLK) then
-            RED <= rgb(23 downto 16);
-            GREEN <= rgb(15 downto 8);
-            BLUE <= rgb(7 downto 0);
-            HSYNC <= hs_r;
-            VSYNC <= vs_r;
-            ACTIVE <= act_r;
-            PIXEL_X <= px_r;
-            PIXEL_Y <= py_r;
+            blend_rgb(0) <= rgb;
+            if text_r = '0' and win_r = '1' and act_r = '1' then blend_overlay(0) <= overlay;
+            else blend_overlay(0) <= (others => '0'); end if;
+            blend_x(0) <= px_r; blend_y(0) <= py_r;
+            blend_hs(0) <= hs_r; blend_vs(0) <= vs_r; blend_act(0) <= act_r;
+            for i in 0 to 3 loop
+                layer := blend_overlay(i)(i*7+6 downto i*7);
+                blend_rgb(i+1) <= composite(blend_rgb(i), palette(to_integer(unsigned(layer(3 downto 0)))),
+                                             layer(6 downto 4), layer(3 downto 0));
+                if i < 3 then blend_overlay(i+1) <= blend_overlay(i); end if;
+                blend_x(i+1) <= blend_x(i); blend_y(i+1) <= blend_y(i);
+                blend_hs(i+1) <= blend_hs(i); blend_vs(i+1) <= blend_vs(i); blend_act(i+1) <= blend_act(i);
+            end loop;
         end if;
     end process;
+    RED <= blend_rgb(4)(23 downto 16); GREEN <= blend_rgb(4)(15 downto 8); BLUE <= blend_rgb(4)(7 downto 0);
+    HSYNC <= blend_hs(4); VSYNC <= blend_vs(4); ACTIVE <= blend_act(4);
+    PIXEL_X <= blend_x(4); PIXEL_Y <= blend_y(4);
 end rtl;

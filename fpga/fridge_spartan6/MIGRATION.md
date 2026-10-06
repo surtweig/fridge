@@ -41,7 +41,8 @@ repository, on branch `spartan6-atlys`.
 - The original tree matches the pre-migration snapshot: 2,761 file metadata
   entries (including both Git directories) and 194 tracked-file SHA-256
   hashes are unchanged.
-- Hardware verification of the newly generated bitstream remains pending.
+- Hardware verification of the newly generated bitstream was pending at
+  this stage; the relocated combined-system board gate completed below.
   Earlier TEXT and palette board results are recorded in `PORTING_PLAN.md`.
 
 Timing results from `examples/palette/palette.twr` / `palette.par`:
@@ -57,13 +58,16 @@ Local compiler, regeneration, simulation and build logs are retained under
 
 ## Board verification
 
-From the new board directory:
+The user tested the canonical combined demo from the new board directory on
+the Atlys and confirmed it works on 2026-10-07. This completes the relocated
+build's board gate; canonical simulation and timing results are recorded in
+`INTEGRATION.md`. The original directory remains untouched and retained.
+
+To rebuild and load the verified combined demo from the new board directory:
 
 ```bash
-make -C examples/palette all timing
-make -C examples/palette load
+make all timing
+make load
 ```
 
-Confirm the same palette animation and controls as the previously tested
-`examples/palette/README.md` demo. Retain the old directory until this check
-has succeeded.
+The demo controls are documented in `programs/integration/README.md`.

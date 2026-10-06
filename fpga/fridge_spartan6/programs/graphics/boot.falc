@@ -1,0 +1,265 @@
+// Advanced GPU demo: boot-time readback tests, packed sprites and RGB blending.
+include "vtext.inc"
+offset 0x0000
+static Title "FRAMEBUFFER + SPRITES: PASS"
+static Help1 "SPACE: TEXT/EGA   WASD: MOVE"
+static Help2 "M: SPRITE MODE (0..7)"
+static Help3 "7 FIXED SPRITES SHOW MODES 1..7"
+static Failed "GPU SELF TEST FAILED"
+static Scene 1
+static SpriteX 112
+static SpriteY 56
+static SpriteMode 2
+
+main start
+    MVI A, 1
+    STA Scene
+    MVI A, 112
+    STA SpriteX
+    MVI A, 56
+    STA SpriteY
+    MVI A, 2
+    STA SpriteMode
+    MVI A, 0
+    STA VTEXT_BACK_COLOR
+    MVI A, 15
+    STA VTEXT_FORE_COLOR
+    MVI A, 1
+    VMODE
+    MVI A, 5
+    LXI HL, 0x0000
+    VPRE
+    // Clear TEXT and check the immediate store and both readback instructions.
+    LXI HL, 0x0000
+    LXI BC, 0x0320
+entry clear
+    VFSI 0, 0
+    DCX BC
+    MOV A, B
+    ORA C
+    JNZ clear
+    LXI HL, 0x0101
+    VFSI 0xA5, 0xC3
+    MOV A, H
+    CPI 1
+    JNZ fail
+    MOV A, L
+    CPI 3
+    JNZ fail
+    LXI HL, 0x0101
+    VFLA
+    CPI 0xA5
+    JNZ fail
+    INX HL
+    VFLA
+    CPI 0xC3
+    JNZ fail
+    LXI HL, 0x0000
+    MVI A, 0xAA
+    VFSA
+    LXI HL, 0x0000
+    MVI A, 0x5C
+    VFSAC
+    VFLA
+    CPI 0x5A
+    JNZ fail
+    LXI HL, 0x0100
+    MVI A, 0xB7
+    VFSAC
+    VFLAC
+    CPI 7
+    JNZ fail
+    LXI HL, 0x0000
+    VFLAC
+    CPI 5
+    JNZ fail
+    // Sprite readback and sprite-to-frame byte copy.
+    LXI HL, 0x7FFE
+    VSSI 0x12, 0x34
+    MOV A, H
+    CPI 0x80
+    JNZ fail
+    MOV A, L
+    CPI 0
+    JNZ fail
+    LXI HL, 0x7FFF
+    VSLA
+    CPI 0x34
+    JNZ fail
+    LXI HL, 0x0100
+    MVI A, 0x0F
+    VSSA
+    VSLA
+    CPI 0x0F
+    JNZ fail
+    LXI BC, 0x0000
+    VS2F
+    LXI HL, 0x0000
+    VFLA
+    CPI 0x0F
+    JNZ fail
+    // Remove test cells before drawing the instructions.
+    LXI HL, 0x0000
+    VFSI 0, 0
+    LXI HL, 0x0100
+    VFSI 0, 0
+    VFSI 0, 0
+    MVI B, 2
+    MVI C, 3
+    LXI HL, Title
+    CALL vtext_putstr
+    MVI B, 2
+    MVI C, 6
+    LXI HL, Help1
+    CALL vtext_putstr
+    MVI B, 2
+    MVI C, 8
+    LXI HL, Help2
+    CALL vtext_putstr
+    MVI B, 2
+    MVI C, 10
+    LXI HL, Help3
+    CALL vtext_putstr
+    // Fill the hidden EGA frame with grey, then draw a red diagonal.
+    MVI A, 4
+    LXI HL, 0x0000
+    VPRE
+    LXI BC, 0x2580
+entry fill
+    VFSI 0x77, 0x77
+    DCX BC
+    MOV A, B
+    ORA C
+    JNZ fill
+    LXI HL, 0x0000
+entry diagonal
+    MVI A, 0xCC
+    VFSAC
+    INR H
+    INR L
+    MOV A, L
+    CPI 160
+    JNZ diagonal
+    // One packed 16x16 checker sprite shared by all descriptors.
+    LXI HL, 0x0100
+    MVI E, 64
+entry sprite_data
+    VSSI 0x0F, 0xF0
+    DCR E
+    JNZ sprite_data
+    MVI A, 0
+    MVI B, 16
+    MVI C, 16
+    LXI HL, 0x0100
+    VSS
+    // Fixed mode examples, sid 1..7, left to right.
+    MVI E, 1
+    MVI D, 16
+entry definitions
+    MOV A, E
+    MVI B, 16
+    MVI C, 16
+    LXI HL, 0x0100
+    VSS
+    MOV A, E
+    MOV B, E
+    MOV H, D
+    MVI L, 104
+    VSD
+    MOV A, D
+    ADI 30
+    MOV D, A
+    INR E
+    MOV A, E
+    CPI 8
+    JNZ definitions
+    CALL draw
+    // Keep the help screen visible initially, while writing to EGA frame 0.
+entry poll
+    IN 3
+    MOV E, A
+    ANI 0x80
+    JZ poll
+    MOV A, E
+    ANI 0x7F
+    CPI 0x20
+    JZ toggle
+    CPI 0x6D
+    JZ next_mode
+    CPI 0x61
+    JZ left
+    CPI 0x64
+    JZ right
+    CPI 0x77
+    JZ up
+    CPI 0x73
+    JZ down
+    JMP poll
+entry left
+    LDA SpriteX
+    CPI 0
+    JZ poll
+    DCR A
+    STA SpriteX
+    JMP redraw
+entry right
+    LDA SpriteX
+    CPI 239
+    JZ poll
+    INR A
+    STA SpriteX
+    JMP redraw
+entry up
+    LDA SpriteY
+    CPI 0
+    JZ poll
+    DCR A
+    STA SpriteY
+    JMP redraw
+entry down
+    LDA SpriteY
+    CPI 159
+    JZ poll
+    INR A
+    STA SpriteY
+    JMP redraw
+entry next_mode
+    LDA SpriteMode
+    INR A
+    ANI 7
+    STA SpriteMode
+entry redraw
+    CALL draw
+    JMP poll
+entry toggle
+    LDA Scene
+    XRI 1
+    STA Scene
+    VMODE
+    CPI 0
+    JZ show_ega
+    MVI A, 5
+    JMP present
+entry show_ega
+    MVI A, 2
+entry present
+    LXI HL, 0x0000
+    VPRE
+    JMP poll
+entry fail
+    MVI B, 2
+    MVI C, 3
+    LXI HL, Failed
+    CALL vtext_putstr
+    HLT
+subroutine draw
+    LDA SpriteMode
+    MOV B, A
+    LDA SpriteX
+    MOV H, A
+    LDA SpriteY
+    MOV L, A
+    MVI A, 0
+    VSD
+    RET
+endsub

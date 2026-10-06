@@ -1,7 +1,8 @@
 # Canonical Fridge system for Atlys
 
 `rtl/` is the source for the combined computer. It includes the implemented
-CPU/RAM, EGA/TEXT GPU, programmable palette, keyboard and bitstream ROM.
+CPU/RAM, EGA/TEXT GPU, programmable palette, framebuffer read/write operations,
+sprites, keyboard and bitstream ROM.
 Existing `examples/` remain independently buildable milestone snapshots while
 this system is verified on hardware. New hardware work belongs in `rtl/`.
 
@@ -12,7 +13,7 @@ Run from `fpga/fridge_spartan6/`:
 ```bash
 make                     # .local/build/integration/fridge.bit
 make timing              # .local/build/integration/fridge.twr
-make test                # 10 shared-RTL unit regressions + combined-system test
+make test                # 12 unit regressions + integration and graphics demos
 make test-system         # combined-system test only
 make regressions         # original 17 milestone testbenches
 make load                # load the combined bitstream into FPGA SRAM
@@ -38,7 +39,8 @@ selected program's build directory.
   handshake with the ROM version's IIN/IOUT timing fixes.
 - `rtl/video/`: one framebuffer/GPU, raster font, 720p timing generator,
   TMDS encoders and serializers. TEXT and EGA share both frames and the same
-  RGB888 palette.
+  RGB888 palette. Advanced commands and sprite rendering are specified in
+  [GPU.md](GPU.md).
 - `rtl/devices/`: PS/2 receiver/keyboard FIFO and Case B bitstream ROM.
 - `rtl/fridge_system.vhd`: connects all components using externally supplied
   CPU/pixel clocks and resets. Boot RAM and ROM images are generic inputs.
@@ -75,8 +77,8 @@ advance ROM.
 | 3 | Keyboard event FIFO reads |
 
 CPU RAM remains 64 KiB, video 240x160 / 40x20 TEXT, and stack descending from
-0xFFFF. Interrupts/PAM16, persistent flash ROM, remaining framebuffer access
-instructions and sprites are deferred as in the porting plan. The current
+0xFFFF. Interrupts/PAM16 and persistent flash ROM remain deferred as in the
+porting plan. The current
 small ROM image is LUT mapped; integration does not introduce a flash backend
 or claim boot-loader interrupt compatibility.
 
@@ -96,7 +98,7 @@ TEXT/EGA raster pixels, shared palette updates, hidden-frame text writes and
 recovery from warm reset and a reset during ROM streaming. Every suite uses
 its own `.local/tests/<suite>/` work library and log.
 
-Verification on 2026-10-06:
+Baseline verification on 2026-10-06 (before advanced framebuffer/sprite support):
 
 - All 11 canonical testbenches pass (10 unit/regression suites plus the real
   combined-system program). The full-system test includes cold start, warm
@@ -109,8 +111,10 @@ Verification on 2026-10-06:
   and reports remain in the same ignored build tree. Per-suite simulation
   logs are `.local/tests/<suite>/test.log` and `isim.log`.
 - Earlier example RTL and the original standalone directory are unchanged.
-- Hardware verification of this combined bitstream is pending. Earlier
-  milestone board gates remain recorded separately in `PORTING_PLAN.md`.
+- Hardware gate complete: the user tested the combined demo on the Atlys
+  and confirmed it works on 2026-10-07. Earlier milestone board gates remain
+  recorded separately in `PORTING_PLAN.md`. This hardware result applies to the
+  pre-sprite bitstream.
 
 | Constraint | Requirement | Achieved |
 | --- | --- | --- |
@@ -119,6 +123,13 @@ Verification on 2026-10-06:
 | Double pixel clock (148.5 MHz) | 6.734 ns | 4.807 ns |
 | Palette held-data payload | 20.000 ns | 4.584 ns |
 
-The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/` remains
-untouched and must be retained until verification of the relocated build is
-complete.
+Advanced GPU verification on 2026-10-07: all 14 canonical suites pass, and
+both programs build with zero post-route timing errors. The new GPU uses
+32 KiB sprite memory, 64 descriptors and four overlaps per pixel. See
+[GPU.md](GPU.md) for final resource/timing results, ISA contracts and the
+WRITE_FIRST memory-mode verification.
+
+The framebuffer/sprite demo is documented in
+[programs/graphics/README.md](programs/graphics/README.md); its hardware gate is
+pending. The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/`
+remains untouched and retained.

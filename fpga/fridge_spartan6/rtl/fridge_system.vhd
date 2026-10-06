@@ -31,6 +31,10 @@ architecture rtl of fridge_system is
     signal ram_write_addr, ram_read_addr : XCM2_DWORD;
     signal ram_write_enabled : std_logic;
 
+    signal gpu_command_valid, gpu_command_ready : std_logic;
+    signal gpu_command_code, gpu_command_a, gpu_command_b, gpu_command_c : XCM2_WORD;
+    signal gpu_command_arg0, gpu_command_arg1, gpu_command_result : XCM2_WORD;
+    signal gpu_command_hl, gpu_command_bc : XCM2_DWORD;
     signal gpu_mode_switch : std_logic_vector(0 to 1);
     signal gpu_palette_switch, gpu_present_trigger : std_logic;
     signal gpu_palette_index : XCM2_WORD;
@@ -72,6 +76,12 @@ begin
             RAM_WRITE_ENABLED => ram_write_enabled,
             RAM_READ_DATA => ram_read_data,
             RAM_READ_ADDR => ram_read_addr,
+            GPU_COMMAND_VALID => gpu_command_valid, GPU_COMMAND_READY => gpu_command_ready,
+            GPU_COMMAND_CODE => gpu_command_code, GPU_COMMAND_A => gpu_command_a,
+            GPU_COMMAND_B => gpu_command_b, GPU_COMMAND_C => gpu_command_c,
+            GPU_COMMAND_HL => gpu_command_hl, GPU_COMMAND_BC => gpu_command_bc,
+            GPU_COMMAND_ARG0 => gpu_command_arg0, GPU_COMMAND_ARG1 => gpu_command_arg1,
+            GPU_COMMAND_RESULT => gpu_command_result,
             GPU_MODE_SWITCH => gpu_mode_switch,
             GPU_PALETTE_SWITCH => gpu_palette_switch,
             GPU_PALETTE_INDEX => gpu_palette_index,
@@ -117,6 +127,12 @@ begin
             COMMAND_CLK => cpu_clk,
             RESET => pixel_reset,
             COMMAND_RESET => cpu_reset,
+            COMMAND_VALID => gpu_command_valid, COMMAND_READY => gpu_command_ready,
+            COMMAND_CODE => gpu_command_code, COMMAND_A => gpu_command_a,
+            COMMAND_B => gpu_command_b, COMMAND_C => gpu_command_c,
+            COMMAND_HL => gpu_command_hl, COMMAND_BC => gpu_command_bc,
+            COMMAND_ARG0 => gpu_command_arg0, COMMAND_ARG1 => gpu_command_arg1,
+            COMMAND_RESULT => gpu_command_result,
             FRAME_STORE => gpu_back_store,
             FRAME_ADDR => gpu_back_addr,
             FRAME_DATA => gpu_back_data,

@@ -2,7 +2,7 @@
 
 > Status snapshot for future agent sessions. The emulator overview originated
 > at `7f0162d` (FRIDGE_VIDEO_240X180); Spartan-6 integration was updated on
-> 2026-10-06 on `spartan6-atlys`.
+> 2026-10-07 on `spartan6-atlys`.
 > Source of truth is the code itself; treat this document as a map, not a spec.
 
 ## 1. What Fridge is
@@ -175,7 +175,11 @@ include resolution. Rebuild the assembler after changing its sources.
 
 The CPU runs at 10 MHz. CPU RAM is 64 KiB BRAM; internal video is 240x160 EGA
 or 40x20 TEXT, scaled 4x and centered in 720p60 HDMI. TEXT and VPAL demos are
-hardware-verified. The current port uses a descending stack (`SP=0xFFFF`), ROM
+hardware-verified. Framebuffer access and sprites are implemented in shared
+RTL; `programs/graphics/` awaits hardware verification. `GPU.md` defines the
+32 KiB sprite ABI, bounds and emulator divergences. All 14 canonical suites
+pass, both program builds meet timing, and the GPU BRAM ports use WRITE_FIRST
+to avoid Spartan-6 AR34533. The current port uses a descending stack (`SP=0xFFFF`), ROM
 data/reset devices 1/2 and keyboard device 3; these differ from some emulator
 header constants above. Refer to this target's `tools/README.md` for the ABI.
 
@@ -184,9 +188,10 @@ header constants above. Refer to this target's `tools/README.md` for the ABI.
 read/write signals and a read mux; `atlys_top.vhd` wraps clocks, reset, HDMI and
 board pins. The default root Makefile builds `programs/integration/` into an
 isolated `.local/build/<program>/`; each test has a separate `.local/tests/`
-library. Existing examples remain milestone snapshots pending combined-board
-verification; edit `rtl/` for new functionality. `INTEGRATION.md` records this
-system's verification gates separately from earlier example hardware results.
+library. Existing examples remain milestone snapshots; edit `rtl/` for new
+functionality. The user confirmed the combined demo works on the Atlys on
+2026-10-07. `INTEGRATION.md` records this system's verification gates separately
+from earlier example hardware results.
 
 `README.md`, `PORTING_PLAN.md` and each example's README define the build flow,
 contracts and verification gates. `bin/` and simulation `.tcl` files are
