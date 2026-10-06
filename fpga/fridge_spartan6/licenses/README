@@ -1,0 +1,10 @@
+Put the free ISE WebPACK license file here as: Xilinx.lic
+
+Generate it at https://www.xilinx.com/getlicense (AMD account):
+  - "Create New License" -> ISE WebPACK / free WebPACK license
+  - Host ID type: Ethernet Address (MAC)
+  - Host ID: 08:00:27:68:c9:35   (the virtual MAC used by bin/ise-run;
+    override with ISE_LICENSE_MAC if you use a different one)
+Then download the .lic file and save it as Xilinx.lic in this directory.
+
+bin/ise-run mounts it into the container automatically when present.

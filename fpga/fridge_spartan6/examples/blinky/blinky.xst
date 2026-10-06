@@ -1,0 +1,7 @@
+run
+-ifn blinky.prj
+-ofn blinky
+-top blinky
+-p xc6slx45-3-csg324
+-opt_mode Speed
+-opt_level 1

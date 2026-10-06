@@ -1,0 +1,11 @@
+# Digilent Atlys revision C, CPU smoke test.
+NET "clk" LOC = "L15" | IOSTANDARD = LVCMOS33;
+NET "clk" TNM_NET = "clk";
+TIMESPEC "TS_clk" = PERIOD "clk" 10 ns HIGH 50%;
+NET "reset_button" LOC = "T15" | IOSTANDARD = LVCMOS33;
+NET "reset_button" TIG;
+NET "clock_fault" TIG;
+NET "led<0>" LOC = "U18" | IOSTANDARD = LVCMOS33;
+NET "led<1>" LOC = "M14" | IOSTANDARD = LVCMOS33;
+NET "led<2>" LOC = "N14" | IOSTANDARD = LVCMOS33;
+NET "led<3>" LOC = "L14" | IOSTANDARD = LVCMOS33;

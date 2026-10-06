@@ -1,0 +1,6 @@
+vhdl work "FridgeGlobals.vhd"
+vhdl work "FridgeIRCodes.vhd"
+vhdl work "FridgeRAMBootImage.vhd"
+vhdl work "FridgeRAM.vhd"
+vhdl work "FridgeCPU.vhd"
+vhdl work "tb_cpu.vhd"

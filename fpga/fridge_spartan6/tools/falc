@@ -1,0 +1,39 @@
+#!/bin/bash
+# Host wrapper for falc, the Fridge Assembly Language Compiler.
+#
+# Builds falc on first use and runs it from inside the fridge/ tree, because
+# falc resolves its standard include path ("../x2al_std/", hard-coded in
+# FridgeAssemblyLanguageCompiler.h) relative to the current directory. Running
+# from fridge/falc/ makes that path point at fridge/x2al_std/. Input and output
+# paths are made absolute first, so source-local includes keep working
+# regardless of where the caller lives.
+#
+# Usage: falc <input.falc|.x2al> <output.bin> [-vhdl | -vhdl-aggregate]
+set -euo pipefail
+
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FRIDGE="$(cd "$TOOLS_DIR/../fridge" && pwd)"
+FALC="$FRIDGE/build-falc/falc"
+
+if [ ! -x "$FALC" ]; then
+    "$TOOLS_DIR/build-falc.sh"
+fi
+
+if [ "$#" -lt 2 ]; then
+    echo "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate]" >&2
+    exit 2
+fi
+
+abspath() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *)  printf '%s\n' "${PWD}/${1#./}" ;;
+    esac
+}
+
+input="$(abspath "$1")"
+output="$(abspath "$2")"
+shift 2
+
+cd "$FRIDGE/falc"
+exec "$FALC" "$input" "$output" "$@"

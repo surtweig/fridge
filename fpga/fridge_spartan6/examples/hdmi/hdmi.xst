@@ -1,0 +1,7 @@
+run
+-ifn hdmi.prj
+-ofn hdmi
+-top hdmi
+-p xc6slx45-3-csg324
+-opt_mode Speed
+-opt_level 2

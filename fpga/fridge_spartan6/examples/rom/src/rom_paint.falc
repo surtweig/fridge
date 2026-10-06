@@ -1,0 +1,55 @@
+// ROM demo: paint the Case B ROM image to the active frame.
+//
+// VMODE TEXT then EGA (locks the A-bit-0 mode decode), present an
+// all-zero frame with VPRE MANUAL_11 (displayed and active frames
+// both frame 1, single-buffered), then walk ROM segments 0..3 with
+// the device protocol (mode LOAD, segment hi/lo, 256-byte stream)
+// and paint each ROM byte as one framebuffer byte (two 4bpp pixels)
+// at the frame pointer HL. Segments are re-selected without a device
+// reset (the stream's end returns the device to the mode state).
+// 4 * 256 = 1024 bytes are painted at frame bytes 0..1023; the rest
+// of the frame stays at its reset value (black). HLT when done.
+
+offset 0x0000
+
+main start
+    MVI A, 1              // A = 1 (TEXT)
+    VMODE
+    MVI A, 0              // A = 0 (EGA)
+    VMODE
+
+    // present: VPRE MANUAL_11 (A = 5): visible = 1, active = 1
+    MVI H, 0              // offsets (0, 0)
+    MVI L, 0
+    MVI A, 5              // A = 5 (SWAP_MANUAL_11)
+    VPRE
+
+    // ROM reset (device 2, value 1)
+    MVI A, 1
+    OUT 2
+
+    MVI D, 0              // D = segment index
+
+entry segment_loop
+    MVI A, 2              // A = 2 (LOAD)
+    OUT 1                // device 1: mode
+    MVI A, 0              // segment hi = 0
+    OUT 1
+    MOV A, D              // A = D (segment lo)
+    OUT 1
+
+    // stream 256 bytes to the frame at HL
+    MVI C, 0              // C = 0 -> 256 bytes (wraps)
+entry byte_loop
+    IN 1                 // A = ROM byte
+    VFSA                  // frame[HL] = A
+    INX HL
+    DCR C
+    JNZ byte_loop         // byte loop
+
+    INR D
+    MOV A, D
+    CPI 4
+    JNZ segment_loop      // segment loop
+
+    HLT

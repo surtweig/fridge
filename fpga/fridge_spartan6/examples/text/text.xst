@@ -1,0 +1,7 @@
+run
+-ifn text.prj
+-ofn text
+-top text
+-p xc6slx45-3-csg324
+-opt_mode Speed
+-opt_level 2

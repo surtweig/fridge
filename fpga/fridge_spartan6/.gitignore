@@ -1,0 +1,74 @@
+# Xilinx ISE 14.7 installer archives the user provides locally (they will be
+# installed into the Docker image instead)
+ISE/
+
+# Nested project with its own git repository (tracked separately / submodule later)
+fridge/
+
+# Vendor runtime packages (Digilent Adept debs) + extracted tree
+vendor/*.deb
+vendor/adept-root/
+
+# Node-locked Xilinx license (drop your own here)
+licenses/*.lic
+
+# Log files / ISim launcher junk
+DebugErc.log
+fuseRelaunch.cmd
+fuse.xmsgs
+
+# ---- ISE / ISim generated build artifacts ----
+# Working directories
+_xmsgs/
+xst/
+isim/
+xlnx_auto_0_xdb/
+ipcore_dir/
+.Xil/
+
+# Logs and reports
+*.log
+*.html
+*.syr
+*.xrpt
+*.xpi
+*.lso
+*.bld
+*.bgn
+*.drc
+*.unroutes
+*.ptwx
+*.xwbt
+netlist.lst
+*_summary.xml
+*_usage.xml
+
+# Intermediate netlists / implementation results
+*.ngm
+*.ngd
+*.ncd
+*.ngc
+*.map
+*.mrp
+*.pcf
+*.par
+*.pad
+*_pad.txt
+*_pad.csv
+
+# Timing reports
+*.twr
+*.twx
+
+# Simulation waveforms / outputs
+*.wdb
+*.vdb
+*.exe
+
+# Programming files (regenerable outputs)
+*.bit
+*.svf
+*.mcs
+
+# Assembler output (regenerated from src/*.falc by tools/falc)
+*.bin
