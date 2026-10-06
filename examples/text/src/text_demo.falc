@@ -1,0 +1,63 @@
+// TEXT mode demo: print a few lines through the vtext.inc library.
+//
+// VMODE TEXT (A = 1) is the power-on video mode; the frame store is then
+// read as a 40x20 grid of 2-byte cells at byte address (row*40 + col)*2,
+// byte 0 = glyph code and byte 1 = (background << 4) | foreground palette
+// indices. vtext_putstr writes those pairs with VFSA. VPRE presents the
+// frame; HLT ends the demo (LD0).
+
+include "vtext.inc"
+
+offset 0x0000
+
+static Title "SPARTAN-6 FRIDGE"
+static Sub   "TEXT VIDEO MODE"
+static Info  "40x20 CELLS  6x8 FONT"
+static Src   "FALC + VTEXT.INC"
+
+main start
+    MVI A, 1              // A = 1 (TEXT)
+    VMODE
+
+    // Title on a blue band: white on dark blue.
+    MVI A, 1              // background 1 = dark blue
+    STA VTEXT_BACK_COLOR
+    MVI A, 15             // foreground 15 = white
+    STA VTEXT_FORE_COLOR
+    MVI B, 3              // column
+    MVI C, 2              // row
+    LXI HL, Title
+    CALL vtext_putstr
+
+    MVI A, 11             // foreground 11 = bright cyan
+    STA VTEXT_FORE_COLOR
+    MVI B, 4
+    MVI C, 4
+    LXI HL, Sub
+    CALL vtext_putstr
+
+    // The remaining lines are on the black background.
+    MVI A, 0              // background 0 = black
+    STA VTEXT_BACK_COLOR
+    MVI A, 10             // foreground 10 = bright green
+    STA VTEXT_FORE_COLOR
+    MVI B, 2
+    MVI C, 7
+    LXI HL, Info
+    CALL vtext_putstr
+
+    MVI A, 7              // foreground 7 = light gray
+    STA VTEXT_FORE_COLOR
+    MVI B, 2
+    MVI C, 9
+    LXI HL, Src
+    CALL vtext_putstr
+
+    // VPRE takes the frame offsets from HL, so clear them after vtext_putstr
+    // has left HL at the last cell address.
+    MVI H, 0
+    MVI L, 0
+    MVI A, FRIDGE_GPU_VIDEO_SWAP_AUTO   // A = 1: show at the next present
+    VPRE
+
+    HLT

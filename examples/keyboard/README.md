@@ -73,7 +73,17 @@ Practical notes from the reference manual and field reports:
   keyboard or mouse is supported.
 
 The hardware gate (see PORTING_PLAN.md) is recorded from the actual board
-with this bitstream; the pin/protocol evidence above is documentation-level.
+with this bitstream: a USB keyboard on J13 (JP11 open) paints key-event tape
+pixels on the 720p display (letters, digits, numpad, space, enter,
+backspace). The pin/protocol evidence above is documentation-level.
+
+**Deferred anomaly:** on hardware the tape is silent for Esc although Esc is
+mapped to 0x1B (its 0x9B press pixels, bright blue / bright cyan, would be
+plainly visible), and Up/Down/Left appear to produce events although all four
+arrows are E0-extended and unmapped (`tb_system` asserts the Up arrow yields
+no event). Silence for F-keys, Ctrl, Alt, Shift and Ins/Del/Home/End/PgUp/
+PgDn is by design (keymap parity). Investigate later with a raw scan-code
+trace of what the PIC24 bridge actually emits for Esc and the arrow keys.
 
 ## Commands
 

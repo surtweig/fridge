@@ -69,3 +69,6 @@ netlist.lst
 *.bit
 *.svf
 *.mcs
+
+# Assembler output (regenerated from src/*.falc by tools/falc)
+*.bin

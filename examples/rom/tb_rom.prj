@@ -1,0 +1,4 @@
+vhdl work "FridgeGlobals.vhd"
+vhdl work "FridgeROMImage.vhd"
+vhdl work "fridge_rom.vhd"
+vhdl work "tb_rom.vhd"

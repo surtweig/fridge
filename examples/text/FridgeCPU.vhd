@@ -8,34 +8,34 @@ use work.FridgeIRCodes.all;
 use work.FridgePAM16Commands.all;
 
 entity FridgeCPU is
-     
+
 port (
      CLK_MAIN : in std_logic;
      CLK_PHI2 : in std_logic;
      RESET : in std_logic;
      DEBUG_SWITCH : in std_logic;
      HALTED : out std_logic;
-     
+
      INTE : out std_logic;
      INT : in std_logic;
      INT_IRQ : in XCM2_WORD;
-     
+
      DEVICE_SEL : out XCM2_WORD;
      DEVICE_READ : out std_logic;
      DEVICE_DATA : inout XCM2_WORD;
-  
+
      RAM_WRITE_DATA : out XCM2_WORD;
      RAM_WRITE_ADDR : out XCM2_DWORD;
      RAM_WRITE_ENABLED : out std_logic;
      RAM_READ_DATA : in XCM2_WORD;
-     RAM_READ_ADDR : out XCM2_DWORD;	  
-     
+     RAM_READ_ADDR : out XCM2_DWORD;
+
      GPU_MODE_SWITCH : out std_logic_vector(0 to 1);
      GPU_PALETTE_SWITCH : out std_logic;
      GPU_PRESENT_TRIGGER : out std_logic;
      GPU_PRESENT_MODE : out XCM2_WORD;
      GPU_FRAME_OFFSET : out XCM2_DWORD;
-     
+
      GPU_BACK_STORE : out std_logic;
      GPU_BACK_LOAD : out std_logic;
      GPU_BACK_ADDR : out XCM2_DWORD;
@@ -46,26 +46,26 @@ port (
      GPU_VMEM_LOAD : out std_logic;
      GPU_VMEM_ADDR : out XCM2_DWORD;
      GPU_VMEM_DATA : inout XCM2_WORD;
-     
-     PAM16_COMMAND_ENABLED : out std_logic; 
+
+     PAM16_COMMAND_ENABLED : out std_logic;
      PAM16_COMMAND_READY : in std_logic;
      PAM16_DATA_WRITE : out XCM2_DWORD;
      PAM16_DATA_READ : in XCM2_DWORD;
      PAM16_COMMAND_CODE : out PAM16_COMMAND;
-     
+
      DEBUG_STEP : in std_logic;
      DEBUG_STATE : out XCM2_WORD;
      DEBUG_CURRENT_IR : out XCM2_WORD;
      DEBUG_PC : out XCM2_DWORD
 );
-     
+
 end FridgeCPU;
 
 architecture main of FridgeCPU is
 
      type CPUState is (
           CPU_INVALID,             -- 00
-          CPU_HALTED,              -- 01 
+          CPU_HALTED,              -- 01
           CPU_FETCH_IR,            -- 02
           CPU_FETCH_ARG0,          -- 03
           CPU_FETCH_ARG1,          -- 04
@@ -90,7 +90,6 @@ architecture main of FridgeCPU is
      signal interruptsEnabled, interruptRequested, interruptInProgress : std_logic:= '0';
      signal interruptAddr : XCM2_WORD;
      signal deviceData, deviceSel : XCM2_WORD;
-     signal deviceDataIn : XCM2_WORD;
      signal PC, nextPC : XCM2_DWORD;
      signal SP, nextSP : XCM2_DWORD;
      signal rA, rB, rC, rD, rE, rH, rL : XCM2_WORD;
@@ -102,7 +101,7 @@ architecture main of FridgeCPU is
      signal fSign, fZero, fAux, fParity, fCarry : std_logic := '0';
      signal rF : XCM2_WORD;
      --signal memory : XCM2_RAM:= (others => X"0");
-     
+
      signal currentIRCode : XCM2_WORD:= NOP;
      signal IRArg0 : XCM2_WORD:= X"00";
      signal IRArg1 : XCM2_WORD:= X"00";
@@ -111,34 +110,34 @@ architecture main of FridgeCPU is
      signal memAddrBuffer : XCM2_DWORD:= X"0000";
      signal memWriteEnabled : std_logic;
      signal IRTemp : XCM2_WORD:= X"00";
-     
+
      signal gpuBackClr, gpuPresentTrigger, gpuBackStore, gpuBackLoad : std_logic:= '0';
      signal gpuBackAddr : XCM2_DWORD;
      signal gpuBackData : XCM2_WORD;
      signal gpuPresentMode : XCM2_WORD:= X"00";
      signal gpuFrameOffset : XCM2_DWORD:= X"0000";
      signal gpuModeSwitch : std_logic_vector(0 to 1):= ('0', '0');
-     
+
      signal debugStepPressed : std_logic:= '0';
-     
+
      --function pcRead() return XCM2_WORD is
      --begin
-     --     
+     --
      --end function pcRead;
-     
+
      procedure defaultSetFlags(result : in XCM2_WORD; signal fSign, fZero, fParity : out std_logic) is
      begin
           fSign <= result(0);
-     
+
           if (result = 0) then
                fZero <= '1';
           else
                fZero <= '0';
           end if;
-          
+
           fParity <= not result(7); -- doesn't meet i8080 specification
      end procedure defaultSetFlags;
-     
+
      procedure compareSetFlags(a, b : in XCM2_WORD; signal fCarry, fSign, fZero, fParity : out std_logic) is
      begin
           if a < b then
@@ -154,10 +153,10 @@ architecture main of FridgeCPU is
                fSign <= '0';
                fZero <= '1';
           end if;
-          
+
           fParity <= not (a(7) xor b(7)); -- doesn't meet i8080 specification
      end procedure compareSetFlags;
-     
+
      -- Flag word layout follows fridge.h: SIGN 0x80, ZERO 0x40, PANIC 0x20,
      -- AUX 0x10, PARITY 0x04, CARRY 0x01. rF is unsigned(0 to 7) with index 0
      -- as the most significant bit.
@@ -181,7 +180,7 @@ architecture main of FridgeCPU is
           fParity <= r(5);
           fCarry <= r(7);
      end procedure unpackFlags;
-     
+
      function XCM2_DWORD_HL(H, L : in XCM2_WORD) return XCM2_DWORD is
           variable vh, vl : std_logic_vector(0 to 7);
           variable vhl : std_logic_vector(0 to 15);
@@ -191,19 +190,19 @@ architecture main of FridgeCPU is
           vhl:= vh & vl;
           return unsigned(vhl);
      end function XCM2_DWORD_HL;
-     
-     function XCM2_HIGH_WORD(D : in XCM2_DWORD) return XCM2_WORD is          
+
+     function XCM2_HIGH_WORD(D : in XCM2_DWORD) return XCM2_WORD is
      begin
           return D(0 to 7);
      end function XCM2_HIGH_WORD;
-     
+
      function XCM2_LOW_WORD(D : in XCM2_DWORD) return XCM2_WORD is
           variable result : XCM2_WORD;
      begin
           result := D(8 to 15);
           return result;
-     end function XCM2_LOW_WORD;     
-     
+     end function XCM2_LOW_WORD;
+
      function boolean_to_std_logic(b : in boolean) return std_logic is
      begin
           if b then
@@ -212,7 +211,7 @@ architecture main of FridgeCPU is
                return '0';
           end if;
      end function boolean_to_std_logic;
-         
+
      procedure ir_MOV(signal rDst : inout XCM2_WORD; signal rSrc : in XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -220,13 +219,13 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_MOV;
-     
-     procedure ir_MOV_RM(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD; 
+
+     procedure ir_MOV_RM(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                          signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                          signal state : in CPUState; variable nextState : inout CPUState) is
      variable vh, vl : std_logic_vector(0 to 7);
      variable vhl : std_logic_vector(0 to 15);
-     
+
      begin
           if (state = CPU_EXECUTE_IR) then
                vh:= std_logic_vector(rH);
@@ -239,13 +238,13 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_MOV_RM;
-     
+
      procedure ir_MOV_MR(signal rSrc : in XCM2_WORD; signal rH, rL : in XCM2_WORD;
                          signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
                          signal state : in CPUState; variable nextState : inout CPUState) is
      variable vh, vl : std_logic_vector(0 to 7);
      variable vhl : std_logic_vector(0 to 15);
-     
+
      begin
           if (state = CPU_EXECUTE_IR) then
                vh:= std_logic_vector(rH);
@@ -258,7 +257,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_MOV_MR;
-     
+
      procedure ir_MVI(signal rDst : inout XCM2_WORD; signal IRArg0 : in XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -272,7 +271,7 @@ architecture main of FridgeCPU is
                         signal state : in CPUState; variable nextState : inout CPUState) is
      variable vh, vl : std_logic_vector(0 to 7);
      variable vhl : std_logic_vector(0 to 15);
-     
+
      begin
           if (state = CPU_EXECUTE_IR) then
                vh:= std_logic_vector(rH);
@@ -284,8 +283,8 @@ architecture main of FridgeCPU is
           elsif (state = CPU_STORE_WORD) then
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_MVI_M;     
-     
+     end procedure ir_MVI_M;
+
      procedure ir_LXI(signal rDstH, rDstL : inout XCM2_WORD; signal IRArg0, IRArg1 : in XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
      begin
@@ -293,24 +292,24 @@ architecture main of FridgeCPU is
                rDstH <= IRArg0;
                rDstL <= IRArg1;
                nextState:= CPU_FETCH_IR;
-          end if;     
+          end if;
      end procedure ir_LXI;
-     
+
      procedure ir_LXI_D(signal rDst : inout XCM2_DWORD; signal IRArg0, IRArg1 : in XCM2_WORD;
                         signal state : in CPUState; variable nextState : inout CPUState) is
      variable vh, vl : std_logic_vector(0 to 7);
      variable vhl : std_logic_vector(0 to 15);
-     
+
      begin
           if (state = CPU_EXECUTE_IR) then
                vh:= std_logic_vector(IRArg0);
                vl:= std_logic_vector(IRArg1);
                vhl:= vh & vl;
                rDst <= unsigned(vhl);
-               nextState:= CPU_FETCH_IR;               
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_LXI_D;
-     
+
      procedure ir_LDA(signal rA : inout XCM2_WORD; signal rAddrH, rAddrL : in XCM2_WORD;
                       signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -323,7 +322,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_LDA;
-     
+
      procedure ir_STA(signal rA : in XCM2_WORD; signal rAddrH, rAddrL : in XCM2_WORD;
                       signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -336,7 +335,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_STA;
-     
+
      procedure ir_LHLD(signal rH, rL : inout XCM2_WORD; signal rAddrH, rAddrL : in XCM2_WORD;
                        signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -353,7 +352,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_LHLD;
-     
+
      procedure ir_SHLD(signal rH, rL : in XCM2_WORD; signal rAddrH, rAddrL : in XCM2_WORD;
                        signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -370,7 +369,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SHLD;
-     
+
      procedure ir_XCNG(signal rD, rE, rH, rL : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      variable tD, tE : XCM2_WORD;
      begin
@@ -384,7 +383,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_XCNG;
-     
+
      procedure ir_ADD(signal rDst : inout XCM2_WORD; signal rAdd : in XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -398,7 +397,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ADD;
-     
+
      procedure ir_ADD_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -407,16 +406,16 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= boolean_to_std_logic((not rDst) < RAM_READ_DATA);
                tDst:= rDst + RAM_READ_DATA;
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ADD_M;
-     
+
      procedure ir_ADC(signal rDst : inout XCM2_WORD; signal rAdd : in XCM2_WORD;
                       signal fSign, fZero, fParity : inout std_logic; signal fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -435,7 +434,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ADC;
-     
+
      procedure ir_ADC_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity : inout std_logic; signal fCarry : inout std_logic;
@@ -444,21 +443,21 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                tDst:= rDst + RAM_READ_DATA;
                if (fCarry = '1') then
                     c:= X"01";
                else
                     c:= X"00";
-               end if;       
+               end if;
                fCarry <= boolean_to_std_logic((not rDst) < RAM_READ_DATA + c);
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst + c;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ADC_M;
-     
+
      procedure ir_SUB(signal rDst : inout XCM2_WORD; signal rSub : in XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -472,7 +471,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SUB;
-     
+
      procedure ir_SUB_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -481,16 +480,16 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= boolean_to_std_logic(rDst < RAM_READ_DATA);
                tDst:= rDst - RAM_READ_DATA;
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SUB_M;
-     
+
      procedure ir_SBB(signal rDst : inout XCM2_WORD; signal rSub : in XCM2_WORD;
                       signal fSign, fZero, fParity : inout std_logic; signal fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -509,7 +508,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SBB;
-     
+
      procedure ir_SBB_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity : inout std_logic; signal fCarry : inout std_logic;
@@ -518,21 +517,21 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                tDst:= rDst - RAM_READ_DATA;
                if (fCarry = '1') then
                     c:= X"01";
                else
                     c:= X"00";
-               end if;       
+               end if;
                fCarry <= boolean_to_std_logic(rDst < RAM_READ_DATA + c);
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst - c;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SBB_M;
-     
+
      procedure ir_INR(signal rDst : inout XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -545,8 +544,8 @@ architecture main of FridgeCPU is
                rDst <= tDst;
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_INR;     
-     
+     end procedure ir_INR;
+
      procedure ir_INR_M(signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD; signal memWriteBuffer : inout XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -555,7 +554,7 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= boolean_to_std_logic((not RAM_READ_DATA) = 0);
                tDst:= RAM_READ_DATA + 1;
@@ -565,7 +564,7 @@ architecture main of FridgeCPU is
           elsif (state = CPU_STORE_WORD) then
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_INR_M;  
+     end procedure ir_INR_M;
 
      procedure ir_DCR(signal rDst : inout XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -579,8 +578,8 @@ architecture main of FridgeCPU is
                rDst <= tDst;
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_DCR;  
- 
+     end procedure ir_DCR;
+
      procedure ir_DCR_M(signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD; signal memWriteBuffer : inout XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -589,7 +588,7 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= boolean_to_std_logic((not RAM_READ_DATA) = 0);
                tDst:= RAM_READ_DATA - 1;
@@ -599,9 +598,9 @@ architecture main of FridgeCPU is
           elsif (state = CPU_STORE_WORD) then
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_DCR_M;  
+     end procedure ir_DCR_M;
 
-     procedure ir_INX(signal rDstH, rDstL : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is     
+     procedure ir_INX(signal rDstH, rDstL : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      variable tDst : XCM2_DWORD;
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -617,10 +616,10 @@ architecture main of FridgeCPU is
           if (state = CPU_EXECUTE_IR) then
                rDst := rSrc + X"0001";
                nextState:= CPU_FETCH_IR;
-          end if;     
+          end if;
      end procedure ir_INX_D;
-     
-     procedure ir_DCX(signal rDstH, rDstL : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is     
+
+     procedure ir_DCX(signal rDstH, rDstL : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      variable tDst : XCM2_DWORD;
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -630,15 +629,15 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_DCX;
-     
+
      procedure ir_DCX_D(signal rSrc : in XCM2_DWORD; rDst : inout XCM2_DWORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
                rDst := rSrc - X"0001";
                nextState:= CPU_FETCH_IR;
-          end if;     
+          end if;
      end procedure ir_DCX_D;
-     
+
      procedure ir_DAD(signal rH, rL : inout XCM2_WORD; signal rAddH, rAddL : in XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      variable tDst : XCM2_DWORD;
      begin
@@ -649,7 +648,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_DAD;
-     
+
      procedure ir_DAD_D(signal rH, rL : inout XCM2_WORD; signal rAdd : in XCM2_DWORD; signal state : in CPUState; variable nextState : inout CPUState) is
      variable tDst : XCM2_DWORD;
      begin
@@ -660,7 +659,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_DAD_D;
-     
+
      procedure ir_ANA(signal rDst : inout XCM2_WORD; signal rOp : in XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -674,7 +673,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ANA;
-     
+
      procedure ir_ANA_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -683,15 +682,15 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= '0';
                tDst:= rDst and RAM_READ_DATA;
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_ANA_M;     
+     end procedure ir_ANA_M;
 
      procedure ir_ORA(signal rDst : inout XCM2_WORD; signal rOp : in XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -706,7 +705,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_ORA;
-     
+
      procedure ir_ORA_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -715,15 +714,15 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= '0';
                tDst:= rDst or RAM_READ_DATA;
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_ORA_M;      
+     end procedure ir_ORA_M;
 
      procedure ir_XRA(signal rDst : inout XCM2_WORD; signal rOp : in XCM2_WORD;
                       signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -737,8 +736,8 @@ architecture main of FridgeCPU is
                rDst <= tDst;
                nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_XRA;     
-     
+     end procedure ir_XRA;
+
      procedure ir_XRA_M(signal rDst : inout XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -747,16 +746,16 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                fCarry <= '0';
                tDst:= rDst xor RAM_READ_DATA;
                defaultSetFlags(tDst, fSign, fZero, fParity);
                rDst <= tDst;
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
-     end procedure ir_XRA_M;    
-     
+     end procedure ir_XRA_M;
+
      procedure ir_CMP(signal rA, rB : in XCM2_WORD; signal fSign, fZero, fParity, fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
      begin
@@ -765,7 +764,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_CMP;
-     
+
      procedure ir_CMP_M(signal rA : in XCM2_WORD; signal rH, rL : in XCM2_WORD;
                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
                         signal fSign, fZero, fParity, fCarry : inout std_logic;
@@ -773,13 +772,13 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                memAddrBuffer <= XCM2_DWORD_HL(rH, rL);
-               nextState:= CPU_LOAD_WORD;          
+               nextState:= CPU_LOAD_WORD;
           elsif (state = CPU_LOAD_WORD) then
                compareSetFlags(rA, RAM_READ_DATA, fCarry, fSign, fZero, fParity);
-               nextState:= CPU_FETCH_IR;          
+               nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_CMP_M;
-     
+
      procedure ir_RLC(signal rA : inout XCM2_WORD; signal fCarry : inout std_logic;
                       signal state : in CPUState; variable nextState : inout CPUState) is
      begin
@@ -797,7 +796,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_RRC;
-     
+
      procedure ir_RAL(signal rA : inout XCM2_WORD; signal fCarry : inout std_logic; signal IRTemp : inout XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
      variable c : std_logic;
@@ -828,7 +827,7 @@ architecture main of FridgeCPU is
                fCarry <= IRTemp(7);
                nextState:= CPU_FETCH_IR;
           end if;
-          
+
           --if (state = CPU_EXECUTE_IR) then
           --     carry:= fCarry;
           --     c:= rA(0);
@@ -837,16 +836,16 @@ architecture main of FridgeCPU is
           --     fCarry <= c;
           --     nextState:= CPU_FETCH_IR;
           --end if;
-     end procedure ir_RAR;  
-   
+     end procedure ir_RAR;
+
      procedure ir_CMA(signal rA : inout XCM2_WORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
                rA <= not rA;
                nextState:= CPU_FETCH_IR;
-          end if;     
+          end if;
      end procedure ir_CMA;
-     
+
      procedure ir_SetCarry(newValue : in std_logic; signal fCarry : inout std_logic; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -854,7 +853,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SetCarry;
-     
+
      procedure ir_JMP(condition : in std_logic; signal pcH, pcL : in XCM2_WORD; variable nextPC : inout XCM2_DWORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -864,7 +863,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_JMP;
-     
+
      procedure ir_CALL(condition : in std_logic; signal pcH, pcL : in XCM2_WORD; signal PC : in XCM2_DWORD; variable nextPC : inout XCM2_DWORD;
                        signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
                        signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
@@ -878,19 +877,19 @@ architecture main of FridgeCPU is
                else
                     nextState:= CPU_FETCH_IR;
                end if;
-               
+
           elsif (state = CPU_STORE_DWORD_L) then
                nextState:= CPU_STORE_DWORD_H;
                memAddrBuffer <= SP - X"02";
                memWriteBuffer <= XCM2_HIGH_WORD(PC);
-               
+
           elsif (state = CPU_STORE_DWORD_H) then
                nextState:= CPU_FETCH_IR;
                nextPC:= XCM2_DWORD_HL(pcH, pcL);
                nextSP:= SP - X"02";
           end if;
      end procedure ir_CALL;
-     
+
      procedure ir_RET(condition : in std_logic; variable nextPC : inout XCM2_DWORD;
                       signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
                       signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA, memReadBufferH : in XCM2_WORD;
@@ -902,7 +901,7 @@ architecture main of FridgeCPU is
                     memAddrBuffer <= SP;
                else
                     nextState:= CPU_FETCH_IR;
-               end if;          
+               end if;
           elsif (state = CPU_LOAD_DWORD_H) then
                nextState:= CPU_LOAD_DWORD_L;
                nextPC(0 to 7):= RAM_READ_DATA;
@@ -914,7 +913,7 @@ architecture main of FridgeCPU is
                memAddrBuffer <= nextPC;
           end if;
      end procedure ir_RET;
-     
+
      procedure ir_PCHL(signal rH, rL : in XCM2_WORD; variable nextPC : inout XCM2_DWORD; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -922,8 +921,8 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_PCHL;
-     
-     procedure ir_PUSH(signal rH, rL : in XCM2_WORD; 
+
+     procedure ir_PUSH(signal rH, rL : in XCM2_WORD;
                        signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
                        signal memAddrBuffer : inout XCM2_DWORD; signal memWriteBuffer : inout XCM2_WORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -931,17 +930,17 @@ architecture main of FridgeCPU is
           if (state = CPU_EXECUTE_IR) then
                nextState:= CPU_STORE_DWORD_L;
                memAddrBuffer <= SP - X"01";
-               memWriteBuffer <= rL;          
+               memWriteBuffer <= rL;
           elsif (state = CPU_STORE_DWORD_L) then
                nextState:= CPU_STORE_DWORD_H;
                memAddrBuffer <= SP - X"02";
-               memWriteBuffer <= rH;            
+               memWriteBuffer <= rH;
           elsif (state = CPU_STORE_DWORD_H) then
                nextState:= CPU_FETCH_IR;
                nextSP:= SP - X"02";
           end if;
      end procedure ir_PUSH;
-     
+
      procedure ir_POP(signal rH, rL : inout XCM2_WORD;
                       signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
                       signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
@@ -949,7 +948,7 @@ architecture main of FridgeCPU is
      begin
           if (state = CPU_EXECUTE_IR) then
                nextState:= CPU_LOAD_DWORD_H;
-               memAddrBuffer <= SP;         
+               memAddrBuffer <= SP;
           elsif (state = CPU_LOAD_DWORD_H) then
                nextState:= CPU_LOAD_DWORD_L;
                memAddrBuffer <= SP + X"01";
@@ -958,7 +957,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
                nextSP:= SP + X"02";
                rL <= RAM_READ_DATA;
-          end if;     
+          end if;
      end procedure ir_POP;
 
      procedure ir_POP_AF(signal rA : inout XCM2_WORD;
@@ -980,7 +979,7 @@ architecture main of FridgeCPU is
                unpackFlags(RAM_READ_DATA, fCarry, fSign, fZero, fAux, fParity);
           end if;
      end procedure ir_POP_AF;
- 
+
      procedure ir_XTHL(signal rH, rL : inout XCM2_WORD;
                        signal SP : in XCM2_DWORD;
                        signal memAddrBuffer : inout XCM2_DWORD; signal memReadBufferH, RAM_READ_DATA : in XCM2_WORD; signal memWriteBuffer : inout XCM2_WORD;
@@ -1006,7 +1005,7 @@ architecture main of FridgeCPU is
                rL <= RAM_READ_DATA;
           end if;
      end procedure ir_XTHL;
-     
+
      procedure ir_SPHL(signal rH, rL : in XCM2_WORD;
                        variable nextSP : inout XCM2_DWORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1016,7 +1015,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_SPHL;
-     
+
      procedure ir_HLSP(signal rH, rL : inout XCM2_WORD;
                        signal SP : in XCM2_DWORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1027,14 +1026,14 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_HLSP;
-    
+
      procedure ir_HLT(signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
                nextState:= CPU_HALTED;
           end if;
      end procedure ir_HLT;
-     
+
      procedure ir_EnableInterrupt(enable : in std_logic; signal interruptsEnabled : inout std_logic; signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -1042,7 +1041,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_EnableInterrupt;
-     
+
      procedure ir_IIN(signal rA : inout XCM2_WORD; signal IRArg0 : in XCM2_WORD;
                       signal deviceSel : inout XCM2_WORD; signal deviceData : in XCM2_WORD;
                       signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1066,9 +1065,9 @@ architecture main of FridgeCPU is
           elsif (state = CPU_DEVICE_WRITE) then
                deviceData <= rA;
                nextState:= CPU_FETCH_IR;
-          end if;               
+          end if;
      end procedure ir_IOUT;
-     
+
      procedure ProcessInterrupt(signal interruptAddr : in XCM2_WORD; signal interruptsEnabled, interruptInProgress : inout std_logic;
                                 signal PC : in XCM2_DWORD; variable nextPC : inout XCM2_DWORD;
                                 signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
@@ -1090,9 +1089,9 @@ architecture main of FridgeCPU is
                nextSP:= SP - X"02";
                interruptInProgress <= '0';
                interruptsEnabled <= '0';
-          end if;          
+          end if;
      end procedure ProcessInterrupt;
-     
+
      procedure ir_Trigger(signal trigger : inout std_logic;
                           signal state : in CPUState; variable nextState : inout CPUState) is
      begin
@@ -1104,14 +1103,14 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_Trigger;
-     
+
      procedure ir_Dummy(signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_Dummy;
-     
+
      procedure ir_VMODE(signal gpuModeSwitch : inout std_logic_vector(0 to 1); signal mode : in XCM2_WORD;
                         signal state : in CPUState; variable nextState : inout CPUState) is
      begin
@@ -1122,9 +1121,9 @@ architecture main of FridgeCPU is
           elsif (state = CPU_EXECUTE_IR_STAGE_2) then
                gpuModeSwitch(0) <= '0';
                nextState:= CPU_FETCH_IR;
-          end if;          
+          end if;
      end procedure ir_VMODE;
-     
+
      procedure ir_VPRE(signal trigger : inout std_logic;
                        signal modeOut : inout XCM2_WORD; signal offsetOut : inout XCM2_DWORD;
                        signal mode, rH, rL : in XCM2_WORD;
@@ -1140,7 +1139,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_VPRE;
-     
+
      procedure ir_VFSA(signal rA, rH, rL : in XCM2_WORD;
                        signal gpuBackStore, gpuBackLoad : inout std_logic; signal gpuBackAddr : inout XCM2_DWORD; signal gpuBackData : inout XCM2_WORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1157,7 +1156,7 @@ architecture main of FridgeCPU is
                nextState:= CPU_FETCH_IR;
           end if;
      end procedure ir_VFSA;
-     
+
      procedure ir_PAM16C(signal rA : in XCM2_WORD; signal rB, rC, rD, rE, rH, rL : inout XCM2_WORD; signal pam16Ready : in std_logic;
                          signal pam16CmdEnabled : out std_logic; signal pam16CmdCode : out PAM16_COMMAND; signal pam16DataWrite : out XCM2_DWORD; signal pam16DataRead : in XCM2_DWORD;
                          signal state : in CPUState; variable nextState : inout CPUState) is
@@ -1168,13 +1167,13 @@ architecture main of FridgeCPU is
             pam16CmdEnabled <= '1';
             cmdCode:= rA(4 to 7);
             pam16CmdCode <= cmdCode;
-            
+
             if (cmdCode = PAM16_RESET) then
                 data:= X"0000";
                 data(12 to 15):= rA(0 to 3); -- ES
                 pam16DataWrite <= data;
                 nextState:= CPU_FETCH_IR;
-                
+
             elsif (cmdCode = PAM16_PUSH) then
                 pam16DataWrite <= XCM2_DWORD_HL(rH, rL);
                 nextState:= CPU_FETCH_IR;
@@ -1183,46 +1182,46 @@ architecture main of FridgeCPU is
                 nextState:= CPU_EXECUTE_IR_STAGE_2;
             else
                 nextState:= CPU_FETCH_IR;
-            end if;            
-            
+            end if;
+
         elsif (state = CPU_EXECUTE_IR_STAGE_2) then
-        
+
             cmdCode:= rA(4 to 7);
-            
+
             if (pam16Ready = '1') then
                 pam16CmdEnabled <= '0';
-                                
+
                 if (cmdCode = PAM16_POP or cmdCode = PAM16_ADD) then
                     rH <= XCM2_HIGH_WORD(pam16DataRead);
                     rL <= XCM2_LOW_WORD(pam16DataRead);
                     nextState:= CPU_FETCH_IR;
-                end if;                
+                end if;
             end if;
-            
+
             if (cmdCode = PAM16_UNPACK) then
-                nextState:= CPU_EXECUTE_IR_STAGE_3;                    
+                nextState:= CPU_EXECUTE_IR_STAGE_3;
             else
                 nextState:= CPU_FETCH_IR;
             end if;
-        
+
         elsif (state = CPU_EXECUTE_IR_STAGE_3) then
-        
+
             cmdCode:= rA(4 to 7);
             if (cmdCode = PAM16_UNPACK) then
                 rB <= XCM2_HIGH_WORD(pam16DataRead);
                 rC <= XCM2_LOW_WORD(pam16DataRead);
-                nextState:= CPU_EXECUTE_IR_STAGE_4;                    
+                nextState:= CPU_EXECUTE_IR_STAGE_4;
             end if;
-                        
+
         elsif (state = CPU_EXECUTE_IR_STAGE_4) then
-        
+
             cmdCode:= rA(4 to 7);
             if (cmdCode = PAM16_UNPACK) then
                 rD <= XCM2_HIGH_WORD(pam16DataRead);
                 rE <= XCM2_LOW_WORD(pam16DataRead);
                 nextState:= CPU_EXECUTE_IR_STAGE_5;
             end if;
-            
+
         elsif (state = CPU_EXECUTE_IR_STAGE_5) then
             cmdCode:= rA(4 to 7);
             if (cmdCode = PAM16_UNPACK) then
@@ -1234,7 +1233,7 @@ architecture main of FridgeCPU is
             nextState:= CPU_FETCH_IR;
         end if;
      end procedure ir_PAM16C;
-                        
+
 begin
 
      process (CLK_MAIN) is
@@ -1243,7 +1242,7 @@ begin
           variable buf_nextState : CPUState:= CPU_INVALID;
           variable buf_currentIRCode : XCM2_WORD:= X"00";
      begin
-              
+
           rF <= packFlags(fCarry, fSign, fZero, fAux, fParity);
 
           if (state = CPU_HALTED) then
@@ -1251,7 +1250,7 @@ begin
           else
                HALTED <= '0';
           end if;
-               
+
           INTE <= interruptsEnabled;
           GPU_BACK_CLR <= gpuBackClr;
           GPU_BACK_STORE <= gpuBackStore;
@@ -1262,10 +1261,16 @@ begin
           GPU_PRESENT_MODE <= gpuPresentMode;
           GPU_FRAME_OFFSET <= gpuFrameOffset;
           GPU_BACK_DATA <= gpuBackData;
-          
+
+          if (state = CPU_DEVICE_READ) then
+               DEVICE_READ <= '1';
+          elsif (state = CPU_DEVICE_WRITE) then
+               DEVICE_READ <= '0';
+          end if;
+
           if rising_edge(CLK_MAIN) then
                if RESET = '0' then
-               
+
                     if DEBUG_SWITCH = '1' then
                         if nextState /= CPU_FETCH_IR then
                             state <= nextState;
@@ -1282,7 +1287,7 @@ begin
                     else
                         state <= nextState; -- normal operation
                     end if;
-					
+
                     PC <= nextPC;
                     SP <= nextSP;
                     if (INT = '1') then
@@ -1298,9 +1303,9 @@ begin
                     interruptRequested <= '0';
                end if;
           end if;
-          
+
           if falling_edge(CLK_MAIN) then
-               
+
                if RESET = '1' then
                     buf_nextState:= CPU_INVALID;
                     nextPC <= X"0000";
@@ -1319,32 +1324,32 @@ begin
                     fCarry <= '0';
                     IRTemp <= X"00";
                     IRArg0 <= X"00";
-                    IRArg1 <= X"00";                    
+                    IRArg1 <= X"00";
                end if;
-               
+
                if (interruptRequested = '1') then
                     if (state = CPU_FETCH_IR or interruptInProgress = '1') then
                          ProcessInterrupt(interruptAddr, interruptsEnabled, interruptInProgress,
                                           PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     end if;
                end if;
-          
+
                if (interruptRequested /= '1' and state = CPU_INVALID) then
                     buf_nextState:= CPU_FETCH_IR;
                end if;
-          
+
                if (interruptRequested /= '1' and (state = CPU_FETCH_IR or state = CPU_FETCH_ARG0 or state = CPU_FETCH_ARG1)) then
                     if (state = CPU_FETCH_IR) then
                          buf_currentIRCode := RAM_READ_DATA;
-                         currentIRCode <= RAM_READ_DATA;                 
-                    elsif (state = CPU_FETCH_ARG0) then                         
+                         currentIRCode <= RAM_READ_DATA;
+                    elsif (state = CPU_FETCH_ARG0) then
                          IRArg0 <= RAM_READ_DATA;
                     elsif (state = CPU_FETCH_ARG1) then
                          IRArg1 <= RAM_READ_DATA;
                     end if;
-                                  
-                    buf_nextPC := PC + 1;   
-                                       
+
+                    buf_nextPC := PC + 1;
+
                     if (buf_currentIRCode >= LXI_BC and buf_currentIRCode <= SHLD) or (buf_currentIRCode >= JMP and buf_currentIRCode <= CM) or (buf_currentIRCode = DAI)
                     then
                          -- 3byte instructions
@@ -1369,24 +1374,24 @@ begin
                        --or buf_currentIRCode = VMODE
                     then
                          -- 2byte instructions
-                         if (state = CPU_FETCH_IR) then      
+                         if (state = CPU_FETCH_IR) then
                               buf_nextState := CPU_FETCH_ARG0;
                          else
                               buf_nextState := CPU_EXECUTE_IR;
-                         end if;                       
+                         end if;
                     else
                          -- 1byte instructions
-                         buf_nextState := CPU_EXECUTE_IR;                          
+                         buf_nextState := CPU_EXECUTE_IR;
                     end if;
 
                end if;
-               
+
                if (state = CPU_LOAD_DWORD_H) then
                     memReadBufferH <= RAM_READ_DATA;
                elsif (state = CPU_LOAD_DWORD_L) then
                     memReadBufferL <= RAM_READ_DATA;
                end if;
-               
+
                if (interruptRequested /= '1' and
                    state /= CPU_INVALID and
                    state /= CPU_HALTED and
@@ -1437,7 +1442,7 @@ begin
                     when MOV_EL => ir_MOV(rE, rL, state, buf_nextState);
                     when MOV_HL => ir_MOV(rH, rL, state, buf_nextState);
                     when MOV_LH => ir_MOV(rL, rH, state, buf_nextState);
-                    
+
                     when MOV_AM => ir_MOV_RM(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when MOV_BM => ir_MOV_RM(rB, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when MOV_CM => ir_MOV_RM(rC, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
@@ -1445,7 +1450,7 @@ begin
                     when MOV_EM => ir_MOV_RM(rE, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when MOV_HM => ir_MOV_RM(rH, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when MOV_LM => ir_MOV_RM(rL, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
-                    
+
                     when MOV_MA => ir_MOV_MR(rA, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when MOV_MB => ir_MOV_MR(rB, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when MOV_MC => ir_MOV_MR(rC, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
@@ -1453,7 +1458,7 @@ begin
                     when MOV_ME => ir_MOV_MR(rE, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when MOV_MH => ir_MOV_MR(rH, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when MOV_ML => ir_MOV_MR(rL, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when MVI_A => ir_MVI(rA, IRArg0, state, buf_nextState);
                     when MVI_B => ir_MVI(rB, IRArg0, state, buf_nextState);
                     when MVI_C => ir_MVI(rC, IRArg0, state, buf_nextState);
@@ -1462,28 +1467,28 @@ begin
                     when MVI_H => ir_MVI(rH, IRArg0, state, buf_nextState);
                     when MVI_L => ir_MVI(rL, IRArg0, state, buf_nextState);
                     when MVI_M => ir_MVI_M(IRArg0, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when LXI_BC => ir_LXI(rB, rC, IRArg0, IRArg1, state, buf_nextState);
                     when LXI_DE => ir_LXI(rD, rE, IRArg0, IRArg1, state, buf_nextState);
                     when LXI_HL => ir_LXI(rH, rL, IRArg0, IRArg1, state, buf_nextState);
                     when LXI_SP => ir_LXI_D(nextSP, IRArg0, IRArg1, state, buf_nextState);
-                    
+
                     when LDA => ir_LDA(rA, IRArg0, IRArg1, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when STA => ir_STA(rA, IRArg0, IRArg1, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when LHLD => ir_LHLD(rH, rL, IRArg0, IRArg1, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when SHLD => ir_SHLD(rH, rL, IRArg0, IRArg1, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when LDAX_BC => ir_LDA(rA, rB, rC, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when LDAX_DE => ir_LDA(rA, rD, rE, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when LDAX_HL => ir_LDA(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
-                    
+
                     when STAX_BC => ir_STA(rA, rB, rC, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when STAX_DE => ir_STA(rA, rD, rE, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when STAX_HL => ir_STA(rA, rH, rL, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when XCNG => ir_XCNG(rD, rE, rH, rL, state, buf_nextState);
-                    
+
                     when ADD_A => ir_ADD(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADD_B => ir_ADD(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADD_C => ir_ADD(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1493,7 +1498,7 @@ begin
                     when ADD_L => ir_ADD(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADD_M => ir_ADD_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADI => ir_ADD(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when ADC_A => ir_ADC(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADC_B => ir_ADC(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADC_C => ir_ADC(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1503,7 +1508,7 @@ begin
                     when ADC_L => ir_ADC(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ADC_M => ir_ADC_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ACI => ir_ADC(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when SUB_A => ir_SUB(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SUB_B => ir_SUB(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SUB_C => ir_SUB(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1513,7 +1518,7 @@ begin
                     when SUB_L => ir_SUB(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SUB_M => ir_SUB_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SUI => ir_SUB(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when SBB_A => ir_SBB(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SBB_B => ir_SBB(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SBB_C => ir_SBB(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1522,8 +1527,8 @@ begin
                     when SBB_H => ir_SBB(rA, rH, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SBB_L => ir_SBB(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when SBB_M => ir_SBB_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    when SBI => ir_SBB(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);                    
-                    
+                    when SBI => ir_SBB(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
+
                     when INR_A => ir_INR(rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when INR_B => ir_INR(rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when INR_C => ir_INR(rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1532,7 +1537,7 @@ begin
                     when INR_H => ir_INR(rH, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when INR_L => ir_INR(rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when INR_M => ir_INR_M(rH, rL, memAddrBuffer, RAM_READ_DATA, memWriteBuffer, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when DCR_A => ir_DCR(rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when DCR_B => ir_DCR(rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when DCR_C => ir_DCR(rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1541,23 +1546,23 @@ begin
                     when DCR_H => ir_DCR(rH, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when DCR_L => ir_DCR(rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when DCR_M => ir_DCR_M(rH, rL, memAddrBuffer, RAM_READ_DATA, memWriteBuffer, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when INX_BC => ir_INX(rB, rC, state, buf_nextState);
                     when INX_DE => ir_INX(rD, rE, state, buf_nextState);
                     when INX_HL => ir_INX(rH, rL, state, buf_nextState);
                     when INX_SP => ir_INX_D(SP, buf_nextSP, state, buf_nextState);
-                    
+
                     when DCX_BC => ir_DCX(rB, rC, state, buf_nextState);
                     when DCX_DE => ir_DCX(rD, rE, state, buf_nextState);
                     when DCX_HL => ir_DCX(rH, rL, state, buf_nextState);
                     when DCX_SP => ir_DCX_D(SP, buf_nextSP, state, buf_nextState);
-                    
+
                     when DAD_BC => ir_DAD(rH, rL, rB, rC, state, buf_nextState);
                     when DAD_DE => ir_DAD(rH, rL, rD, rE, state, buf_nextState);
                     when DAD_HL => ir_DAD(rH, rL, rH, rL, state, buf_nextState);
                     when DAD_SP => ir_DAD_D(rH, rL, SP, state, buf_nextState);
                     when DAI    => ir_DAD(rH, rL, IRArg0, IRArg1, state, buf_nextState);
-                    
+
                     when ANA_A => ir_ANA(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ANA_B => ir_ANA(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ANA_C => ir_ANA(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1567,7 +1572,7 @@ begin
                     when ANA_L => ir_ANA(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ANA_M => ir_ANA_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ANI => ir_ANA(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when ORA_A => ir_ORA(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ORA_B => ir_ORA(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ORA_C => ir_ORA(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1577,7 +1582,7 @@ begin
                     when ORA_L => ir_ORA(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ORA_M => ir_ORA_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when ORI => ir_ORA(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when XRA_A => ir_XRA(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when XRA_B => ir_XRA(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when XRA_C => ir_XRA(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1587,7 +1592,7 @@ begin
                     when XRA_L => ir_XRA(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when XRA_M => ir_XRA_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when XRI => ir_XRA(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when CMP_A => ir_CMP(rA, rA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when CMP_B => ir_CMP(rA, rB, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when CMP_C => ir_CMP(rA, rC, fSign, fZero, fParity, fCarry, state, buf_nextState);
@@ -1597,17 +1602,17 @@ begin
                     when CMP_L => ir_CMP(rA, rL, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when CMP_M => ir_CMP_M(rA, rH, rL, memAddrBuffer, RAM_READ_DATA, fSign, fZero, fParity, fCarry, state, buf_nextState);
                     when CPI => ir_CMP(rA, IRArg0, fSign, fZero, fParity, fCarry, state, buf_nextState);
-                    
+
                     when RLC => ir_RLC(rA, fCarry, state, buf_nextState);
                     when RRC => ir_RRC(rA, fCarry, state, buf_nextState);
                     when RAL => ir_RAL(rA, fCarry, IRTemp, state, buf_nextState);
                     when RAR => ir_RAR(rA, fCarry, IRTemp, state, buf_nextState);
-                    
+
                     when CMA => ir_CMA(rA, state, buf_nextState);
                     when CMC => ir_SetCarry(not fCarry, fCarry, state, buf_nextState);
                     when STC => ir_SetCarry('1', fCarry, state, buf_nextState);
                     when RTC => ir_SetCarry('0', fCarry, state, buf_nextState);
-                    
+
                     when JMP => ir_JMP('1',         IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JNZ => ir_JMP(not fZero,   IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JZ  => ir_JMP(fZero,       IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
@@ -1617,7 +1622,7 @@ begin
                     when JPE => ir_JMP(fParity,     IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JP  => ir_JMP(not fSign,   IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
                     when JM  => ir_JMP(fSign,       IRArg0, IRArg1, buf_nextPC, state, buf_nextState);
-                    
+
                     when CALL => ir_CALL('1',         IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CNZ  => ir_CALL(not fZero,   IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CZ   => ir_CALL(fZero,       IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
@@ -1627,7 +1632,7 @@ begin
                     when CPE  => ir_CALL(fParity,     IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CP   => ir_CALL(not fSign,   IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when CM   => ir_CALL(fSign,       IRArg0, IRArg1, PC, buf_nextPC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when RET  => ir_RET('1',         buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RNZ  => ir_RET(not fZero,   buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RZ   => ir_RET(fZero,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
@@ -1636,62 +1641,62 @@ begin
                     when RPO  => ir_RET(not fParity, buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RPE  => ir_RET(fParity,     buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
                     when RP   => ir_RET(not fSign,   buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
-                    when RM   => ir_RET(fSign,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);                    
-                    
+                    when RM   => ir_RET(fSign,       buf_nextPC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, memReadBufferH, state, buf_nextState);
+
                     when PCHL => ir_PCHL(rH, rL, buf_nextPC, state, buf_nextState);
-                    
+
                     when PUSH_AF => ir_PUSH(rA, rF, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when PUSH_BC => ir_PUSH(rB, rC, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when PUSH_DE => ir_PUSH(rD, rE, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when PUSH_HL => ir_PUSH(rH, rL, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
-                    
+
                     when POP_AF => ir_POP_AF(rA, fCarry, fSign, fZero, fAux, fParity, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_BC => ir_POP(rB, rC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_DE => ir_POP(rD, rE, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_HL => ir_POP(rH, rL, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
-                    
+
                     when XTHL => ir_XTHL(rH, rL, SP, memAddrBuffer, memReadBufferH, RAM_READ_DATA, memWriteBuffer, state, buf_nextState);
-                    
+
                     when SPHL => ir_SPHL(rH, rL, buf_nextSP, state, buf_nextState);
                     when HLSP => ir_HLSP(rH, rL, SP, state, buf_nextState);
-                    
+
                     when HLT => ir_HLT(state, buf_nextState);
                     when EI => ir_EnableInterrupt('1', interruptsEnabled, state, buf_nextState);
                     when DI => ir_EnableInterrupt('0', interruptsEnabled, state, buf_nextState);
-                    
-                    when IIN => ir_IIN(rA, IRArg0, deviceSel, deviceDataIn, state, buf_nextState);
+
+                    when IIN => ir_IIN(rA, IRArg0, deviceSel, deviceData, state, buf_nextState);
                     when IOUT => ir_IOUT(rA, IRArg0, deviceSel, deviceData, state, buf_nextState);
-                    
+
                     --when VFCLR => ir_Trigger(gpuBackClr, state, buf_nextState);
                     when VPRE => ir_VPRE(gpuPresentTrigger, gpuPresentMode, gpuFrameOffset, rA, rH, rL, state, buf_nextState);
                     when VMODE => ir_VMODE(gpuModeSwitch, rA, state, buf_nextState);
                     when VFSA => ir_VFSA(rA, rH, rL, gpuBackStore, gpuBackLoad, gpuBackAddr, gpuBackData, state, buf_nextState);
-                    
+
                     when PAM16C => ir_PAM16C(rA, rB, rC, rD, rE, rH, rL, PAM16_COMMAND_READY, PAM16_COMMAND_ENABLED, PAM16_COMMAND_CODE, PAM16_DATA_WRITE, PAM16_DATA_READ, state, buf_nextState);
-                    
+
                     when others => ir_Dummy(state, buf_nextState);
                end case;
                end if;
-                              
+
                -- pcRead
                if (buf_nextState = CPU_FETCH_IR or buf_nextState = CPU_FETCH_ARG0 or buf_nextState = CPU_FETCH_ARG1) then
                     --memReadBuffer <= RAM_READ_DATA;
                     memWriteEnabled <= '0';
-                    memAddrBuffer <= buf_nextPC;   
-                    
-               -- memory->load    
+                    memAddrBuffer <= buf_nextPC;
+
+               -- memory->load
                elsif (buf_nextState = CPU_LOAD_WORD or buf_nextState = CPU_LOAD_DWORD_H or buf_nextState = CPU_LOAD_DWORD_L) then
 
                     memWriteEnabled <= '0';
                     --RAM_READ_ADDR <= memAddrBuffer;--to_unsigned(std_logic_vector(rH) & std_logic_vector(rL));
-                    
+
                -- memory->store
                elsif (buf_nextState = CPU_STORE_WORD or buf_nextState = CPU_STORE_DWORD_H or buf_nextState = CPU_STORE_DWORD_L) then
                     --RAM_WRITE_DATA <= memWriteBuffer;
                     memWriteEnabled <= '1';
                     --RAM_WRITE_ADDR <= memAddrBuffer;--to_unsigned(std_logic_vector(rH) & std_logic_vector(rL));
                end if;
-               
+
                nextState <= buf_nextState;
                nextPC <= buf_nextPC;
                nextSP <= buf_nextSP;
@@ -1703,22 +1708,7 @@ begin
      RAM_WRITE_DATA <= memWriteBuffer;
      RAM_WRITE_ENABLED <= memWriteEnabled;
      DEVICE_SEL <= deviceSel;
-     -- DEVICE_READ is a pure decode of the FSM state: high for exactly the
-     -- one CPU_DEVICE_READ cycle (the old in-process assignment latched and
-     -- held the level until the next device write). Devices must present
-     -- read data from the start of the state (the CPU captures it at the
-     -- mid-state falling edge) and may advance their read side at the
-     -- rising edge that ends the state.
-     DEVICE_READ <= '1' when state = CPU_DEVICE_READ else '0';
-     -- DEVICE_DATA: the CPU drives it only while writing (IOUT); devices
-     -- drive it while DEVICE_READ is asserted (IIN). Without the tri-state
-     -- the CPU and a device would fight over the bus during reads. The
-     -- write value is rA, valid for the whole CPU_DEVICE_WRITE state.
-     -- deviceDataIn follows the resolved port value so IIN sees what the
-     -- selected device drives. (IOUT device-write timing is not exercised
-     -- by this stage; only the IIN read path is validated.)
-     deviceDataIn <= DEVICE_DATA;
-     DEVICE_DATA <= rA when state = CPU_DEVICE_WRITE else (others => 'Z');
+     DEVICE_DATA <= deviceData;
      DEBUG_PC <= PC;
      DEBUG_CURRENT_IR <= currentIRCode;
 

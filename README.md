@@ -24,6 +24,11 @@ examples/blinky/        smoke-test design for the Atlys
 examples/hdmi/          720p60 HDMI rectangle demo with simulation tests
 examples/cpu/           Fridge CPU + BRAM smoke test
 examples/gpu/           CPU + framebuffer/GPU on the 720p HDMI pipeline
+examples/keyboard/      PS/2 keyboard bridge and FIFO demo
+examples/rom/           bitstream ROM device and assembly-generated images
+examples/text/          hardware-tested 40x20 TEXT mode demo
+examples/palette/       programmable TEXT/EGA palette and animation demo
+tools/                  Linux falc and boot/ROM image generation
 PORTING_PLAN.md         staged Fridge port plan and agreed peripheral choices
 setup-host.sh           one-time host setup, part 1 (sudo)
 setup-system.sh         one-time host setup, part 2 (sudo)

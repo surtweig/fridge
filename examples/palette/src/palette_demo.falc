@@ -1,0 +1,199 @@
+// Stage 7 VPAL demo: one programmable palette shared by TEXT and EGA.
+// A = palette entry (0..15), B/C/D = red/green/blue; registers/flags unchanged.
+// Frame 1 holds text and 16 swatches. Frame 0 holds 16 horizontal EGA bars.
+// Animate entry 15 and alternate modes; no framebuffer writes after setup.
+include "vtext.inc"
+offset 0x0000
+static Title "VPAL SHARED PALETTE"
+static Info "TEXT + EGA  16 RGB888 COLORS"
+static AnimRed 0xFF
+static Scene 1
+static Steps 1
+
+main start
+    MVI A, 0
+    MVI B, 0x10
+    MVI C, 0x20
+    MVI D, 0x30
+    VPAL
+    MVI A, 1
+    MVI B, 0x20
+    MVI C, 0x30
+    MVI D, 0x50
+    VPAL
+    MVI A, 2
+    MVI B, 0x20
+    MVI C, 0xA0
+    MVI D, 0x40
+    VPAL
+    MVI A, 3
+    MVI B, 0x20
+    MVI C, 0xA0
+    MVI D, 0xA0
+    VPAL
+    MVI A, 4
+    MVI B, 0xC0
+    MVI C, 0x20
+    MVI D, 0x30
+    VPAL
+    MVI A, 5
+    MVI B, 0xA0
+    MVI C, 0x30
+    MVI D, 0xB0
+    VPAL
+    MVI A, 6
+    MVI B, 0xC0
+    MVI C, 0x80
+    MVI D, 0x20
+    VPAL
+    MVI A, 7
+    MVI B, 0xB0
+    MVI C, 0xB0
+    MVI D, 0xB0
+    VPAL
+    MVI A, 8
+    MVI B, 0x50
+    MVI C, 0x50
+    MVI D, 0x50
+    VPAL
+    MVI A, 9
+    MVI B, 0x40
+    MVI C, 0x80
+    MVI D, 0xFF
+    VPAL
+    MVI A, 10
+    MVI B, 0x80
+    MVI C, 0xFF
+    MVI D, 0x40
+    VPAL
+    MVI A, 11
+    MVI B, 0x40
+    MVI C, 0xE0
+    MVI D, 0xFF
+    VPAL
+    MVI A, 12
+    MVI B, 0xFF
+    MVI C, 0x60
+    MVI D, 0x40
+    VPAL
+    MVI A, 13
+    MVI B, 0xE0
+    MVI C, 0x40
+    MVI D, 0xD0
+    VPAL
+    MVI A, 14
+    MVI B, 0xFF
+    MVI C, 0xD0
+    MVI D, 0x40
+    VPAL
+    MVI A, 15
+    MVI B, 0xFF
+    MVI C, 0x80
+    MVI D, 0x40
+    VPAL
+
+    // Frame 1: text title and information.
+    MVI A, 1
+    VMODE
+    MVI A, 1
+    STA VTEXT_BACK_COLOR
+    MVI A, 15
+    STA VTEXT_FORE_COLOR
+    MVI B, 3
+    MVI C, 2
+    LXI HL, Title
+    CALL vtext_putstr
+    MVI B, 3
+    MVI C, 4
+    LXI HL, Info
+    CALL vtext_putstr
+
+    // Sixteen swatches at row 8, two 'A' cells each, foreground 15.
+    LXI HL, 0x0284
+    MVI E, 0x0F
+    MVI B, 16
+entry swatch
+    MVI A, 0x41
+    VFSA
+    INX HL
+    MOV A, E
+    VFSA
+    INX HL
+    MVI A, 0x41
+    VFSA
+    INX HL
+    MOV A, E
+    VFSA
+    INX HL
+    ADI 0x10
+    MOV E, A
+    DCR B
+    JNZ swatch
+
+    // Switch the active frame to 0 and fill the EGA bars there.
+    LXI HL, 0x0000
+    MVI A, 2
+    VPRE
+    MVI E, 0
+    MVI B, 16
+entry bar
+    MVI C, 10
+entry row
+    MVI D, 120
+entry byte
+    MOV A, E
+    VFSA
+    INX HL
+    DCR D
+    JNZ byte
+    DCR C
+    JNZ row
+    MOV A, E
+    ADI 0x11
+    MOV E, A
+    DCR B
+    JNZ bar
+
+    LXI HL, 0x0000
+    MVI A, 5
+    VPRE
+
+entry animate
+    // Delay loop at 10 MHz. The first TEXT scene lasts one step; thereafter
+    // each scene lasts 16 steps. Counters are CPU work, not vblank.
+    LXI HL, 0x8000
+entry delay
+    DCX HL
+    MOV A, H
+    ORA L
+    JNZ delay
+
+    LDA AnimRed
+    ADI 0x20
+    STA AnimRed
+    MOV B, A
+    MVI C, 0x80
+    MVI D, 0x40
+    MVI A, 15
+    VPAL
+
+    LDA Steps
+    DCR A
+    STA Steps
+    JNZ animate
+    MVI A, 16
+    STA Steps
+    LDA Scene
+    XRI 1
+    STA Scene
+    VMODE
+    CPI 0
+    JZ ega
+    MVI A, 5
+    JMP present
+entry ega
+    MVI A, 2
+entry present
+    LXI HL, 0x0000
+    VPRE
+    JMP animate

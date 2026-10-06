@@ -90,13 +90,14 @@ architecture main of FridgeCPU is
      signal deviceData, deviceSel : XCM2_WORD;
      signal PC, nextPC : XCM2_DWORD;
      signal SP, nextSP : XCM2_DWORD;
-     signal rA, rB, rC, rD, rE, rH, rL, rF : XCM2_WORD;
-     --signal fSign, fZero, fAux, fParity, fCarry : std_logic;
-     alias fSign : std_logic is rF(0);
-     alias fZero : std_logic is rF(1);
-     alias fAux : std_logic is rF(2);
-     alias fParity : std_logic is rF(3);
-     alias fCarry : std_logic is rF(4);
+     signal rA, rB, rC, rD, rE, rH, rL : XCM2_WORD;
+     -- The flags are ordinary signals and are packed into rF only for
+     -- PUSH AF / POP AF. They used to be aliases of individual rF bits, but
+     -- an alias of an array element is not usable as an `inout` signal
+     -- parameter: a procedure then reads a stale value instead of the bit
+     -- (which broke RAL/RAR carry chaining and ADC/ACI). See PORTING_PLAN.md.
+     signal fSign, fZero, fAux, fParity, fCarry : std_logic := '0';
+     signal rF : XCM2_WORD;
      --signal memory : XCM2_RAM:= (others => X"0");
      
      signal currentIRCode : XCM2_WORD:= NOP;
@@ -152,23 +153,28 @@ architecture main of FridgeCPU is
           fParity <= not (a(7) xor b(7)); -- doesn't meet i8080 specification
      end procedure compareSetFlags;
      
-     function packFlags(signal fCarry, fSign, fZero, fParity : in std_logic) return XCM2_WORD is
-     variable rF : XCM2_WORD;
+     -- Flag word layout follows fridge.h: SIGN 0x80, ZERO 0x40, PANIC 0x20,
+     -- AUX 0x10, PARITY 0x04, CARRY 0x01. rF is unsigned(0 to 7) with index 0
+     -- as the most significant bit.
+     function packFlags(fCarry, fSign, fZero, fAux, fParity : in std_logic) return XCM2_WORD is
+     variable r : XCM2_WORD;
      begin
-          rF:= X"00";
-          rF(0):= fCarry;
-          rF(1):= fSign;
-          rF(2):= fZero;
-          rF(3):= fParity;
-          return rF;
+          r:= X"00";
+          r(0):= fSign;
+          r(1):= fZero;
+          r(3):= fAux;
+          r(5):= fParity;
+          r(7):= fCarry;
+          return r;
      end function packFlags;
-     
-     procedure unpackFlags(rF : in XCM2_WORD; signal fCarry, fSign, fZero, fParity : out std_logic) is
+
+     procedure unpackFlags(r : in XCM2_WORD; signal fCarry, fSign, fZero, fAux, fParity : out std_logic) is
      begin
-          fCarry <= rF(0);
-          fSign <= rF(1);
-          fZero <= rF(2);
-          fParity <= rF(3);
+          fSign <= r(0);
+          fZero <= r(1);
+          fAux <= r(3);
+          fParity <= r(5);
+          fCarry <= r(7);
      end procedure unpackFlags;
      
      function XCM2_DWORD_HL(H, L : in XCM2_WORD) return XCM2_DWORD is
@@ -949,6 +955,26 @@ architecture main of FridgeCPU is
                rL <= RAM_READ_DATA;
           end if;     
      end procedure ir_POP;
+
+     procedure ir_POP_AF(signal rA : inout XCM2_WORD;
+                         signal fCarry, fSign, fZero, fAux, fParity : inout std_logic;
+                         signal SP : in XCM2_DWORD; variable nextSP : inout XCM2_DWORD;
+                         signal memAddrBuffer : inout XCM2_DWORD; signal RAM_READ_DATA : in XCM2_WORD;
+                         signal state : in CPUState; variable nextState : inout CPUState) is
+     begin
+          if (state = CPU_EXECUTE_IR) then
+               nextState:= CPU_LOAD_DWORD_H;
+               memAddrBuffer <= SP;
+          elsif (state = CPU_LOAD_DWORD_H) then
+               nextState:= CPU_LOAD_DWORD_L;
+               memAddrBuffer <= SP + X"01";
+               rA <= RAM_READ_DATA;
+          elsif (state = CPU_LOAD_DWORD_L) then
+               nextState:= CPU_FETCH_IR;
+               nextSP:= SP + X"02";
+               unpackFlags(RAM_READ_DATA, fCarry, fSign, fZero, fAux, fParity);
+          end if;
+     end procedure ir_POP_AF;
  
      procedure ir_XTHL(signal rH, rL : inout XCM2_WORD;
                        signal SP : in XCM2_DWORD;
@@ -1197,6 +1223,8 @@ begin
           variable buf_currentIRCode : XCM2_WORD:= X"00";
      begin
               
+          rF <= packFlags(fCarry, fSign, fZero, fAux, fParity);
+
           if (state = CPU_HALTED) then
                HALTED <= '1';
           else
@@ -1267,7 +1295,11 @@ begin
                     rE <= X"00";
                     rH <= X"00";
                     rL <= X"00";
-                    rF <= X"00";
+                    fSign <= '0';
+                    fZero <= '0';
+                    fAux <= '0';
+                    fParity <= '0';
+                    fCarry <= '0';
                     IRTemp <= X"00";
                     IRArg0 <= X"00";
                     IRArg1 <= X"00";                    
@@ -1596,7 +1628,7 @@ begin
                     when PUSH_DE => ir_PUSH(rD, rE, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     when PUSH_HL => ir_PUSH(rH, rL, SP, buf_nextSP, memAddrBuffer, memWriteBuffer, state, buf_nextState);
                     
-                    when POP_AF => ir_POP(rA, rF, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
+                    when POP_AF => ir_POP_AF(rA, fCarry, fSign, fZero, fAux, fParity, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_BC => ir_POP(rB, rC, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_DE => ir_POP(rD, rE, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);
                     when POP_HL => ir_POP(rH, rL, SP, buf_nextSP, memAddrBuffer, RAM_READ_DATA, state, buf_nextState);

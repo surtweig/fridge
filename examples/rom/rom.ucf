@@ -1,0 +1,34 @@
+# Digilent Atlys revision C, dedicated HDMI OUT connector.
+NET "clk" LOC = "L15" | IOSTANDARD = LVCMOS33;
+NET "clk" TNM_NET = "clk";
+TIMESPEC "TS_clk" = PERIOD "clk" 10 ns HIGH 50%;
+NET "reset_button" LOC = "T15" | IOSTANDARD = LVCMOS33;
+NET "reset_button" TIG;
+# Lock loss asserts reset asynchronously; release is synchronized separately
+# in each domain. Only this asynchronous reset path is excluded from timing.
+NET "clock_fault" TIG;
+NET "led<0>" LOC = "U18" | IOSTANDARD = LVCMOS33;
+NET "led<1>" LOC = "M14" | IOSTANDARD = LVCMOS33;
+NET "led<2>" LOC = "N14" | IOSTANDARD = LVCMOS33;
+NET "led<3>" LOC = "L14" | IOSTANDARD = LVCMOS33;
+# LD5 (D4, HSWAPEN) and LD7 (N12, M1) share configuration pins and are
+# unused; led<4>/led<5> map to LD4/LD6 and are unused in this demo.
+NET "led<4>" LOC = "M13" | IOSTANDARD = LVCMOS33;
+NET "led<5>" LOC = "P16" | IOSTANDARD = LVCMOS33;
+NET "tmds_clk_p" LOC = "B6" | IOSTANDARD = TMDS_33;
+NET "tmds_clk_n" LOC = "A6" | IOSTANDARD = TMDS_33;
+NET "tmds_p<0>" LOC = "D8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<0>" LOC = "C8" | IOSTANDARD = TMDS_33;
+NET "tmds_p<1>" LOC = "C7" | IOSTANDARD = TMDS_33;
+NET "tmds_n<1>" LOC = "A7" | IOSTANDARD = TMDS_33;
+NET "tmds_p<2>" LOC = "B8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<2>" LOC = "A8" | IOSTANDARD = TMDS_33;
+# The CPU and pixel clocks have no synchronous relationship. The only paths
+# between them are the documented command-to-pixel crossings in fridge_gpu:
+# two-stage synchronizers (toggle_meta, mode_meta) and the request-captured
+# pending registers (pend_*). They are asynchronous by construction and are
+# excluded from synchronous analysis; the frame buffer crossing goes through
+# dual-clock block RAM ports and has no fabric path.
+NET "cpu_clk_raw" TNM_NET = "cpu_clk_raw";
+NET "pixel_raw" TNM_NET = "pixel_raw";
+TIMESPEC "TS_cdc" = FROM "cpu_clk_raw" TO "pixel_raw" TIG;
