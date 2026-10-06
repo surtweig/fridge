@@ -1,4 +1,4 @@
-# Spartan-6 Toolchain (Digilent Atlys / XC6SLX45)
+# Fridge Spartan-6 (Digilent Atlys / XC6SLX45)
 
 Legacy Xilinx **ISE 14.7** (the last toolchain supporting Spartan-6) running in
 Docker on CachyOS, plus host-side programming via Digilent **Adept** (`djtgcfg`).
@@ -9,6 +9,33 @@ Docker on CachyOS, plus host-side programming via Digilent **Adept** (`djtgcfg`)
 - Programming: `djtgcfg` (Digilent Adept) through the Atlys' onboard Digilent
   USB-JTAG (`1443:0007`, FX2-based DJTG protocol — openFPGALoader cannot drive
   this interface)
+
+## Repository and working directory
+
+This board target belongs to the Fridge repository at
+`fpga/fridge_spartan6/` on branch `spartan6-atlys`. The assembler and standard
+library are shared with the rest of Fridge: `falc/` and `x2al_std/` at the
+repository root. There is no nested Fridge checkout in this target.
+
+Run the commands below from this directory:
+
+```bash
+cd /mnt/data/Projects/Spartan6Fridge/fridge/fpga/fridge_spartan6
+make -C examples/palette regen
+make -C examples/palette test
+make -C examples/palette all timing
+make -C examples/palette load
+```
+
+The host assembler builds into `.local/falc-build/`. Installer archives,
+Adept packages/runtime, license files, compiler cache and FPGA build outputs
+are ignored by Git. A fresh clone needs the installer/vendor/license inputs
+and the `ise:14.7` Docker image described below. Existing host setup and the
+Docker image can be reused after relocating the source directory.
+
+[Migration notes](MIGRATION.md) record the history import and verification.
+The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/` remains
+untouched while the new layout is verified on the board.
 
 ## Layout
 
@@ -28,7 +55,8 @@ examples/keyboard/      PS/2 keyboard bridge and FIFO demo
 examples/rom/           bitstream ROM device and assembly-generated images
 examples/text/          hardware-tested 40x20 TEXT mode demo
 examples/palette/       programmable TEXT/EGA palette and animation demo
-tools/                  Linux falc and boot/ROM image generation
+tools/                  wrappers for shared falc and boot/ROM image generation
+.local/                 ignored host compiler cache and verification logs
 PORTING_PLAN.md         staged Fridge port plan and agreed peripheral choices
 setup-host.sh           one-time host setup, part 1 (sudo)
 setup-system.sh         one-time host setup, part 2 (sudo)
@@ -79,7 +107,7 @@ docker build -t ise:14.7 .
 ```
 
 Takes a while (~20–40 min, dominated by the installer). The 8 GB installer
-payloads are bind-mounted at build time and do not become image layers.
+payloads are copied into the builder stage and excluded from the final image.
 
 ## 4. Free WebPACK license (needed for map/par/bitgen)
 
@@ -217,7 +245,7 @@ alternative for pure-VHDL unit tests: `pacman -S ghdl`.)
 
 ### Porting from Quartus / Cyclone V (e.g. the fridge project)
 
-The fridge sources (`fridge/fpga/fridge_graphics_de0cv/`) are mostly
+The older DE0-CV sources (`../fridge_graphics_de0cv/`) are mostly
 vendor-neutral. What will need attention on Spartan-6:
 
 - `pll.vhd` uses Altera's `altpll` → replace with a Xilinx `PLL_BASE`/`DCM_SP`

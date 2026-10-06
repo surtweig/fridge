@@ -21,14 +21,19 @@
 
 ## Repository Preparation
 
-- Local clone: `/mnt/data/Projects/Spartan6Fridge/fridge` into
-  `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/fridge`.
-- Git history preserved; branch `spartan6-atlys` created from `master`
-  at commit `e348131`.
-- Source repository untouched; ignored build artifacts excluded.
-- Port-specific assembler and standard-library changes are committed locally
-  in the nested clone at `48a8703` on `spartan6-atlys` (VHDL aggregate emitter
-  and `mul_dc` carry correction).
+- Canonical repository: `/mnt/data/Projects/Spartan6Fridge/fridge`, branch
+  `spartan6-atlys`, tracking the pushed `origin/spartan6-atlys`.
+- Board target: `fpga/fridge_spartan6/`, an ordinary directory in that
+  repository. The standalone toolchain history through `aa704c1` was imported
+  with a non-squashed Git subtree merge.
+- Shared assembler and standard library: root `falc/` and `x2al_std/`.
+  The VHDL aggregate emitter and `mul_dc` carry correction were already
+  committed at `48a8703` on the pushed branch.
+- The original preparation cloned Fridge into `Spartan6Toolchain/fridge`
+  and branched from `master` at `e348131`. That old directory, including
+  both repositories and their build outputs, is retained unchanged until
+  the new layout is verified on hardware.
+- See [MIGRATION.md](MIGRATION.md) for relocation checks and commands.
 
 ## Implementation Stages
 
@@ -61,8 +66,9 @@
 6. **Fridge assembly toolchain (falc), complete:** make `falc` a working part of the
    toolchain so programs can be written in Fridge Assembly, compiled on the
    host, and loaded into the design's RAM (boot image) or ROM (ROM image),
-   instead of hand-assembling VHDL byte arrays. Build `fridge/falc` for Linux
-   under `tools/`, extend it with an address-indexed VHDL aggregate emitter,
+   instead of hand-assembling VHDL byte arrays. Build the shared root `falc/`
+   for Linux through `tools/`, extend it with an address-indexed VHDL
+   aggregate emitter,
    and generate `FridgeRAMBootImage.vhd` / `FridgeROMImage.vhd` from source.
    Pin the ABI constants the toolchain targets (device IDs, executable
    offset, stack direction, big-endian immediates) and record the source
@@ -119,8 +125,9 @@
 - Initial bring-up exposed an active-low reset on T15 that was incorrectly
   treated as active-high, holding the DCM in reset. The polarity was corrected;
   lock LEDs and frame activity provide board-level confirmation.
-- Repository cloned into `Spartan6Toolchain/fridge`; branch `spartan6-atlys`
-  created from `master` at commit `e348131`.
+- Initial repository preparation cloned into `Spartan6Toolchain/fridge`
+  and branched from `master` at `e348131`; the current integrated layout is
+  described in Repository Preparation above.
 - CPU/RAM smoke test implemented under `examples/cpu`: FridgeCPU +
   FridgeRAM with BRAM, driven by a 26-byte test program exercising
   MVI, ADD, STA, LDA, CMP, JZ, JMP, HLT.
@@ -273,8 +280,8 @@
   on-screen byte->pixel mapping are confirmed in hardware.
 - Stage 5 Case A (SPI flash backend, flash-part/layout confirmation and the
   safe programming procedure) is deferred per the plan split above.
-- Stage 6 implemented under `tools/` + `examples/rom/src`: `fridge/falc` builds
-  for Linux (`tools/build-falc.sh`, `tools/falc` wrapper) and generates the
+- Stage 6 implemented under `tools/` + `examples/rom/src`: the shared root
+  `falc/` builds for Linux (`tools/build-falc.sh`, `tools/falc` wrapper) and generates the
   examples' program images from Fridge Assembly source instead of
   hand-assembled VHDL aggregates. `tools/rom2vhd.py` packs binaries into the
   ROM image. `tools/README.md` documents the workflow, the ABI constants the
@@ -282,9 +289,9 @@
 - falc build validated on Linux against the upstream goldens:
   `fridge_emulator/tests/hello.bin` (136 bytes) and `test_phase_b/c.bin`
   reproduce byte-for-byte from source, and `fridgemulib/tests/pamtest*.falc`
-  compile. falc is built unmodified into `fridge/build-falc/` (upstream's own
-  layout) apart from the additive `-vhdl-aggregate` emitter below.
-- falc extended (in the `fridge` clone on `spartan6-atlys`, additive only —
+  compile. falc now builds into this board target's `.local/falc-build/`; the
+  assembler includes the additive `-vhdl-aggregate` emitter below.
+- falc extended (in shared root `falc/` on `spartan6-atlys`, additive only —
   the existing `-vhdl` flat output is unchanged) with `-vhdl-aggregate`: a
   complete `FridgeRAMBootImage` package whose `RAMBootImage` is an
   address-indexed aggregate, opcode bytes as `FridgeIRCodes` symbolic names,
@@ -347,7 +354,7 @@
   HL) are ignored in text scanout, matching the emulator. Power-on mode is
   TEXT, matching `FRIDGE_gpu_reset`.
 - Font ROM: `FridgeRasterFont.vhd`, copied byte-identical from
-  `fridge/fpga/fridge_graphics_de0cv/FridgeRasterFont.vhd` (256 glyphs x 6
+  `../fridge_graphics_de0cv/FridgeRasterFont.vhd` (256 glyphs x 6
   columns; verified equal to `FRIDGE_gpu_default_glyph_bitmap` in
   `fridge.h`). LUT-mapped (~192 LUTs).
 - GPU frame store widened to a 16-bit word per read (even byte = glyph code,

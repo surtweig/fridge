@@ -11,7 +11,7 @@ all: $(TOP).bit
 
 # The boot image is generated from src/ by the host tools; the VHDL file is
 # checked in so a plain build needs no extra step.
-FridgeRAMBootImage.vhd: src/palette_demo.falc $(HOSTTOOLS)/falc $(HOSTTOOLS)/build-falc.sh ../../fridge/x2al_std/vtext.inc ../../fridge/x2al_std/arithm.inc
+FridgeRAMBootImage.vhd: src/palette_demo.falc $(HOSTTOOLS)/falc $(HOSTTOOLS)/build-falc.sh ../../../../x2al_std/vtext.inc ../../../../x2al_std/arithm.inc
 	$(HOSTTOOLS)/falc src/palette_demo.falc palette_demo.bin -vhdl-aggregate
 	mv palette_demo.bin.vhd $@
 

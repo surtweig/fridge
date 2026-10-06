@@ -18,7 +18,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-BASE=/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEW=/mnt/data/containerd
 OLD=/var/lib/containerd
 

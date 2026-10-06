@@ -2,9 +2,6 @@
 # installed into the Docker image instead)
 ISE/
 
-# Nested project with its own git repository (tracked separately / submodule later)
-fridge/
-
 # Vendor runtime packages (Digilent Adept debs) + extracted tree
 vendor/*.deb
 vendor/adept-root/
@@ -72,3 +69,11 @@ netlist.lst
 
 # Assembler output (regenerated from src/*.falc by tools/falc)
 *.bin
+
+# Board-local host compiler cache and migration verification logs.
+.local/
+# Fridge's root ignore rules hide bin/ and *.tcl; these are board sources.
+!bin/
+!bin/**
+!examples/**/run.tcl
+!examples/**/run_clocks.tcl

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Host wrapper for falc, the Fridge Assembly Language Compiler.
 #
-# Builds falc on first use and runs it from inside the fridge/ tree, because
+# Builds falc on first use and runs it from the shared Fridge source, because
 # falc resolves its standard include path ("../x2al_std/", hard-coded in
 # FridgeAssemblyLanguageCompiler.h) relative to the current directory. Running
 # from fridge/falc/ makes that path point at fridge/x2al_std/. Input and output
@@ -12,8 +12,8 @@
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRIDGE="$(cd "$TOOLS_DIR/../fridge" && pwd)"
-FALC="$FRIDGE/build-falc/falc"
+FRIDGE="$(cd "$TOOLS_DIR/../../.." && pwd)"
+FALC="$TOOLS_DIR/../.local/falc-build/falc"
 
 if [ ! -x "$FALC" ]; then
     "$TOOLS_DIR/build-falc.sh"

@@ -1,7 +1,8 @@
 # Fridge — Technical Overview
 
-> Status snapshot for future agent sessions. Written from a code-walkthrough of
-> the repository as of the latest commit (`7f0162d`, FRIDGE_VIDEO_240X180).
+> Status snapshot for future agent sessions. The emulator overview originated
+> at `7f0162d` (FRIDGE_VIDEO_240X180); Spartan-6 integration was updated on
+> 2026-10-06 on `spartan6-atlys`.
 > Source of truth is the code itself; treat this document as a map, not a spec.
 
 ## 1. What Fridge is
@@ -55,8 +56,10 @@ fridge_sdk/               Qt-based IDE project (read-only, "on hold" per README)
 fridge-boot/              Boot loader + sample apps written in Fridge Assembly (.x2al)
 x2al_std/                 Standard library includes for Fridge Assembly
   arithm.inc, posit.inc, stdapp.inc, string.inc, vtext.inc
-fpga/                     VHDL design targeting Terasic DE0-CV (Altera Cyclone V)
-  fridge_graphics_de0cv/  Current design: FridgeCPU.vhd, FridgeGraphicsAdapter.vhd,
+fpga/                     FPGA board targets
+  fridge_spartan6/        Active Atlys port: ISE Docker/wrappers, constraints, examples, tools
+                          Shared root falc/x2al_std; ignored .local/falc-build cache
+  fridge_graphics_de0cv/  Legacy DE0-CV design: FridgeCPU.vhd, FridgeGraphicsAdapter.vhd,
                           FridgePAM16.vhd, FridgeRAM.vhd, raster font, VGA PLL, RAM init images
   xcm1_de0cv/             Older XCM1 prototype (kept for history)
   xcm_fpga_proto/         Earlier breadboard/PLL experiments
@@ -137,7 +140,8 @@ test-bench binary.
 - **falc** (`falc/`): the active assembler. Two-pass: parse → resolve
   aliases/includes/entries/subroutines → address markup → codegen. Supports
   `include`, `alias`, `static` data, `subroutine`/`endsub`, `entry`, `offset`,
-  `unsafe_flow`, an optional `-vhdl` mode that emits a VHDL ROM initialiser.
+  `unsafe_flow`, `-vhdl` for a flat VHDL initialiser and `-vhdl-aggregate` for
+  a complete symbolic `FridgeRAMBootImage` package.
   Standard library lives in `x2al_std/` (e.g. `vtext.inc` text-mode helpers,
   `arithm.inc` 8x8→16 multiplication, `posit.inc` PAM16 wrappers).
 - **Frion / CPM** (`emulator/cpm/`, surfaced via the `frion/` VS Code ext):
@@ -158,23 +162,51 @@ test-bench binary.
   and `fridgemulib/fridgemulib.c` directly as sources (no shared library), so
   any change to the core immediately recompiles into the GUI.
 
-## 6. FPGA design (`fpga/fridge_graphics_de0cv/`)
+## 6. FPGA designs
+
+### Active Spartan-6 Atlys target (`fpga/fridge_spartan6/`)
+
+The `spartan6-atlys` branch contains the board build as ordinary tracked files,
+with the standalone toolchain history imported by a non-squashed subtree merge.
+There is no nested Fridge checkout. Source changes to the assembler/library go
+in root `falc/` and `x2al_std/`; the board's wrappers build falc into
+`fpga/fridge_spartan6/.local/falc-build/` and run from root `falc/` for standard
+include resolution. Rebuild the assembler after changing its sources.
+
+The CPU runs at 10 MHz. CPU RAM is 64 KiB BRAM; internal video is 240x160 EGA
+or 40x20 TEXT, scaled 4x and centered in 720p60 HDMI. TEXT and VPAL demos are
+hardware-verified. The current port uses a descending stack (`SP=0xFFFF`), ROM
+data/reset devices 1/2 and keyboard device 3; these differ from some emulator
+header constants above. Refer to this target's `tools/README.md` for the ABI.
+
+`README.md`, `PORTING_PLAN.md` and each example's README define the build flow,
+contracts and verification gates. `bin/` and simulation `.tcl` files are
+tracked despite root ignore patterns. Installer archives, vendor runtime,
+licenses, compiler cache and generated FPGA artifacts are ignored. Existing
+host setup and Docker image can be reused when relocating this target.
+
+The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/` is retained
+unchanged until verification of the new structure on the board is complete.
+Do not change or delete that directory during migration verification.
+
+### Legacy DE0-CV (`fpga/fridge_graphics_de0cv/`)
 
 VHDL implementation of the same ISA. The CPU (`FridgeCPU.vhd`), graphics
 adapter, RAM, raster font (`FridgeRasterFont.vhd`) and PAM16 coprocessor
 (`FridgePAM16.vhd`, `PAM16Adder.vhd`, `PAM16Unpacker.vhd`) are all kept in source
 control alongside their Quartus project files. `RAMInit.hex`/`.mif` are the
-flashed boot image. **Status: "On hold"** per the README and per the project's
-new direction (see §8) — kept in-tree for reference but not the active focus.
+flashed boot image. **Status: "On hold"** per the README — kept in-tree for
+reference but not the active focus.
 
 ## 7. State of implementation (per the README + reality check)
 
-| Component                  | README state   | Reality on `master`                                                                |
+| Component                  | README state   | Reality on `spartan6-atlys`                                                                |
 |----------------------------|----------------|------------------------------------------------------------------------------------|
 | Win64 emulator             | Done           | `emulator/emulator/` builds via `emulator.sln` (DirectX11 + falc + x2al legacy)   |
 | Linux emulator             | not listed     | `fridgemulib/` builds under CMake; test bench runs; no host UI on Linux yet        |
 | WebAssembly emulator       | To do          | No code present                                                                    |
-| VHDL design                | On hold        | Present, compiles on Quartus, not being actively developed                         |
+| Spartan-6 Atlys VHDL      | Active         | CPU/HDMI/keyboard/ROM/TEXT/VPAL demos in `fpga/fridge_spartan6/`                 |
+| DE0-CV VHDL               | On hold        | Legacy Quartus design retained for reference                                      |
 | Assembly compiler (falc)   | Done           | Builds under CMake; `-static` binary; runs against `x2al_std`                      |
 | Frion compiler             | In progress    | Parser + intermediate + codegen in `emulator/cpm/`; assignment/static data in flux  |
 | Fridge IDE                 | On hold        | `fridge_sdk/` and Qt OpenGL emulator exist, not actively developed                 |
@@ -218,11 +250,11 @@ all of which use the existing portable C core in `fridgemulib/`:
    decoder as the front end, and generate RISC-V instructions for each Fridge
    opcode with fast-paths for the hot loops.
 
-The FPGA path (`fpga/`) and the Windows-only DirectX emulator
-(`emulator/emulator/`) are **not** the focus and should be treated as legacy
-reference material unless explicitly requested. New work should target
-`fridgemulib/`, `falc/`, and a new translator/runtime component (likely under a
-new top-level directory).
+The DE0-CV FPGA targets and Windows-only DirectX emulator
+(`emulator/emulator/`) remain legacy references unless explicitly requested.
+The owner has also requested active Atlys FPGA development under
+`fpga/fridge_spartan6/`; follow its porting plan for board work. The Linux
+emulator/translator direction above remains separate ongoing work.
 
 ## 9. Useful commands
 
@@ -232,6 +264,12 @@ cmake -S fridgemulib -B build && cmake --build build -j && ./build/fridgemulib
 
 # There is no global `make`/`cmake --build` target; build each component:
 cmake -S falc          -B build-falc && cmake --build build-falc -j
+
+# Build and verify the active Atlys palette example (requires ise:14.7):
+fpga/fridge_spartan6/tools/build-falc.sh
+make -C fpga/fridge_spartan6/examples/palette regen
+make -C fpga/fridge_spartan6/examples/palette test
+make -C fpga/fridge_spartan6/examples/palette all timing
 
 # Quick sanity check of the IR-code enum against the assembler:
 grep -nE '^\s+[A-Z_]+,?\s*(//.*)?$' include/fridge.h | head -300

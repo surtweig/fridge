@@ -58,7 +58,8 @@ Power-on mode is TEXT, matching `FRIDGE_gpu_reset`.
   The boot image is generated from it (`make regen`); do not edit
   `FridgeRAMBootImage.vhd` (see `tools/README.md`).
 - `FridgeRasterFont.vhd` — 256 glyphs x 6 columns of 8 vertical pixels,
-  copied from `fridge/fpga/fridge_graphics_de0cv/FridgeRasterFont.vhd`.
+  copied from the shared Fridge repository's
+  `fpga/fridge_graphics_de0cv/FridgeRasterFont.vhd`.
 - `fridge_gpu.vhd` — `../gpu/fridge_gpu.vhd` with the text scanout and the
   frame store widened to a 16-bit word per read (even byte = glyph code,
   odd byte = attribute), so one read fetches both bytes of a cell. The

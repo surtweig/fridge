@@ -1,13 +1,13 @@
 #!/bin/bash
 # Build the Fridge Assembly Language Compiler (falc) for the host.
 #
-# falc lives in the nested fridge/ clone and is built unmodified into
-# fridge/build-falc/, which is the location upstream's own scripts expect.
+# falc source belongs to the enclosing Fridge repository. Keep this
+# board's compiler cache under .local/falc-build/.
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRIDGE="$(cd "$TOOLS_DIR/../fridge" && pwd)"
-BUILD="$FRIDGE/build-falc"
+FRIDGE="$(cd "$TOOLS_DIR/../../.." && pwd)"
+BUILD="$TOOLS_DIR/../.local/falc-build"
 
 cmake -S "$FRIDGE/falc" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release
 

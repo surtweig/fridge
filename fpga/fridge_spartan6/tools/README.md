@@ -7,7 +7,7 @@ by them; do not hand-edit those files.
 
 ```
 tools/
-  build-falc.sh   build the assembler from fridge/falc into fridge/build-falc/
+  build-falc.sh   build shared Fridge falc into ../.local/falc-build/
   falc            host wrapper for the assembler (builds it on first use)
   rom2vhd.py      pack binaries into FridgeROMImage.vhd
 ```
@@ -28,8 +28,10 @@ main start
 ```
 
 ```console
-$ tools/falc src/rom_paint.falc rom_paint.bin -vhdl-aggregate   # -> FridgeRAMBootImage.vhd
-$ tools/rom2vhd.py --raw -o FridgeROMImage.vhd src/rom_image/*.hex
+$ cd examples/rom
+$ ../../tools/falc src/rom_paint.falc rom_paint.bin -vhdl-aggregate
+$ mv rom_paint.bin.vhd FridgeRAMBootImage.vhd
+$ ../../tools/rom2vhd.py --raw -o FridgeROMImage.vhd src/rom_image/*.hex
 $ make          # ISE build
 $ make load     # djtgcfg prog to the Atlys
 ```
@@ -43,9 +45,10 @@ rebuild + `make load`, and it is gone at the next power cycle.
 
 `tools/falc <input.falc|.x2al> <output.bin> [-vhdl | -vhdl-aggregate]`
 
-Built from the nested `fridge/falc` checkout (`spartan6-atlys`, local commit
-`48a8703`; see `build-falc.sh`). The wrapper makes
-input and output paths absolute and runs from inside `fridge/falc/`, because
+Built from `falc/` at the enclosing Fridge repository root on
+`spartan6-atlys`; see `build-falc.sh`. The executable and CMake cache live in
+this board target's `.local/falc-build/`. The wrapper makes input and output
+paths absolute and runs from the shared `falc/` source directory, because
 falc resolves its standard include path (`../x2al_std/`) relative to the
 current directory.
 
@@ -65,7 +68,8 @@ Mnemonic notes:
 - The assembler takes `IN` / `OUT`; the `FridgeIRCodes` names in generated
   VHDL are `IIN` / `IOUT` (same opcodes).
 - Jump targets are declared with `entry name`; `subroutine name` / `endsub`
-  is for CALL/RET code. See `fridge/doc/fridge-assembly-language.md`.
+  is for CALL/RET code. See the
+  [assembly language reference](../../../doc/fridge-assembly-language.md).
 - `offset 0x0000` makes the program the reset image (it runs from PC = 0).
   With `main start` at the offset no jump prologue is emitted.
 

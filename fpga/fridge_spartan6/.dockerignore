@@ -1,7 +1,11 @@
-# Keep the build context small: only docker/ and ISE/ are needed by the Dockerfile.
-examples/
-bin/
-ISE/README*
-*.md
-setup-host.sh
-.gitignore
+# Only installation inputs belong in the Docker build context.
+**
+!Dockerfile
+!.dockerignore
+!docker/
+!docker/**
+!ISE/
+!ISE/Xilinx_ISE_DS_14.7_1015_1-1.tar
+!ISE/Xilinx_ISE_DS_14.7_1015_1-2.zip.xz
+!ISE/Xilinx_ISE_DS_14.7_1015_1-3.zip.xz
+!ISE/Xilinx_ISE_DS_14.7_1015_1-4.zip.xz
