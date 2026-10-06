@@ -18,10 +18,18 @@ if [ -f "$LICENSE" ]; then
     LICENSE_OPTS+=(--mac-address "$LICENSE_MAC")
 fi
 
+# Build/test directories need access to shared sources. Avoid duplicate
+# Docker mount targets when the caller already works in the board root.
+SOURCE_OPTS=()
+if [ "$PWD" != "$ROOT" ]; then
+    SOURCE_OPTS+=(-v "$ROOT:$ROOT:ro")
+fi
+
 exec docker run --rm $TTY_FLAGS \
     --user "$(id -u):$(id -g)" \
     -e HOME=/tmp/ise-home \
     "${LICENSE_OPTS[@]}" \
+    "${SOURCE_OPTS[@]}" \
     -v "$PWD:$PWD" \
     -w "$PWD" \
     "$IMAGE" "$@"

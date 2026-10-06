@@ -1,0 +1,60 @@
+# Digilent Atlys revision C, dedicated HDMI OUT connector.
+NET "clk" LOC = "L15" | IOSTANDARD = LVCMOS33;
+NET "clk" TNM_NET = "clk";
+TIMESPEC "TS_clk" = PERIOD "clk" 10 ns HIGH 50%;
+NET "reset_button" LOC = "T15" | IOSTANDARD = LVCMOS33;
+NET "reset_button" TIG;
+# Lock loss asserts reset asynchronously; release is synchronized separately
+# in each domain. Only this asynchronous reset path is excluded from timing.
+NET "clocking/clock_fault" TIG;
+NET "led<0>" LOC = "U18" | IOSTANDARD = LVCMOS33;
+NET "led<1>" LOC = "M14" | IOSTANDARD = LVCMOS33;
+NET "led<2>" LOC = "N14" | IOSTANDARD = LVCMOS33;
+NET "led<3>" LOC = "L14" | IOSTANDARD = LVCMOS33;
+NET "tmds_clk_p" LOC = "B6" | IOSTANDARD = TMDS_33;
+NET "tmds_clk_n" LOC = "A6" | IOSTANDARD = TMDS_33;
+NET "tmds_p<0>" LOC = "D8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<0>" LOC = "C8" | IOSTANDARD = TMDS_33;
+NET "tmds_p<1>" LOC = "C7" | IOSTANDARD = TMDS_33;
+NET "tmds_n<1>" LOC = "A7" | IOSTANDARD = TMDS_33;
+NET "tmds_p<2>" LOC = "B8" | IOSTANDARD = TMDS_33;
+NET "tmds_n<2>" LOC = "A8" | IOSTANDARD = TMDS_33;
+# CPU and pixel clocks are asynchronous. Ignore only the first-stage
+# control synchronizers and the existing VPRE pending-control captures;
+# subsequent synchronizer stages remain covered by their clock periods.
+NET "clocking/cpu_clk_raw" TNM_NET = "cpu_clk_raw";
+NET "clocking/pixel_raw" TNM_NET = "pixel_raw";
+INST "system/video/toggle_meta" TNM = "cdc_pixel_controls";
+INST "system/video/mode_meta" TNM = "cdc_pixel_controls";
+INST "system/video/pend_visible" TNM = "cdc_pixel_controls";
+INST "system/video/pend_hoff*" TNM = "cdc_pixel_controls";
+INST "system/video/pend_voff*" TNM = "cdc_pixel_controls";
+INST "system/video/pal_req_meta" TNM = "cdc_pixel_controls";
+TIMESPEC "TS_cdc_controls" = FROM "cpu_clk_raw" TO "cdc_pixel_controls" TIG;
+INST "system/video/pal_ack_meta" TNM = "cdc_cpu_ack";
+TIMESPEC "TS_cdc_ack" = FROM "pixel_raw" TO "cdc_cpu_ack" TIG;
+# Palette RGB/index are bundled data held until acknowledgement. They must
+# settle before the synchronized request reaches the receiving write edge
+# (at least two 13.468 ns pixel periods). Bound this path to 20 ns instead
+# of excluding it with a clock-to-clock TIG.
+INST "system/video/pal_rgb_hold*" TNM = "pal_payload";
+INST "system/video/pal_index_hold*" TNM = "pal_payload";
+INST "system/video/palette*" TNM = "pal_colours";
+TIMESPEC "TS_pal_payload" = FROM "pal_payload" TO "pal_colours" 20 ns DATAPATHONLY;
+
+# LD5 (D4, HSWAPEN) and LD7 (N12, M1) share configuration pins and are
+# unused; the keyboard demo maps led<4>/led<5> to LD4/LD6.
+NET "led<4>" LOC = "M13" | IOSTANDARD = LVCMOS33;
+NET "led<5>" LOC = "P16" | IOSTANDARD = LVCMOS33;
+# USB-HID bridge keyboard PS/2 port (PIC24FJ192 -> FPGA, board rev C):
+# K_CLK = P17 (net USBCLK / PIC32-SCK1 in the stale master UCF),
+# K_DAT = N15 (net USBSDI / PIC32-SDI1). Bank 1 is 3.3 V. The board has no
+# external pull-ups on these lines; the internal pull-ups are required
+# (Atlys reference manual sec. 11; open-drain idle high). Both signals only
+# feed input synchronizers and are asynchronous to all clocks.
+NET "ps2_clk" LOC = "P17" | IOSTANDARD = LVCMOS33;
+NET "ps2_clk" PULLUP;
+NET "ps2_clk" TIG;
+NET "ps2_dat" LOC = "N15" | IOSTANDARD = LVCMOS33;
+NET "ps2_dat" PULLUP;
+NET "ps2_dat" TIG;

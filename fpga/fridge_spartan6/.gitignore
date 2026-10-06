@@ -77,3 +77,10 @@ netlist.lst
 !bin/**
 !examples/**/run.tcl
 !examples/**/run_clocks.tcl
+
+# Canonical test runner batch files.
+!sim/run.tcl
+!sim/run_clocks.tcl
+
+# Host Python bytecode caches.
+__pycache__/

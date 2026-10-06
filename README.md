@@ -21,13 +21,15 @@ The board build is part of this repository at
 The CPU runs at 10 MHz, with 64 KB BRAM RAM, 240x160 graphics and 40x20 TEXT
 mode scaled to 720p60 HDMI. ROM, keyboard and programmable palette demos are
 included. The shared `falc/` assembler and `x2al_std/` library generate the
-program images; no separate Fridge checkout is needed.
+program images; no separate Fridge checkout is needed. The combined system
+and interactive demo are documented in
+[`INTEGRATION.md`](fpga/fridge_spartan6/INTEGRATION.md); its board gate is pending.
 
 ```bash
-make -C fpga/fridge_spartan6/examples/palette regen
-make -C fpga/fridge_spartan6/examples/palette test
-make -C fpga/fridge_spartan6/examples/palette all timing
-make -C fpga/fridge_spartan6/examples/palette load
+make -C fpga/fridge_spartan6 regen
+make -C fpga/fridge_spartan6 test
+make -C fpga/fridge_spartan6 all timing
+make -C fpga/fridge_spartan6 load
 ```
 
 See the [porting plan](fpga/fridge_spartan6/PORTING_PLAN.md) for the implemented

@@ -21,10 +21,10 @@ Run the commands below from this directory:
 
 ```bash
 cd /mnt/data/Projects/Spartan6Fridge/fridge/fpga/fridge_spartan6
-make -C examples/palette regen
-make -C examples/palette test
-make -C examples/palette all timing
-make -C examples/palette load
+make regen
+make test
+make all timing
+make load
 ```
 
 The host assembler builds into `.local/falc-build/`. Installer archives,
@@ -33,7 +33,11 @@ are ignored by Git. A fresh clone needs the installer/vendor/license inputs
 and the `ise:14.7` Docker image described below. Existing host setup and the
 Docker image can be reused after relocating the source directory.
 
-[Migration notes](MIGRATION.md) record the history import and verification.
+The combined computer is described in [INTEGRATION.md](INTEGRATION.md),
+with demo controls in [programs/integration/README.md](programs/integration/README.md).
+`rtl/` contains its canonical sources; existing `examples/` are preserved
+milestone snapshots. [Migration notes](MIGRATION.md) record the history import
+and relocation verification.
 The original `/mnt/data/Projects/Spartan6Fridge/Spartan6Toolchain/` remains
 untouched while the new layout is verified on the board.
 
@@ -46,7 +50,11 @@ ISE/                    official Xilinx ISE 14.7 installer files (you provide)
 vendor/                 Digilent Adept debs + user-space extraction
 bin/                    host wrappers: ise-run, xst, ngdbuild, map, par, bitgen, trce,
                       fuse/isimgui/vhpcomp (ISim), djtgcfg
-constraints/            Digilent's master pin constraints (AtlysGeneral.ucf)
+rtl/                    canonical CPU/RAM, GPU/HDMI, keyboard/ROM and Atlys top
+programs/               boot programs and ROM inputs (integration is the default)
+sim/                    shared-RTL regressions and combined-system tests
+Makefile                combined board build/test/timing/load targets
+constraints/            board constraints (master and combined-system UCF)
 examples/blinky/        smoke-test design for the Atlys
 examples/hdmi/          720p60 HDMI rectangle demo with simulation tests
 examples/cpu/           Fridge CPU + BRAM smoke test
@@ -125,6 +133,10 @@ ISE WebPACK 14.7 requires a free, node-locked WebPACK license file (synthesis
 automatically when the file is present.
 
 ## 5. Use the tools
+
+The default `make`, `make test`, `make timing` and `make load` targets build
+and verify the combined computer. The commands below describe the standalone
+milestone examples, which remain useful for bringing up individual features.
 
 `bin/` wrappers run tools in the container against the current directory:
 

@@ -57,7 +57,7 @@ fridge-boot/              Boot loader + sample apps written in Fridge Assembly (
 x2al_std/                 Standard library includes for Fridge Assembly
   arithm.inc, posit.inc, stdapp.inc, string.inc, vtext.inc
 fpga/                     FPGA board targets
-  fridge_spartan6/        Active Atlys port: ISE Docker/wrappers, constraints, examples, tools
+  fridge_spartan6/        Active Atlys port: canonical rtl/, programs/, sim/, ISE tooling
                           Shared root falc/x2al_std; ignored .local/falc-build cache
   fridge_graphics_de0cv/  Legacy DE0-CV design: FridgeCPU.vhd, FridgeGraphicsAdapter.vhd,
                           FridgePAM16.vhd, FridgeRAM.vhd, raster font, VGA PLL, RAM init images
@@ -179,6 +179,15 @@ hardware-verified. The current port uses a descending stack (`SP=0xFFFF`), ROM
 data/reset devices 1/2 and keyboard device 3; these differ from some emulator
 header constants above. Refer to this target's `tools/README.md` for the ABI.
 
+`rtl/` is the canonical combined CPU/GPU/peripheral implementation.
+`fridge_system.vhd` connects CPU/RAM, GPU, ROM and keyboard using explicit
+read/write signals and a read mux; `atlys_top.vhd` wraps clocks, reset, HDMI and
+board pins. The default root Makefile builds `programs/integration/` into an
+isolated `.local/build/<program>/`; each test has a separate `.local/tests/`
+library. Existing examples remain milestone snapshots pending combined-board
+verification; edit `rtl/` for new functionality. `INTEGRATION.md` records this
+system's verification gates separately from earlier example hardware results.
+
 `README.md`, `PORTING_PLAN.md` and each example's README define the build flow,
 contracts and verification gates. `bin/` and simulation `.tcl` files are
 tracked despite root ignore patterns. Installer archives, vendor runtime,
@@ -265,11 +274,11 @@ cmake -S fridgemulib -B build && cmake --build build -j && ./build/fridgemulib
 # There is no global `make`/`cmake --build` target; build each component:
 cmake -S falc          -B build-falc && cmake --build build-falc -j
 
-# Build and verify the active Atlys palette example (requires ise:14.7):
+# Build and verify the combined Atlys computer (requires ise:14.7):
 fpga/fridge_spartan6/tools/build-falc.sh
-make -C fpga/fridge_spartan6/examples/palette regen
-make -C fpga/fridge_spartan6/examples/palette test
-make -C fpga/fridge_spartan6/examples/palette all timing
+make -C fpga/fridge_spartan6 regen
+make -C fpga/fridge_spartan6 test
+make -C fpga/fridge_spartan6 all timing
 
 # Quick sanity check of the IR-code enum against the assembler:
 grep -nE '^\s+[A-Z_]+,?\s*(//.*)?$' include/fridge.h | head -300

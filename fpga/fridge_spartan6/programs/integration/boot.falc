@@ -1,0 +1,185 @@
+// Combined board demo. Device map: ROM 1, ROM reset 2, keyboard 3.
+// Frame 1 is TEXT; frame 0 contains all four ROM segments in EGA.
+// Keyboard is polled between ROM bytes, proving the two devices coexist.
+include "vtext.inc"
+offset 0x0000
+static Title "FRIDGE: ROM + KEYBOARD + GPU"
+static Controls "SPACE: TEXT/EGA   R: PALETTE"
+static Prompt "TYPE BELOW:"
+static Scene 1
+static Pending 0
+static Red 0xFF
+static EchoHi 2
+static EchoLo 0x84
+
+main start
+    // RAM survives reset, so initialise every writable program variable.
+    MVI A, 1
+    STA Scene
+    MVI A, 0
+    STA Pending
+    STA VTEXT_BACK_COLOR
+    MVI A, 15
+    STA VTEXT_FORE_COLOR
+    MVI A, 0xFF
+    STA Red
+    MVI A, 2
+    STA EchoHi
+    MVI A, 0x84
+    STA EchoLo
+    MVI A, 15
+    MVI B, 0xFF
+    MVI C, 0xD0
+    MVI D, 0x40
+    VPAL
+    MVI A, 1
+    VMODE
+    LXI HL, 0x0000
+    MVI A, 5
+    VPRE
+
+    // Clear all TEXT cells, including characters left by a warm reset.
+    LXI HL, 0x0000
+    LXI BC, 0x0640
+entry clear_text
+    MVI A, 0
+    VFSA
+    INX HL
+    DCX BC
+    MOV A, B
+    ORA C
+    JNZ clear_text
+    MVI B, 2
+    MVI C, 2
+    LXI HL, Title
+    CALL vtext_putstr
+    MVI B, 2
+    MVI C, 4
+    LXI HL, Controls
+    CALL vtext_putstr
+    MVI B, 2
+    MVI C, 6
+    LXI HL, Prompt
+    CALL vtext_putstr
+
+    LXI HL, 0x0000
+    MVI A, 2
+    VPRE
+    MVI A, 1
+    OUT 2
+    MVI D, 0
+entry segment
+    MVI A, 2
+    OUT 1
+    MVI A, 0
+    OUT 1
+    MOV A, D
+    OUT 1
+    // Unmapped traffic must not change ROM state or supply stale data.
+    MVI A, 0x5A
+    OUT 99
+    IN 99
+    IN 2
+    MVI C, 0
+entry stream
+    IN 1
+    VFSA
+    INX HL
+    IN 3
+    CPI 0
+    JZ no_event
+    STA Pending
+entry no_event
+    DCR C
+    JNZ stream
+    INR D
+    MOV A, D
+    CPI 4
+    JNZ segment
+
+    MVI A, 5
+    LXI HL, 0x0000
+    VPRE
+    LDA Pending
+    CPI 0
+    JZ poll
+    CALL key
+entry poll
+    IN 3
+    CPI 0
+    JZ poll
+    CALL key
+    JMP poll
+
+subroutine key
+    // Release events carry bit 7 clear; only presses affect the display.
+    MOV E, A
+    ANI 0x80
+    RZ
+    MOV A, E
+    ANI 0x7F
+    CPI 0x20
+    JZ key.toggle
+    CPI 0x72
+    JZ key.colour
+    MOV E, A
+    // While EGA is visible, select TEXT as the write frame only.
+    LDA Scene
+    CPI 0
+    JNZ key.echo
+    MVI A, 3
+    LXI HL, 0x0000
+    VPRE
+entry key.echo
+    LDA EchoHi
+    MOV H, A
+    LDA EchoLo
+    MOV L, A
+    MOV A, E
+    VFSA
+    INX HL
+    MVI A, 0x0F
+    VFSA
+    INX HL
+    MOV A, L
+    CPI 0xD0
+    JNZ key.save
+    LXI HL, 0x0284
+entry key.save
+    MOV A, H
+    STA EchoHi
+    MOV A, L
+    STA EchoLo
+    LDA Scene
+    CPI 0
+    RNZ
+    MVI A, 2
+    LXI HL, 0x0000
+    VPRE
+    RET
+entry key.toggle
+    LDA Scene
+    XRI 1
+    STA Scene
+    VMODE
+    CPI 0
+    JZ key.ega
+    MVI A, 5
+    JMP key.present
+entry key.ega
+    MVI A, 2
+entry key.present
+    LXI HL, 0x0000
+    VPRE
+    RET
+entry key.colour
+    LDA Red
+    ADI 0x40
+    STA Red
+    MOV B, A
+    MVI C, 0x80
+    MVI D, 0x40
+    MVI A, 15
+    VPAL
+    RET
+endsub

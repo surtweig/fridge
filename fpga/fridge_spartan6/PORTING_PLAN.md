@@ -94,6 +94,26 @@
    (`VFSI`/`VFSAC`/`VFLA`/`VFLAC`, then sprites) follows; sprite memory is
    limited to 32 KB on hardware (16 RAMB16BWER; see Agreed Target).
 
+## Cross-stage System Integration
+
+- A canonical combined system now lives in `rtl/`, joining CPU/RAM, HDMI,
+  keyboard, Case B ROM, TEXT/EGA and VPAL. The CPU merges the working ROM
+  device strobes with the palette handshake; explicit read/write data signals
+  and a device read mux remove the internal tri-state bus.
+- The root Makefile builds `programs/integration/boot.falc` and its ROM inputs
+  into an isolated `.local/build/integration/` directory. The demo supports
+  typed TEXT, keyboard mode switching and live palette updates while ROM and
+  keyboard share the CPU I/O interface.
+- Canonical unit/integration tests, implementation/timing and board gates are
+  recorded separately in [INTEGRATION.md](INTEGRATION.md). All 11 canonical
+  testbenches pass, including warm/mid-ROM reset recovery, and the combined
+  bitstream meets all timing constraints. The combined-system board gate is
+  pending.
+- Existing examples and their hardware results remain milestone snapshots
+  during validation. Future GPU/peripheral development belongs in shared
+  `rtl/`; conversion of old demos to that implementation follows board
+  verification.
+
 ## Source Limitations
 
 - The source has an incomplete video ABI and interrupt support; define and
