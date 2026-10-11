@@ -116,7 +116,9 @@ we write is one extra **image-to-texture** path:
 
 - `VkFormat VK_FORMAT_R8G8B8A8_UNORM`, dimensions from
   `FRIDGE_GPU_FRAME_EGA_WIDTH` × `FRIDGE_GPU_FRAME_EGA_HEIGHT` (240×180 when
-  `FRIDGE_VIDEO_240X180` is defined in `fridge.h`, 240×160 otherwise).
+  `FRIDGE_VIDEO_240X180` is defined,
+  210×160 with the current `FRIDGE_VIDEO_210X160` selection, or 240×160
+  with all mode selections disabled).
 - Per frame:
   1. `FRIDGE_gpu_render_ega_rgb8` or `FRIDGE_gpu_render_txt_rgb8` writes
      RGB888 into a host staging buffer.
@@ -231,9 +233,10 @@ target_link_libraries(fridge_emulator PRIVATE
 )
 ```
 
-`FRIDGE_VIDEO_240X180` is **not** a target option — it lives in
-`include/fridge.h` (currently `#define`d) and must stay untouched (AGENTS.md
-§7 ABI gotcha).
+Video geometry is selected in shared `include/fridge.h`: currently 210×160
+via `FRIDGE_VIDEO_210X160`, with an optional `FRIDGE_VIDEO_240X180` define
+and a 240×160 base mode.
+Use the same selection for the emulator and assembler (AGENTS.md §7 ABI gotcha).
 
 SDL2 is fine to pull in as a system package (`libsdl2-dev`) on Linux; the
 "vendored" decision applies to ImGui and VMA, which are header-style deps

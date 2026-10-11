@@ -53,11 +53,25 @@ hardware contracts, verification gates and remaining GPU work.
 * 64 KB (16-bit address)
 
 ### Video
-* Display: 240x160 pixels
+* Display: 240x160 base mode; optional 210x160 or 240x180
 * 4-bit pallette (16 colors) from 4096 possible colors
-* Two framebuffers 240x160x4
-* 64 KB sprite memory (102 KB total video memory)
-* 40x20 ASCII text mode (6x8 font)
+* Two framebuffers, each 4 bits per pixel (16,800 bytes at 210x160)
+* 64 KB sprite memory, in addition to the two framebuffers
+* ASCII text mode with a 6x8 font: 35x20 / 40x20 / 40x22 cells
+
+The shared `include/fridge.h` currently selects `FRIDGE_VIDEO_210X160` for the
+P4 landscape display. With that selection disabled and no video-mode define,
+the base mode is 240x160. Select `FRIDGE_VIDEO_240X180` consistently when compiling
+the emulator and assembler to use 240x180. Its four partial bottom rows render
+as palette color zero. Video coordinates and the FALC width alias use 8-bit values.
+
+Run the renderer regression tests for the current selection and 240x180:
+
+```bash
+cmake -S fridgemulib -B build-video
+cmake --build build-video -j
+ctest --test-dir build-video --output-on-failure
+```
 
 ### ROM
 * SD card (16 MB maximum)

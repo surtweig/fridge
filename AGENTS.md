@@ -16,10 +16,12 @@ Fridge (formerly "XCM2 Fridge") is a fantasy 8-bit game console:
   (0x0200) bytes are reserved for the boot loader; user executables load at
   0x0200. `FRIDGE_ASCENDING_STACK` is defined — the stack grows upward.
 - **Video**: dual framebuffers plus 64 KiB sprite memory (~102 KiB total video
-  RAM). Two configurable resolutions selected at compile time via
-  `FRIDGE_VIDEO_240X180`:
-  - 240x160 (legacy, README default; 40x20 text mode with a 6x8 font)
-  - 240x180 (current build; 40x22 text mode)
+  RAM at the base resolution). Three compile-time resolutions:
+  - 210x160 (`FRIDGE_VIDEO_210X160`, currently selected; 35x20 text mode)
+  - 240x160 (base with no video define; 40x20 text mode with a 6x8 font)
+  - 240x180 (`FRIDGE_VIDEO_240X180`; 40x22 text mode)
+  Optional defines must match in the assembler and emulator. Video coordinates
+  and the FALC width alias use 8-bit values.
   4-bit (16 entry) palette, RGB4096 source. Sprites with 8 compositing modes
   (invisible, opaque, transparent0, additive, subtractive, AND/OR/XOR).
 - **ROM**: SD-card style, max 16 MiB, addressed in 256-byte segments via a
@@ -237,8 +239,9 @@ Known code-level gotchas worth flagging in any future session:
   `FRIDGE_BOOT_SECTION_INDEX_ADDRESS` (0x0003) form an implicit ABI between
   the boot loader, ROM builder, and emulator; changing any of them is a
   cross-component change.
-- `FRIDGE_VIDEO_240X180` changes framebuffer size, text-mode rows (22 vs 20),
-  and several derived constants; the Windows emulator binary in-tree was built
+- Video-mode defines change framebuffer size and text-mode dimensions;
+  `FRIDGE_VIDEO_240X180` is disabled by default.
+  The Windows emulator binary in-tree was built
   against the older 240x160 mode and the Qt project's hardcoded UI sizes also
   assume 160.
 
