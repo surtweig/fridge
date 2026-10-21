@@ -59,7 +59,7 @@ namespace CPM
         inline void Error() { OwnerFunction()->compiler->Error(); }
         inline Logger* CompilerLog() { return OwnerFunction()->compiler->CompilerLog(); }
         inline Logger* AsmLog() { return OwnerFunction()->compiler->AsmDebugOutput(); }
-        ~CPMExecutableSemanticNode();
+        virtual ~CPMExecutableSemanticNode();
     };
 
     class CPMSemanticOperator : public CPMExecutableSemanticNode

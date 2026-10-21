@@ -3,6 +3,8 @@
 #include "CPMCompiler.h"
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <functional>
 
 #define COMPLETE_SEQ_NOT_EMPTY { complete = seq.size() > 0; return false; }
 
@@ -58,35 +60,6 @@ namespace CPM
         return true;
     }
 
-    CPMSD_STR::CPMSD_STR() : CPMSyntaxDetector()
-    {
-        closed = false;
-    }
-
-    bool CPMSD_STR::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (complete)
-            return false;
-
-        if (cur->type != CPM_CHAR)
-            return false;
-
-        char c = cur->text[0];
-
-        if (seq.size() == 0 && c != CPM_STR_DELIM)
-            return false;
-
-        if (seq.size() > 0 && c == CPM_STR_DELIM)
-            complete = true;
-
-        seq.push_back(cur);
-
-        if (complete)
-            return false;
-
-        return true;
-    }
-
     CPMSD_ID::CPMSD_ID() : CPMSyntaxDetector()
     {
         complete = false;
@@ -128,35 +101,6 @@ namespace CPM
             COMPLETE_SEQ_NOT_EMPTY
 
             return true;
-    }
-
-    CPMSD_CHARLIT::CPMSD_CHARLIT() : CPMSyntaxDetector()
-    {
-        closed = false;
-    }
-
-    bool CPMSD_CHARLIT::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (complete)
-            return false;
-
-        if (cur->type != CPM_CHAR)
-            return false;
-
-        char c = cur->text[0];
-
-        if (seq.size() == 0 && c != CPM_CHAR_DELIM)
-            return false;
-
-        if (seq.size() > 0 && c == CPM_CHAR_DELIM)
-            complete = true;
-
-        seq.push_back(cur);
-
-        if (complete)
-            return false;
-
-        return true;
     }
 
     CPMSD_REF::CPMSD_REF() : CPMSyntaxDetector()
@@ -214,220 +158,6 @@ namespace CPM
         return valid;
     }
 
-    CPMSD_EXPR::CPMSD_EXPR() : CPMSyntaxDetector()
-    {
-        pcounter = 0;
-        itemsCount = 0;
-        opened = false;
-    }
-
-    bool CPMSD_EXPR::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (complete)
-            return false;
-
-        if (cur->type == CPM_CHAR)
-        {
-            char c = cur->text[0];
-            if (c == CPM_BLOCK_OPEN)
-            {
-                if (!opened)
-                {
-                    opened = true;
-                    return true;
-                }
-                //else
-                //    return false;
-            }
-
-            if (!opened && c != CPM_BLOCK_OPEN)
-                return false;
-
-            if (c == CPM_LINE_END)
-                return false;
-
-            if (!CharIsDelimiter(c) && !CharIsWhiteSpace(c))
-            {
-                compilerLog->Add(LOG_ERROR, "Invalid character in the expression: ", cur->sourceFileName, cur->lineNumber)->Add(c);
-                return false;
-            }
-
-            // if (opened && CharIsWhiteSpace(c))
-            //     return true;
-
-            /*if (c == CPM_BLOCK_OPEN)
-                pcounter++;
-                if (c == CPM_BLOCK_CLOSE)
-                pcounter--;
-
-                if (pcounter < 0)
-                {
-                CPMCompilerLog.Add(LOG_ERROR, "Parenthesis parse error.");
-                return false;
-                }*/
-
-            if (opened && c == CPM_BLOCK_CLOSE)
-            {
-                complete = true;
-                opened = false;
-                return false;
-            }
-        }
-        else
-        {
-            /*if (pcounter > 0)
-                itemsCount++;
-                else
-                return false;*/
-        }
-
-        /*if (itemsCount == 0 && n->type != CPM_ID)
-        {
-        CPMCompilerLog.Add(LOG_ERROR, "Token '")->Add(n->text)->Add("' is not an ID.");
-        return false;
-        }*/
-
-        if (opened && !(cur->type == CPM_CHAR && CharIsWhiteSpace(cur->text[0])))
-            seq.push_back(cur);
-
-        if (next != NULL)
-        {
-            if (next->type == CPM_CHAR &&
-                (next->text[0] == CPM_BLOCK_OPEN))
-                return false;
-        }
-
-        return true;
-    }
-
-    CPMSD_LINE::CPMSD_LINE() : CPMSyntaxDetector()
-    {
-        itemsCount = 0;
-    }
-
-    bool CPMSD_LINE::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (complete)
-            return false;
-
-        if (cur->type == CPM_LINE)
-            return false;
-
-        if (cur->type == CPM_CHAR)
-        {
-            char c = cur->text[0];
-
-            if (c == CPM_BLOCK_OPEN)
-                return false;
-
-            if (seq.size() == 0 && (c == CPM_BLOCK_CLOSE || c == CPM_LINE_END))
-                return false;
-
-            if (!CharIsWhiteSpace(c) && !CharIsDelimiter(c))
-            {
-                compilerLog->Add(LOG_ERROR, "Invalid character in the operator line: ")->Add(cur->text[0]);
-                return false;
-            }
-
-            if (c == CPM_LINE_END)
-            {
-                complete = true;
-                return false;
-            }
-        }
-        else
-            itemsCount++;
-
-        /* if (itemsCount == 0 && cur->type != CPM_ID)
-         {
-         CPMCompilerLog.Add(LOG_ERROR, "Token '")->Add(cur->text)->Add("' is not an ID.");
-         return false;
-         }*/
-
-        if (cur->type != CPM_CHAR && !CharIsWhiteSpace(cur->text[0]))
-            seq.push_back(cur);
-
-        if (next != NULL)
-        {
-            if (next->type == CPM_CHAR)
-            {
-                char cn = next->text[0];
-
-                if (cn == CPM_BLOCK_OPEN)
-                    return false;
-
-                if (cn == CPM_BLOCK_CLOSE)
-                {
-                    complete = true;
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    CPMSD_BLOCK::CPMSD_BLOCK()
-    {
-        pcounter = 0;
-    }
-
-    bool CPMSD_BLOCK::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (complete)
-            return false;
-
-        if (cur->type == CPM_CHAR)
-        {
-            char c = cur->text[0];
-            if (seq.size() == 0 && c != CPM_BLOCK_OPEN)
-                return false;
-
-            if (seq.size() > 0 && !CharIsDelimiter(c) && !CharIsWhiteSpace(c))
-            {
-                compilerLog->Add(LOG_ERROR, "Invalid character in the block: ")->Add(c);
-                return false;
-            }
-            /*
-            if (c == CPM_BLOCK_OPEN)
-            pcounter++;
-            if (c == CPM_BLOCK_CLOSE)
-            pcounter--;
-
-            if (pcounter < 0)
-            {
-            CPMCompilerLog.Add(LOG_ERROR, "Parenthesis parse error.");
-            return false;
-            }
-
-            if (pcounter == 0)
-            closed = true;*/
-            if (c == CPM_BLOCK_CLOSE)
-            {
-                complete = true;
-                seq.push_back(cur);
-                return false;
-            }
-        }
-        else
-        {
-            if (seq.size() == 0)
-                return false;
-        }
-
-        if (next != NULL)
-        {
-            if (next->type == CPM_CHAR)
-            {
-                if (next->text[0] == CPM_BLOCK_OPEN)
-                    return false;
-            }
-        }
-
-        seq.push_back(cur);
-        return true;
-    }
-
     void DeleteSyntaxTree(CPMSyntaxTreeNode* root)
     {
         for (int i = 0; i < root->children.size(); i++)
@@ -454,36 +184,12 @@ namespace CPM
             noErrors = false;
         }
 
-        //this->text = text;
         pass_CHAR(sourceFileName);
-        pass_Detector<CPMSD_STR>(CPM_STR);
-        pass_Detector<CPMSD_CHARLIT>(CPM_CHARLIT);
-        pass_Comments();
+        pass_LiteralsAndComments();
         pass_Detector<CPMSD_ID>(CPM_ID);
         pass_Detector<CPMSD_NUM>(CPM_NUM);
-
-        //while (pass_Detector<CPMSD_EXPR>(CPM_EXPR)) {}
-        bool continueDetect = true;
-        while (continueDetect)
-        {
-            continueDetect = false;
-            continueDetect |= pass_Detector<CPMSD_REF>(CPM_REF);
-            continueDetect |= pass_Detector<CPMSD_EXPR>(CPM_EXPR);
-        }
-
-        //pass_Detector<CPMSD_LINE>(CPM_LINE);
-        //pass_Detector<CPMSD_BLOCK>(CPM_BLOCK);
-
-
-        while (true)
-        {
-            if (!pass_Detector<CPMSD_LINE>(CPM_LINE))
-                break;
-            if (!pass_Detector<CPMSD_BLOCK>(CPM_BLOCK))
-                break;
-        }
-        /*pass_Detector<CPMSD_LINE>(CPM_LINE);
-        pass_Detector<CPMSD_BLOCK>(CPM_BLOCK);*/
+        while (pass_Detector<CPMSD_REF>(CPM_REF)) {}
+        pass_Groups();
     }
 
     void CPMParser::Clear()
@@ -492,24 +198,21 @@ namespace CPM
         {
             DeleteSyntaxTree(*li);
         }
+        layer.clear();
     }
 
     void CPMParser::pushSyntaxTreeNode(CPMSyntaxTreeNode* node, list<CPMSyntaxTreeNode*>::iterator childrenSeqStart, list<CPMSyntaxTreeNode*>::iterator childrenSeqFinish, CPMSyntaxDetector* detector)
     {
-        node->parent = NULL;
-        node->text = "";
-        for (list<CPMSyntaxTreeNode*>::iterator li = childrenSeqStart; li != next(childrenSeqFinish); ++li)
+        node->parent = nullptr;
+        detector->CopySeqTo(node->children);
+        for (auto li = childrenSeqStart; li != next(childrenSeqFinish); ++li)
         {
             node->text += (*li)->text;
-            (*li)->parent = node;
-            //node->children.push_back(*li);
+            if (find(node->children.begin(), node->children.end(), *li) != node->children.end())
+                (*li)->parent = node;
+            else
+                DeleteSyntaxTree(*li);
         }
-        detector->CopySeqTo(node->children);
-        /*for (vector<CPMSyntaxTreeNode*>::iterator li = node->children.begin(); li != node->children.end(); ++li)
-        {
-        node->text += (*li)->text + ",";
-        }*/
-
         layer.insert(childrenSeqStart, node);
         layer.erase(childrenSeqStart, next(childrenSeqFinish));
     }
@@ -566,6 +269,7 @@ namespace CPM
             }
             li = nextli;
         }
+        delete detector;
         return layerWasChanged;
     }
 
@@ -574,14 +278,12 @@ namespace CPM
         Clear();
         for (int lineNumber = 1; lineNumber <= text.size(); lineNumber++)
         {
-            string line = text[lineNumber-1] + ' ';
+            string line = text[lineNumber-1] + '\n';
             for (int i = 0; i < line.size(); i++)
             {
                 CPMSyntaxTreeNode* charNode = new CPMSyntaxTreeNode();
                 charNode->parent = NULL;
                 char c = line[i];
-                if (c == '\t' || c == '\n' || c == '\r')
-                    c = ' ';
                 charNode->text = c;
                 charNode->type = CPM_CHAR;
                 charNode->lineNumber = lineNumber;
@@ -591,68 +293,281 @@ namespace CPM
         }
     }
 
-    void CPMParser::pass_Comments()
+    static bool IsChar(CPMSyntaxTreeNode* node, char c)
     {
-        bool commentBlock = false;
-        bool commentLine = false;
-        list<CPMSyntaxTreeNode*>::iterator seqStart = layer.end();
-        list<CPMSyntaxTreeNode*>::iterator seqFinish = layer.end();
+        return node->type == CPM_CHAR && node->text.size() == 1 && node->text[0] == c;
+    }
 
-        for (list<CPMSyntaxTreeNode*>::iterator li = layer.begin(); li != layer.end();)
+    static bool IsTrivia(CPMSyntaxTreeNode* node)
+    {
+        return node->type == CPM_COMMENT ||
+            (node->type == CPM_CHAR && CharIsWhiteSpace(node->text[0]));
+    }
+
+    void CPMParser::syntaxError(CPMSyntaxTreeNode* node, const string& message)
+    {
+        compilerLog->Add(LOG_ERROR, message, node->sourceFileName, node->lineNumber);
+        noErrors = false;
+    }
+
+    void CPMParser::pass_LiteralsAndComments()
+    {
+        vector<CPMSyntaxTreeNode*> raw(layer.begin(), layer.end());
+        layer.clear();
+        for (size_t i = 0; i < raw.size();)
         {
-            list<CPMSyntaxTreeNode*>::iterator nextli = next(li);
-
-            if (seqStart != layer.end() && seqFinish != layer.end())
+            const bool lineComment = IsChar(raw[i], '/') && i + 1 < raw.size() && IsChar(raw[i + 1], '/');
+            const bool blockComment = IsChar(raw[i], '/') && i + 1 < raw.size() && IsChar(raw[i + 1], '*');
+            const bool quoted = IsChar(raw[i], CPM_STR_DELIM) || IsChar(raw[i], CPM_CHAR_DELIM);
+            if (!lineComment && !blockComment && !quoted)
             {
-                layer.erase(seqStart, next(seqFinish));
-                seqStart = layer.end();
-                seqFinish = layer.end();
+                layer.push_back(raw[i++]);
+                continue;
             }
 
-            if (nextli == layer.end())
-                break;
-
-            CPMSyntaxTreeNode* c = (*li);
-            CPMSyntaxTreeNode* nextc = (*nextli);
-
-            if (c->type == CPM_CHAR && nextc->type == CPM_CHAR)
+            size_t start = i;
+            bool closed = lineComment;
+            char quote = raw[i]->text[0];
+            i += quoted ? 1 : 2;
+            while (i < raw.size())
             {
-                if (!commentBlock && !commentLine)
+                if (lineComment && IsChar(raw[i], '\n'))
+                    break;
+                if (blockComment && IsChar(raw[i], '*') && i + 1 < raw.size() && IsChar(raw[i + 1], '/'))
                 {
-                    if (c->text[0] == CPM_COMMENT_LINE[0] && nextc->text[0] == CPM_COMMENT_LINE[1])
-                    {
-                        seqStart = li;
-                        commentLine = true;
-                    }
-                    else
-                    if (c->text[0] == CPM_COMMENT_BLOCK_OPEN[0] && nextc->text[0] == CPM_COMMENT_BLOCK_OPEN[1])
-                    {
-                        seqStart = li;
-                        commentBlock = true;
-                    }
+                    i += 2;
+                    closed = true;
+                    break;
+                }
+                if (quoted && IsChar(raw[i], quote))
+                {
+                    ++i;
+                    closed = true;
+                    break;
+                }
+                ++i;
+            }
+
+            auto node = new CPMSyntaxTreeNode{};
+            node->type = quoted ? (quote == CPM_STR_DELIM ? CPM_STR : CPM_CHARLIT) : CPM_COMMENT;
+            node->sourceFileName = raw[start]->sourceFileName;
+            node->lineNumber = raw[start]->lineNumber;
+            for (size_t j = start; j < i; ++j)
+            {
+                node->children.push_back(raw[j]);
+                raw[j]->parent = node;
+                if (quoted)
+                    node->text += raw[j]->text;
+            }
+            if (!closed)
+                syntaxError(node, quoted ? "Unclosed literal." : "Unclosed block comment.");
+            if (node->type == CPM_CHARLIT && node->text.size() != 3)
+                syntaxError(node, "A char literal must contain exactly one character.");
+            // Comments remain opaque boundaries until grouping. They cannot
+            // merge identifiers or supply missing source whitespace.
+            layer.push_back(node);
+        }
+    }
+
+    CPMSyntaxTreeNode* CPMParser::groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
+                                               CPMSyntaxNodeType type)
+    {
+        auto node = new CPMSyntaxTreeNode{};
+        node->type = type;
+        if (!nodes.empty())
+        {
+            node->sourceFileName = nodes.front()->sourceFileName;
+            node->lineNumber = nodes.front()->lineNumber;
+        }
+        bool whitespace = false;
+        bool comma = false;
+        for (auto child : nodes)
+        {
+            node->text += child->text;
+            if (IsTrivia(child))
+            {
+                if (child->type == CPM_CHAR)
+                    whitespace = true;
+                DeleteSyntaxTree(child);
+            }
+            else if (IsChar(child, CPM_OPERAND_DELIM))
+            {
+                if (comma || node->children.size() < 2)
+                    syntaxError(child, "A comma must separate two operands, not precede the first operand.");
+                comma = true;
+                whitespace = false;
+                DeleteSyntaxTree(child);
+            }
+            else
+            {
+                if (comma && !whitespace)
+                    syntaxError(child, "Whitespace is required after an operand comma.");
+                if (node->children.empty())
+                {
+                    node->sourceFileName = child->sourceFileName;
+                    node->lineNumber = child->lineNumber;
+                }
+                node->commaBefore.push_back(comma);
+                node->whitespaceBefore.push_back(whitespace);
+                child->parent = node;
+                node->children.push_back(child);
+                comma = false;
+                whitespace = false;
+            }
+        }
+        if (comma)
+            syntaxError(node, "Trailing commas are not allowed in operator calls.");
+        return node;
+    }
+
+    bool CPMValidateCall(CPMSyntaxTreeNode* node, Logger* logger)
+    {
+        bool valid = true;
+        for (size_t i = 1; i < node->children.size(); ++i)
+        {
+            const bool comma = i < node->commaBefore.size() && node->commaBefore[i];
+            const bool whitespace = i < node->whitespaceBefore.size() && node->whitespaceBefore[i];
+            string error;
+            if (i == 1 && comma)
+                error = "Use whitespace, not a comma, between an operator and its first operand.";
+            else if (i > 1 && !comma)
+                error = "A comma is required between operator operands.";
+            else if (!whitespace)
+                error = i == 1 ? "Whitespace is required after the operator." :
+                    "Whitespace is required after an operand comma.";
+            if (!error.empty())
+            {
+                logger->Add(LOG_ERROR, error, node->sourceFileName, node->children[i]->lineNumber);
+                valid = false;
+            }
+        }
+        return valid;
+    }
+
+    bool CPMValidateDeclaration(CPMSyntaxTreeNode* node, Logger* logger)
+    {
+        if (find(node->commaBefore.begin(), node->commaBefore.end(), true) == node->commaBefore.end())
+            return true;
+        logger->Add(LOG_ERROR, "Commas separate call operands, not declaration components or parameter declarations.",
+                    node->sourceFileName, node->lineNumber);
+        return false;
+    }
+
+    void CPMParser::pass_Groups()
+    {
+        vector<CPMSyntaxTreeNode*> tokens(layer.begin(), layer.end());
+        layer.clear();
+        size_t position = 0;
+        function<CPMSyntaxTreeNode*(CPMSyntaxTreeNode*)> group;
+        group = [&](CPMSyntaxTreeNode* opening) -> CPMSyntaxTreeNode*
+        {
+            vector<CPMSyntaxTreeNode*> contents;
+            CPMSyntaxTreeNode* closing = nullptr;
+            while (position < tokens.size())
+            {
+                auto token = tokens[position++];
+                if (IsChar(token, CPM_BLOCK_OPEN))
+                    contents.push_back(group(token));
+                else if (IsChar(token, CPM_BLOCK_CLOSE))
+                {
+                    closing = token;
+                    break;
                 }
                 else
-                {
-                    if (commentBlock && c->text[0] == CPM_COMMENT_BLOCK_CLOSE[0] && nextc->text[0] == CPM_COMMENT_BLOCK_CLOSE[1])
-                    {
-                        commentBlock = false;
-                        seqFinish = nextli;
-                        nextli = next(nextli);
-                    }
-                }
+                    contents.push_back(token);
             }
-
-            if (commentLine)
+            if (!closing)
             {
-                if (c->lineNumber != nextc->lineNumber)
-                {
-                    commentLine = false;
-                    seqFinish = li;
-                }
+                syntaxError(opening, "Unclosed parenthesized group.");
+                closing = new CPMSyntaxTreeNode{};
+                closing->type = CPM_CHAR;
+                closing->sourceFileName = opening->sourceFileName;
+                closing->lineNumber = opening->lineNumber;
             }
+            const bool block = any_of(contents.begin(), contents.end(),
+                [](CPMSyntaxTreeNode* n) { return IsChar(n, CPM_LINE_END); });
+            CPMSyntaxTreeNode* result;
+            if (!block)
+            {
+                result = groupSequence(contents, CPM_EXPR);
+                // Keep legacy type groups until the separate angle-type migration.
+                const auto& c = result->children;
+                const bool typeGroup = c.size() >= 2 && c[1]->type == CPM_ID &&
+                    (c[1]->text == "ptr" || c[1]->text == "array");
+                const bool arrayParameter = c.size() >= 3 && c[2]->type == CPM_ID && c[2]->text == "array";
+                if (!typeGroup && !arrayParameter && c.size() > 1)
+                {
+                    if (c[0]->type != CPM_ID && c[0]->type != CPM_REF)
+                        syntaxError(opening, "Initializer elements require semicolons; a call must start with an operator.");
+                    else if (!CPMValidateCall(result, compilerLog))
+                        noErrors = false;
+                }
+                result->text = opening->text + result->text + closing->text;
+                result->lineNumber = opening->lineNumber;
+                result->sourceFileName = opening->sourceFileName;
+                DeleteSyntaxTree(opening);
+                DeleteSyntaxTree(closing);
+            }
+            else
+            {
+                result = new CPMSyntaxTreeNode{};
+                result->type = CPM_BLOCK;
+                result->sourceFileName = opening->sourceFileName;
+                result->lineNumber = opening->lineNumber;
+                result->children.push_back(opening);
+                result->text = opening->text;
+                vector<CPMSyntaxTreeNode*> line;
+                for (auto token : contents)
+                {
+                    result->text += token->text;
+                    if (IsChar(token, CPM_LINE_END))
+                    {
+                        result->children.push_back(groupSequence(line, CPM_LINE));
+                        line.clear();
+                        DeleteSyntaxTree(token);
+                    }
+                    else
+                        line.push_back(token);
+                }
+                if (any_of(line.begin(), line.end(), [](CPMSyntaxTreeNode* n) { return !IsTrivia(n); }))
+                    result->children.push_back(groupSequence(line, CPM_LINE));
+                else
+                    for (auto token : line) DeleteSyntaxTree(token);
+                result->children.push_back(closing);
+                result->text += closing->text;
+                for (auto child : result->children) child->parent = result;
+            }
+            return result;
+        };
 
-            li = nextli;
+        vector<CPMSyntaxTreeNode*> line;
+        auto finishLine = [&]()
+        {
+            if (any_of(line.begin(), line.end(), [](CPMSyntaxTreeNode* n) { return !IsTrivia(n); }))
+                layer.push_back(groupSequence(line, CPM_LINE));
+            else
+                for (auto token : line) DeleteSyntaxTree(token);
+            line.clear();
+        };
+        while (position < tokens.size())
+        {
+            auto token = tokens[position++];
+            if (IsChar(token, CPM_BLOCK_OPEN))
+                line.push_back(group(token));
+            else if (IsChar(token, CPM_LINE_END))
+            {
+                finishLine();
+                DeleteSyntaxTree(token);
+            }
+            else if (IsChar(token, CPM_BLOCK_CLOSE))
+            {
+                syntaxError(token, "Unexpected closing parenthesis.");
+                DeleteSyntaxTree(token);
+            }
+            else
+                line.push_back(token);
         }
+        finishLine();
     }
 
     void CPMParser::GetLayer(vector<CPMSyntaxTreeNode*>& layerCopy)
@@ -691,6 +606,7 @@ namespace CPM
 
     CPMParser::~CPMParser()
     {
+        Clear();
     }
 
     string CPMSyntaxTreeNodeToString(CPMSyntaxTreeNode* node)
@@ -702,6 +618,8 @@ namespace CPM
             s += "?"; break;
         case CPM_CHAR:
             s += "CHAR"; break;
+        case CPM_COMMENT:
+            s += "COMMENT"; break;
         case CPM_NUM:
             s += "NUM"; break;
         case CPM_STR:

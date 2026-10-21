@@ -1,5 +1,11 @@
 # Frion Compiler Refactor Plan
 
+> **Lexer follow-up:** [cpm-lexer-plan.md](cpm-lexer-plan.md) plans dedicated
+> `<...>` type delimiters and mandatory whitespace in operator calls and
+> between a type and its declaration name. Its lexical rules supersede the
+> parenthesized compound-type examples below when that follow-up is implemented.
+> The completed steps below describe the earlier implementation work.
+
 > Bringing `emulator/cpm/` in line with `doc/cpm-language-spec.md`.
 > This document is the implementation plan for the parser and compiler
 > changes that follow from the language-design decisions locked into the spec:
@@ -9,7 +15,7 @@
 >   unrestricted: `((uint8 array 10) array 20)`, `(T ptr ptr)`, etc.
 > - **Sigils are removed.** `#`, `^`, `&` are not part of the language.
 >   `CPM_REF`, `CPMSD_REF`, `PtrPrefix`, `RefPrefix`, `R_REF` go away.
-> - **Indexing is a first-class operator.** `(at arr i)` for arrays,
+> - **Indexing is a first-class operator.** `(at arr, i)` for arrays,
 >   `(at ptr)` for pointers (Optional-deref form). Call-style `(arr i)`
 >   indexing is removed.
 > - **Address-of is an operator.** `(addr lvalue)` yields `(T ptr)`.
@@ -18,8 +24,11 @@
 >   array-literal token, but not in this pass.
 > - **Char literals are single-quoted.** `'x'` is a `char`; `"x"` is a
 >   `string` (was: both forms overloaded `"x"`).
-> - **Array initializers are comma-separated.** `(1, 2, 3)` and
->   `((1, 2), (3, 4))` for nesting. The legacy `;`-separated form is gone.
+> - **Initializers retain semicolons.** `(1; 2; 3)` and
+>   `((1; 2); (3; 4))` for nesting; structs use `(field value; field value)`.
+> - **Calls use operand commas.** `(func a, b, c)` and `= x, (func a, b);`.
+>   Whitespace is required before the first operand and after each comma.
+>   This supersedes the earlier comma-in-initializers decision; see §3.7.
 > - **String literals are static, deduplicated, null-terminated.** A `string`
 >   value is the address of its first char. No implicit array↔pointer decay;
 >   no implicit null termination of `(char array N)`.
@@ -38,42 +47,26 @@
 - **`test.cpm` will be rewritten** in the new syntax as part of the same
   change set, so there is a concrete regression target.
 
-## 1. CPMParser.h changes
+## 1. Parser structure after the separator correction
 
-### 1.1 Removals
+The original detector-only parser migration is recorded in the completed
+steps in §5. Separator implementation (§3.7) subsequently replaced the
+expression/line/block detector sweeps with recursive grouping:
 
-- Delete `CPM_REF` and `CPM_INDEX` from `CPMSyntaxNodeType`.
-- Delete `CPM_INDEX_OPEN = '['`, `CPM_INDEX_CLOSE = ']'` constants.
-- Remove the two `c == CPM_INDEX_OPEN` / `c == CPM_INDEX_CLOSE` lines in
-  `CharIsDelimiter`. (Leave `'\''` in for the char lexer.)
-- Delete `class CPMSD_REF` (declaration and `PutNode` impl in `.cpp`).
-- Delete `class CPMSD_INDEX` (declaration and `PutNode` impl in `.cpp`).
-
-### 1.2 Additions
-
-- New enum value `CPM_CHARLIT` in `CPMSyntaxNodeType`. This is a *literal
-  char* token, distinct from `CPM_CHAR` which is the parser's per-source-byte
-  token. They must not collide.
-- New `class CPMSD_CHARLIT : public CPMSyntaxDetector` mirroring `CPMSD_STR`'s
-  shape (`bool closed` field). It recognises `'` … `'`, consumes the inner
-  bytes, and on `Complete()` emits a single `CPM_CHARLIT` node whose `.text`
-  is the enclosed character (length 1; multi-char inside `'…'` is a compile
-  error logged from the detector).
-- Register the new detector in `CPMParser::CPMParser`'s detector sweep
-  (the `pass_Detector<…>` chain at ~line 516). Order matters: `CPMSD_CHARLIT`
-  must run before `CPMSD_ID`/`CPMSD_NUM` so `'x'` isn't tokenised as
-  `'` + `x` + `'`.
-- `CharIsDelimiter` keeps `'\''` (already there) and now also keeps `','`
-  as a delimiter (it already does — current `CPM_OPERAND_DELIM`). No
-  change needed, but verify the ID detector doesn't absorb `,`.
-
-### 1.3 What stays
-
-- `CPMSD_EXPR` already detects any `(...)` form, including the new
-  `(uint8 ptr)`, `(uint8 array 10)`, `((uint8 array 10) array 20)` type-exprs.
-  The parser doesn't need to know it's a type — that's decided in semantic
-  analysis.
-- `CPMSD_BLOCK` and `CPMSD_LINE` unchanged.
+- `CPM_CHARLIT` remains distinct from per-source-byte `CPM_CHAR`.
+- `pass_LiteralsAndComments` handles strings, chars, and comments together,
+  preventing quotes in comments from hiding active code. Comments remain
+  opaque trivia boundaries until grouping and do not supply required whitespace.
+- `CPMSD_ID`, `CPMSD_NUM`, and `CPMSD_REF` still tokenize atoms and dotted names.
+  `CPM_REF` is a lexical qualified-name node, not a pointer sigil.
+- `pass_Groups` builds nested `CPM_EXPR`, `CPM_LINE`, and `CPM_BLOCK` nodes.
+  Semicolon initializer entries retain LINE wrappers in a BLOCK; calls expose
+  operand children without comma punctuation. Parallel separator metadata
+  records which children had commas and source whitespace before them.
+- `CPMValidateCall` checks call separators, while `CPMValidateDeclaration`
+  prevents operand commas from leaking into declaration components.
+- Bracket indexing remains removed. Parenthesized compound types remain
+  transitional; the separate `cpm-lexer-plan.md` describes the angle migration.
 
 ## 2. CPMCompiler.h changes
 
@@ -184,7 +177,8 @@ provides that.
   `parseAndAllocateLiteralString` / `parseLiteralStruct` — signatures
   stay. Internally they need to:
   - accept `CPM_CHARLIT` from `parseLiteralChar` (was: the `"x"`-as-char hack),
-  - accept `,` as array-literal element separator (was: `;`),
+  - retain `;` as the initializer-element separator and reject comma lists,
+  - accept and validate commas between operator/call operands,
   - reject string literals as initializers for `(char array N)` (no auto
     coercion; spec §5.6).
 - `CPMNamespace::staticAllocate(string)` — header signature stays. The `.cpp`
@@ -208,8 +202,8 @@ plus the `CPMIntermediate.cpp` line. Each is of the form
 `if (node->type == CPM_ID || node->type == CPM_REF)`. The `CPM_REF` branch
 goes away; the `CPM_ID` branch stays. In places where the node was a
 namespace-qualified type like `X2AL.Zuzu`, the parser-level `.`-subscript
-detector (CPMSD_LINE? — needs check) already produces a synthetic node
-shape; rewire to use that.
+detector (`CPMSD_REF`) already produces a qualified-name node; retain that
+lexical representation without the old semantic pointer interpretation.
 
 ### 3.3 `R_REF` arg-mode check (delete)
 Line 922: `if (argNode->children[…]->text == R_REF)`. The `ref`-as-arg-mode
@@ -233,15 +227,33 @@ in `CPMParser.cpp:516` get removed; the `case CPM_INDEX:` in
 The current "double-quoted single char" path (using `CPM_STR` with length 1)
 is removed — the type-checker no longer silently treats `"x"` as a char.
 
-### 3.7 Array initializer separator change
-`parseLiteralNumber` / `parseLiteralStruct` currently expect `;`-separated
-initializer lists (matching `CPM_LINE`). Switch to `,`-separated
-(`CPM_OPERAND_DELIM`). This means initializer lists now decode as a single
-`CPM_EXPR` with comma-separated children rather than a sequence of
-`CPM_LINE` children. The structural change is small but the
-code-path-detection in the parser that distinguished "initializer list" from
-"parenthesized expression" may need an explicit signal — TBD when
-implementing.
+### 3.7 Separator correction — implemented
+
+The earlier plan switched initializer elements from `;` to `,`. That decision
+has been reversed: semicolons separate array elements and named struct-field
+bindings, preserving `test.cpm`'s original design. A trailing initializer
+semicolon is optional. Commas separate operands of operator and function calls,
+with no comma before the first operand and no trailing/empty operands.
+
+Examples:
+
+```cpm
+static uint8 values array 3 (1; (+ 1, 1); 3);
+static person me (name "zuzu"; age 36);
+= x, (func a, b, c);
+```
+
+`CPMParser` groups nested parentheses before splitting semicolon-delimited
+entries, preserving `CPM_BLOCK` / `CPM_LINE` initializer structure. It removes
+operand commas from meaningful children while retaining comma/whitespace
+metadata. Call validation requires the separators; declaration and initializer
+contexts are handled separately. Literal parsers no longer interpret
+comma-separated expressions as initializer lists.
+
+`CPMValidateCall` validates parenthesized calls and semantic consumers of
+paren-less lines. Parser failures propagate through `NoErrors()` and prevent
+binary emission. `cpm_separator_tests` covers syntax trees, malformed separators,
+constant evaluation, and static array/nested struct initialization.
 
 ### 3.8 String dedup
 Add a `std::map<string, FRIDGE_WORD*> stringPool` to `CPMNamespace`. The
@@ -353,58 +365,14 @@ A reasonable commit sequence:
    builds clean; `test.cpm` exhibits the same pre-existing master errors
    (`x`/`z` undeclared — legacy call-style-indexing test file), no new
    regressions.
-6. ~~**Char literal + comma-separated array initializer.** Rewire
-   `parseLiteralChar`, `parseLiteralNumber`, `parseLiteralStruct`.~~
-   **Done (literal-lowering layer).**
-
-   - `parseLiteralChar` in `CPMCompiler.cpp` now consumes `CPM_CHARLIT`
-     nodes (`'x'` form; `text` is the three chars including the single
-     quotes, mirroring `CPM_STR`'s shape). The legacy `CPM_STR &&
-     text.size() == 3` branch (the `"x"`-as-char overload) is removed —
-     per §3.6 the type-checker no longer silently treats `"x"` as a char.
-     `addLiteral`'s `CPM_STR` branch likewise drops its length-1 special
-     case: a `"…"` literal is now always a `string`.
-   - `parseLiteralValue` and `parseLiteralStruct` now accept EITHER the
-     legacy `;`-separated `CPM_BLOCK` form (children = `'('` `LINE`
-     … `LINE` `')'`) OR the new `,`-separated `CPM_EXPR` form (children =
-     `elem` `','` `elem` … with no surrounding parens; the interleaved
-     `CPM_OPERAND_DELIM` `CPM_CHAR` tokens are filtered out before
-     addressing the elements). The legacy char-array-from-string shortcut
-     `char text array 5 "12345"` is kept (until step 9 rewrites `test.cpm`)
-     as a third shape: the `CPM_STR`'s raw char children are the per-
-     element bytes.
-   - `parseLiteralStruct` collects `(name, value)` pairs from either
-     shape: the `CPM_BLOCK` path reads each `LINE`'s two children; the
-     `CPM_EXPR` path pairs up the comma-filtered elements element-by-
-     element (an odd count is rejected as malformed).
-   - `parseLiteralNumber` itself was already `CPM_EXPR`/`CPM_LINE`-aware
-     from prior steps (the const-fold `(+ 1 1)` inside `(0, (+ 1 1), 2,
-     3, 4)` therefore evaluates to `2` correctly); no signature change
-     was needed there.
-   - Verified: a `/tmp` regression `.cpm` exercising `'x'` scalar char,
-     comma-separated `uint8`/`char`/`string` arrays, comma-separated
-     scalar struct init, and comma-separated struct-with-string-field
-     init compiles cleanly with no errors. The existing legacy
-     `test.cpm` continues to compile cleanly modulo (a) the pre-existing
-     `x`/`z`-undeclared master errors already documented for steps 1–5,
-     and (b) one NEW explicit error at `test.cpm:69`
-     (`Cannot parse '"x"' as a char literal.`) which is the *intended*
-     behaviour for `static char charTest "x";` once the `"x"`-as-char
-     overload is removed; step 9 rewrites `test.cpm` to `'x'`.
-   - `g++ -std=c++17 -fsyntax-only` on `CPMCompiler.cpp` and
-     `CPMIntermediate.cpp` is clean; `cmake --build build-cpm -j` is
-     clean.
-   - **Parser limitation noted, out of scope for step 6:** the `CPMSD_EXPR`
-     detector tracks paren nesting with a single `bool opened`, not a
-     depth counter (the `pcounter` logic in `CPMParser.cpp:258-263` is
-     commented-out). Top-level comma-separated initializers `(0, (+ 1 1),
-     2, 3, 4)` parse correctly because the inner `(+ 1 1)` has no comma;
-     nested array literals `((1, 2), (3, 4))` are not currently collapsed
-     into a single `CPM_EXPR` (the outer `(` prematurely completes at the
-     first inner `)`). Fixing the `CPMSD_EXPR` detector to track paren
-     depth is a parser-internal change left for a later step — the literal
-     parsers themselves are already written to handle a properly-nested
-     `CPM_EXPR` once one is available.
+6. **Char literals and initializer lowering.** Implemented, with a later
+   separator correction. This step originally added comma initializer support
+   alongside the legacy semicolon form. That historical behavior is superseded
+   by §3.7: initializers now use semicolons, and calls use mandatory operand
+   commas. Single-quoted chars remain implemented. The legacy
+   char-array-from-string shortcut remains until the declaration/type migration.
+   Recursive grouping now handles nested semicolon lists; executable support
+   for fully nested type expressions remains separate work.
 
 7. **Remove `PtrPrefix`/`RefPrefix`/`R_REF`** and sweep the 40 references.
 8. **String dedup.** Add the `stringPool` map in `CPMNamespace`.

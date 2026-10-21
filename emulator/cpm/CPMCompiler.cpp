@@ -4,6 +4,8 @@
 #include "CPMIntermediate.h"
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <functional>
 #include <stdlib.h>
 
 namespace CPM
@@ -302,6 +304,11 @@ namespace CPM
         outputFileName = outputFile;
         this->includeFolders = includeFolders;
         preprocessSourceFile(sourceRootFolder, sourceFileName);
+        if (!noErrors)
+        {
+            compilerLog.Add(LOG_ERROR, "Compilation failed due to syntax errors.");
+            return;
+        }
         dataTypeCounter = CPM_DATATYPE_USER;
         globalOffset = FRIDGE_EXECUTABLE_OFFSET;
 
@@ -344,7 +351,10 @@ namespace CPM
         readStatics(2);
         readFunctions();
 
-        CPMIntermediate im(this);
+        if (noErrors)
+        {
+            CPMIntermediate im(this);
+        }
 
         if (!noErrors)
             compilerLog.Add(LOG_ERROR, "Compilation failed due to errors.");
@@ -689,6 +699,11 @@ namespace CPM
             return;
         if (phase == 1 && !declIsConst)
             return; // the first pass reads constants only
+        if (!CPMValidateDeclaration(node, &compilerLog))
+        {
+            noErrors = false;
+            return;
+        }
 
         bool isInvalid = false;
 
@@ -942,6 +957,12 @@ namespace CPM
                 CPMSyntaxTreeNode* nameNode;
                 CPMSyntaxTreeNode* countNode = NULL;
 
+                if (!CPMValidateDeclaration(node, &compilerLog))
+                {
+                    noErrors = false;
+                    return;
+                }
+
                 if (node->children.size() != 2 && node->children.size() != 4)
                 {
                     compilerLog.Add(LOG_ERROR, "Invalid struct field declaration.", node->sourceFileName, node->lineNumber);
@@ -1167,6 +1188,44 @@ namespace CPM
             for (int i = 0; i < ns->nodes.size(); i++)
                 detectFunction(ns->nodes[i], ns);
         }
+        // Validate statements even in branches/loops whose executable lowering
+        // is still unfinished. Initializer blocks have a different grammar.
+        for (auto& ns : namespaces)
+            for (auto& entry : ns.second->functions)
+            {
+                auto& functionSymbol = entry.second;
+                function<void(CPMSyntaxTreeNode*)> validate;
+                validate = [&](CPMSyntaxTreeNode* node)
+                {
+                    if (node->type == CPM_BLOCK)
+                    {
+                        for (auto child : node->children) validate(child);
+                        return;
+                    }
+                    if (node->type != CPM_LINE || node->children.empty()) return;
+                    auto head = node->children[0];
+                    if (head->type != CPM_ID && head->type != CPM_REF) return;
+                    const string& op = head->text;
+                    if (op == R_STATIC || op == R_CONST || op == "return")
+                    {
+                        if (!CPMValidateDeclaration(node, &compilerLog)) noErrors = false;
+                        return;
+                    }
+                    if (op == "if" || op == "else" || op == "for")
+                    {
+                        for (auto child : node->children) validate(child);
+                        return;
+                    }
+                    bool pointer = false;
+                    auto type = resolveDataTypeName(head, pointer, getSourceFile(node->sourceFileName), functionSymbol.owner);
+                    if (type > 0)
+                    {
+                        if (!CPMValidateDeclaration(node, &compilerLog)) noErrors = false;
+                    }
+                    else if (!CPMValidateCall(node, &compilerLog)) noErrors = false;
+                };
+                validate(functionSymbol.bodyNode);
+            }
     }
 
     void CPMCompiler::detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner)
@@ -1180,6 +1239,11 @@ namespace CPM
 
             if ((typeNode->type == CPM_ID || typeNode->type == CPM_REF) && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
             {
+                if (!CPMValidateDeclaration(node, &compilerLog))
+                {
+                    noErrors = false;
+                    return;
+                }
                 string typeName = typeNode->text;
 
                 bool isPtr = false;
@@ -1212,6 +1276,11 @@ namespace CPM
                     CPMSyntaxTreeNode* argNode = argsNode->type == CPM_EXPR ? argsNode : argsNode->children[1];
                     for (int i = 1; i < argsNode->children.size() - 1; ++i)
                     {
+                        if (!CPMValidateDeclaration(argNode, &compilerLog))
+                        {
+                            noErrors = false;
+                            return;
+                        }
                         CPMArgumentSignature argSign;
                         bool argIsPtr = false;
                         int argCount = 1;
@@ -1898,6 +1967,19 @@ namespace CPM
 
         if (root->type == CPM_EXPR || root->type == CPM_LINE)
         {
+            if (root->children.empty())
+            {
+                compilerLog.Add(LOG_ERROR, "Expected a value or operator expression.", root->sourceFileName, root->lineNumber);
+                noErrors = false;
+                return false;
+            }
+            if (root->children.size() == 1)
+                return parseExpression(root->children[0], unfolded);
+            if (!CPMValidateCall(root, &compilerLog))
+            {
+                noErrors = false;
+                return false;
+            }
             unfolded.push_back({ (int)root->children.size() - 1, root->children[0] });
             for (int i = 1; i < root->children.size(); ++i)
             {
@@ -2094,56 +2176,26 @@ namespace CPM
         }
         CPMStructSymbol* structInstance = ist->second;
 
-        // Nested fields are not separate CPMStaticSymbols: each field is a
-        // copy of the struct layout entry whose offset is accumulated onto
-        // the parent's, yielding the field's absolute offset inside the
-        // namespace static buffer. All writes land in the shared symbol's
-        // buffer storage (or, for string fields, register their slot in
-        // the shared symbol's staticStrings), so the recursion below
-        // cannot clobber the symbol's immediate data.
-        //
-        // Two syntactic shapes are accepted for the literal struct:
-        //   * legacy ';'-separated CPM_BLOCK: children = '(' LINE(name,value)
-        //     LINE(name,value) … ')'. The surrounding '(' / ')' tokens are
-        //     skipped; each LINE holds two children (the field name and the
-        //     field value). Kept until test.cpm is rewritten in step 9.
-        //   * new ','-separated CPM_EXPR: children = name ',' value ',' name
-        //     ',' value … (no surrounding parens; comma CPM_CHAR tokens are
-        //     filtered out, then the remaining elements are paired up).
+        // Named fields are semicolon-separated bindings. A single binding
+        // without a trailing semicolon has the same grouping as an expression;
+        // the declaration's struct type supplies the initializer context.
         vector<pair<CPMSyntaxTreeNode*, CPMSyntaxTreeNode*>> fieldInits;
-
+        vector<CPMSyntaxTreeNode*> entries;
         if (valueNode->type == CPM_BLOCK)
+            entries.assign(valueNode->children.begin() + 1, valueNode->children.end() - 1);
+        else
+            entries.push_back(valueNode);
+        for (auto entry : entries)
         {
-            for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
+            const bool hasComma = find(entry->commaBefore.begin(), entry->commaBefore.end(), true) != entry->commaBefore.end();
+            if (entry->children.size() != 2 || entry->children[0]->type != CPM_ID || hasComma)
             {
-                CPMSyntaxTreeNode* fieldLine = valueNode->children[i];
-                if (fieldLine->type != CPM_LINE || fieldLine->children.size() != 2)
-                {
-                    compilerLog.Add(LOG_ERROR, "Unexpected syntax in literal struct declaration.", fieldLine->sourceFileName, fieldLine->lineNumber);
-                    noErrors = false;
-                    return false;
-                }
-                fieldInits.push_back(make_pair(fieldLine->children[0], fieldLine->children[1]));
-            }
-        }
-        else // CPM_EXPR
-        {
-            vector<CPMSyntaxTreeNode*> elements;
-            for (size_t i = 0; i < valueNode->children.size(); ++i)
-            {
-                CPMSyntaxTreeNode* c = valueNode->children[i];
-                if (c->type == CPM_CHAR && c->text.size() == 1 && c->text[0] == CPM_OPERAND_DELIM)
-                    continue;
-                elements.push_back(c);
-            }
-            if (elements.size() % 2 != 0)
-            {
-                compilerLog.Add(LOG_ERROR, "Unexpected syntax in literal struct declaration.", valueNode->sourceFileName, valueNode->lineNumber);
+                compilerLog.Add(LOG_ERROR, "Struct initializers use 'field value; field value' bindings, not operand commas.",
+                    entry->sourceFileName, entry->lineNumber);
                 noErrors = false;
                 return false;
             }
-            for (size_t i = 0; i + 1 < elements.size(); i += 2)
-                fieldInits.push_back(make_pair(elements[i], elements[i + 1]));
+            fieldInits.push_back(make_pair(entry->children[0], entry->children[1]));
         }
 
         for (size_t i = 0; i < fieldInits.size(); ++i)
@@ -2161,7 +2213,8 @@ namespace CPM
                 // static was declared in; redirect writes and name
                 // resolution to the symbol's own buffer.
                 sfield.owner = symbol->field.owner;
-                parseLiteralValue(symbol, sfield, fieldValue);
+                if (!parseLiteralValue(symbol, sfield, fieldValue))
+                    return false;
             }
             else
             {
@@ -2177,39 +2230,23 @@ namespace CPM
     {
         if (field.legacyCount() > 1)
         {
-            // Array literal — valueNode must be either:
-            //   * legacy ';'-separated CPM_BLOCK: children = '(' LINE … LINE ')'.
-            //   * new     ','-separated CPM_EXPR : children = elem ',' elem … (no
-            //     surrounding parens; the interleaved comma CPM_CHAR tokens are
-            //     dropped before addressing elements).
-            //   * legacy char-array-from-string shortcut `char text array N
-            //     "…N…"` (spec §5.6 removes it; kept until step 9 rewrites
-            //     test.cpm): here valueNode is a CPM_STR whose raw char
-            //     children are the per-element bytes.
+            // Semicolon-separated elements keep their LINE wrappers. A
+            // comma-separated expression is a call, never an array literal.
             vector<CPMSyntaxTreeNode*> elements;
             if (valueNode->type == CPM_BLOCK)
             {
                 for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
                     elements.push_back(valueNode->children[i]);
             }
-            else if (valueNode->type == CPM_EXPR)
-            {
-                for (size_t i = 0; i < valueNode->children.size(); ++i)
-                {
-                    CPMSyntaxTreeNode* c = valueNode->children[i];
-                    if (c->type == CPM_CHAR && c->text.size() == 1 && c->text[0] == CPM_OPERAND_DELIM)
-                        continue;
-                    elements.push_back(c);
-                }
-            }
             else if (field.legacyType() == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR)
             {
+                // Retained independently of separator changes until type migration.
                 for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
                     elements.push_back(valueNode->children[i]);
             }
             else
             {
-                compilerLog.Add(LOG_ERROR, "Invalid literal array syntax.", valueNode->sourceFileName, valueNode->lineNumber);
+                compilerLog.Add(LOG_ERROR, "Array initializer elements must be separated by semicolons.", valueNode->sourceFileName, valueNode->lineNumber);
                 noErrors = false;
                 return false;
             }
@@ -2232,10 +2269,7 @@ namespace CPM
                 }
                 else
                 {
-                    // Legacy BLOCK entries are CPM_LINE wraps around a single
-                    // value (e.g. `("ab")` becomes LINE([STR("ab")])).
-                    // Unwrap them so the per-type parser sees a leaf; the new
-                    // EXPR form already yields leaf nodes directly.
+                    // Unwrap a single array element before its per-type parser.
                     if (itemNode->type == CPM_LINE)
                     {
                         if (itemNode->children.size() == 1)
@@ -2307,7 +2341,8 @@ namespace CPM
             else
             {
                 vector<CPMUnfoldedExpressionNode> unfolded;
-                parseExpression(valueNode, unfolded);
+                if (!parseExpression(valueNode, unfolded))
+                    return false;
                 bool ok;
                 val = staticEvalNum(unfolded, ok, field.owner);
                 if (!ok)

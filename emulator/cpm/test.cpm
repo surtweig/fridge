@@ -66,19 +66,19 @@ struct person
     uint8 age;
 );
 
-static char charTest "x";
+static char charTest 'x';
 
 static string stringTest "zuzu";
 
 static char textTest array 5 "12345";//("1"; "2"; "3");//"1234567890";
 
-const uint8 intArraySize (+ 2 3);
+const uint8 intArraySize (+ 2, 3);
 
 const uint16 constAnswer 42;
 
 const string helloConst "Hello, const!";
 
-static uint8 MyStaticArray array intArraySize (0; + 1 1; 2; 3; 4);
+static uint8 MyStaticArray array intArraySize (0; + 1, 1; 2; 3; 4);
 
 static X2AL.Zuzu MyStaticZuzu (a 5; b 10; c 15);
 
@@ -118,7 +118,7 @@ struct cs1
 */
 uint8 func(#uint8 a; #uint8 b)
 (
-    return (+ ^a ^b);
+    return (+ ^a, ^b);
 );
 
 uint8 func(#uint8 b; uint8 x) ( ; );
@@ -130,30 +130,30 @@ void main()
     uint8 myArray array intArraySize;
     uint8 ttt array 3 (1;2;3);
     uint16 x;
-    uint8 z (+ 54 12);
+    uint8 z (+ 54, 12);
     //= (myArray 0) 1;
     //= (myArray 1) (myArray.data (- (myArray.data 0) 1));
-    if (== (myArray.data 0) 1)    
-        (putstr 0 0 "Hello, World!")
+    if (== (myArray.data 0), 1)
+        (putstr 0, 0, "Hello, World!")
     else if (0)
-        (putstr 0 0 "No way!")
+        (putstr 0, 0, "No way!")
     else
-        (putstr 0 0 "Hello, Darkness!");
+        (putstr 0, 0, "Hello, Darkness!");
     
-    for (uint8 i 0; < i intArraySize; ++ i)
+    for (uint8 i 0; < i, intArraySize; ++ i)
     (
-        if (== i 2)
+        if (== i, 2)
         (
-            putstr 0 0 "i == 2";
+            putstr 0, 0, "i == 2";
             //= (myArray.data i) i;
         );
         //= (myArray.data i) i;
     );
 
     //= (myArray.data i) i;
-    = x 15;
-    = z x;
-    = x z;
+    = x, 15;
+    = z, x;
+    = x, z;
     //= x (+ 5 z);
     //= #x 10;
 );

@@ -31,3 +31,19 @@ target_compile_definitions(cpm PRIVATE
     $<$<NOT:$<PLATFORM_ID:Windows>>:_TCHAR=char>
     $<$<NOT:$<PLATFORM_ID:Windows>>:_tmain=main>
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(cpm_separator_tests
+        tests/separators.cpp
+        CPMParser.cpp
+        CPMCompiler.cpp
+        CPMIntermediate.cpp
+        Logger.cpp
+    )
+    target_include_directories(cpm_separator_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    )
+    add_test(NAME cpm_separators COMMAND cpm_separator_tests)
+endif()

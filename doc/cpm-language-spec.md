@@ -12,7 +12,10 @@ assembler.
 
 ## 1. Lexical structure
 
-- **Whitespace**: space, tab, CR, LF — separators only, never significant.
+- **Whitespace**: space, tab, CR, LF. Whitespace is required between an
+  operator/callee and its first operand, after each operand comma, and between
+  a type and its declaration name. It is otherwise insignificant. A comment
+  alone does not supply required whitespace; comments never join tokens.
 - **Comments**:
   - Line: `// …` to end of line.
   - Block: `/* … */`, may span lines, may not nest.
@@ -27,8 +30,8 @@ assembler.
   `myArray.data`.
 - **Punctuation**:
   - `(` `)` — block and expression grouping
-  - `;`    — statement / argument separator
-  - `,`    — element separator inside array literals
+  - `;`    — statement, parameter-declaration, and initializer-element separator
+  - `,`    — separator between operator/function-call operands
   - `.`    — subscript / field access
   - `'`    — char delimiter
   - `"`    — string delimiter
@@ -41,7 +44,7 @@ assembler.
 |----------|----------|----------------------------------------|
 | `void`   | 0        | function return only; no variables     |
 | `bool`   | 1 byte   | `0` false, nonzero true                |
-| `char`   | 1 byte   | ASCII; literal form `"x"`              |
+| `char`   | 1 byte   | ASCII; literal form `'x'`              |
 | `uint8`  | 1 byte   | 0..255                                 |
 | `int8`   | 1 byte   | -128..127                              |
 | `uint16` | 2 bytes  | 0..65535  (also: pointer width)        |
@@ -89,7 +92,7 @@ it may be reassigned to point at another string literal, at a `(char array N)`
 in writable memory (via `addr`), or at any `(char ptr)`.
 
 There is **no implicit array↔pointer decay** and no implicit null termination
-for arrays. A `(char array N)` initialized with an array literal `('a','b','c')`
+for arrays. A `(char array N)` initialized with an array literal `('a'; 'b'; 'c')`
 holds exactly N characters — no trailing `0` is added. To pass a char array
 to a `string`-taking function, take its address explicitly (`(addr buf)`) and
 ensure it is null-terminated manually if the callee requires it.
@@ -111,7 +114,7 @@ bodies; the surrounding scope determines lifetime.
 decl ::= type-expr name [initializer] ";"
 initializer ::= "(" init-expr ")"
               | "(" init-list ")"
-init-list ::= init-elem ("," init-elem)*
+init-list ::= init-elem (";" init-elem)* [";"]
 init-elem ::= init-expr | initializer        // nested, for array-of-array
 ```
 
@@ -119,19 +122,26 @@ In any scope a bare type-expr (a single ID node or a parenthesized compound)
 is followed by a name and an optional initializer. The legacy postfix form
 `uint8 x array 10` is **removed**; use `(uint8 array 10) x`.
 
-An initializer list is **comma-separated** (`,`). It is used for array and
-array-of-struct initialization. Each element may itself be an initializer
-(`(…)`-parenthesized) for nesting. The legacy `;`-separated list form in
-the old test file is removed.
+An initializer list is **semicolon-separated** (`;`), preserving the original
+language design. A trailing semicolon is optional; empty elements between
+semicolons are invalid. Each element may itself be an initializer for nesting.
+Commas belong to operator calls inside an element, not to the element list.
+A declaration's type distinguishes an initializer from an executable block.
+For a single-element array, use `(value;)` to make the list explicit.
+
+Struct initializers use named bindings: `(field value; field value)` with an
+optional trailing semicolon. A nested struct uses the same syntax recursively.
+A single binding `(field value)` is interpreted as an initializer in a struct
+initialization context. There is no comma between a field name and its value.
+Parameter declarations likewise remain semicolon-separated (§4.4).
 
 Examples:
 ```
 uint8 x;
-uint16 y (+ 54 12);
-(uint8 array intArraySize) myArr (0, (+ 1 1), 2, 3, 4);
-(char array 3) buf ('a', 'b', 'c');
-((uint8 array 2) array 2) grid ((1, 2), (3, 4));
-(uint8 ptr) px (addr x);
+uint16 y (+ 54, 12);
+(uint8 array intArraySize) myArr (0; (+ 1, 1); 2; 3; 4);
+(char array 3) buf ('a'; 'b'; 'c');
+((uint8 array 2) array 2) grid ((1; 2); (3; 4));
 (uint8 ptr) px (addr x);
 ```
 
@@ -208,8 +218,24 @@ Intrinsics are declared exactly like other prototypes; no extra syntax.
 
 ## 5. Expressions
 
-Expressions are uniformly prefix: `(operator operand operand …)`. A bare
-identifier, literal, or paren-less form is also an expression.
+Expressions are uniformly prefix: `(operator operand, operand, …)`. There
+is whitespace, not a comma, before the first operand. Each subsequent operand
+requires a comma followed by whitespace; whitespace-only multi-operand calls,
+empty operands, and trailing commas are invalid. Zero-operand calls use
+`(name)`. A bare identifier or literal is also an expression.
+
+A paren-less call uses the same separators and ends at `;` (or the closing
+parenthesis of a surrounding semicolon-separated list). Nested calls must be
+parenthesized, so their commas cannot be confused with those of the outer call:
+
+```cpm
+= x, (func a, b, c);
+(= x, (func a, b, c));
+(< (+ 1, 2), 4);
+```
+
+Declaration components, type modifiers, `return expr`, and named struct-field
+bindings are not call operand lists and do not gain commas.
 
 ### 5.1 Operators
 
@@ -226,16 +252,16 @@ identifier, literal, or paren-less form is also an expression.
 | `= += -= *= /= %=` | 2 | assignment, returns the assigned value   |
 | `at`        | 2     | array index / pointer deref (see §5.2)        |
 | `addr`      | 1     | address-of (yields `(T ptr)`)                 |
-| `cast`      | 2     | `(cast type-expr expr)` numeric/ptr narrowing|
+| `cast`      | 2     | `(cast type-expr, expr)` numeric/ptr narrowing|
 
 ### 5.2 `at` — index and deref
 
-`(at aggregate index)` reads element `index` of an array, or — if the
+`(at aggregate, index)` reads element `index` of an array, or — if the
 aggregate is a plain pointer — dereferences it. When `index` is given, the
 aggregate must have array type; when omitted, it must have pointer type.
 
 ```
-(at arr i)                  // arr: (T array n);  yields T
+(at arr, i)                  // arr: (T array n);  yields T
 (at ptr)                    // ptr: (T ptr);      yields T
 ```
 
@@ -255,7 +281,7 @@ Member access is an lvalue when its receiver is.
 
 ### 5.5 Function call
 
-`(name arg arg …)` calls a function. Overload resolution picks the unique
+`(name arg, arg, …)` calls a function. Overload resolution picks the unique
 function in scope whose argument count and (possibly coerced) types match;
 ambiguity is a compile error. Passing a value where a pointer is expected
 requires an explicit `(addr …)`.
@@ -264,7 +290,7 @@ requires an explicit `(addr …)`.
 
 A number, char, or string literal is an expression of its natural type:
 `42 : uint8` (narrowed on assignment if needed), `'x' : char`, `"…" : string`.
-Array-literal initializers `(1, 2, 3)` are **not** expressions in their own
+Array-literal initializers `(1; 2; 3)` are **not** expressions in their own
 right — they appear only as the initializer of a `(T array N)` declaration,
 not as a value inside an expression. To get an array value into a variable
 later, use `(at …)` element-by-element.
@@ -296,7 +322,7 @@ A function body is a sequence of statements. Statements end with `;`.
 statement ::=
     declaration          // local var
   | assignment           // (= lvalue expr) etc.
-  | expression ";"      // for side effects, e.g. (putstr 0 0 "…");
+  | expression ";"      // for side effects, e.g. (putstr 0, 0, "…");
   | "return" [expr] ";"
   | "if" chain
   | "for" "(" init ";" cond ";" step ")" body
@@ -409,7 +435,7 @@ should be a language feature, not a textual one.
 
 ## 14. Open questions
 
-1. **`for` step side effects.** Allow `(= i (+ i 2))` as a step, or only
+1. **`for` step side effects.** Allow `(= i, (+ i, 2))` as a step, or only
    `++`/`--`/assignment-operators? Current intermediate only shows `++ i`.
 
 2. **Break/continue.** Confirm v1 ships without them, or add them now while

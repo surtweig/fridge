@@ -12,6 +12,7 @@ namespace CPM
     {
         CPM_UNDEFINED,
         CPM_CHAR,
+        CPM_COMMENT,     // trivia boundary; never satisfies required whitespace
         CPM_NUM,
         CPM_STR,
         CPM_CHARLIT,
@@ -49,6 +50,9 @@ namespace CPM
         string text;
         string sourceFileName;
         int lineNumber;
+        // Parallel to children: separators retained after punctuation is removed.
+        vector<bool> commaBefore;
+        vector<bool> whitespaceBefore;
     };
 
     class Logger;
@@ -86,17 +90,6 @@ namespace CPM
         inline CPMNumberFormat Format() { return format; }
     };
 
-    class CPMSD_STR : public CPMSyntaxDetector
-    {
-    private:
-        bool closed;
-    public:
-        CPMSD_STR();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_STR; }
-    };
-
     class CPMSD_ID : public CPMSyntaxDetector
     {
     private:
@@ -106,16 +99,6 @@ namespace CPM
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
         //bool Complete() override;
         CPMSyntaxNodeType Type() override { return CPM_ID; }
-    };
-
-    class CPMSD_CHARLIT : public CPMSyntaxDetector
-    {
-    private:
-        bool closed;
-    public:
-        CPMSD_CHARLIT();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        CPMSyntaxNodeType Type() override { return CPM_CHARLIT; }
     };
 
     // Joins dot-separated identifiers (NS.Name, a.b.c) into a single CPM_REF
@@ -129,42 +112,6 @@ namespace CPM
         CPMSD_REF();
         bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
         CPMSyntaxNodeType Type() override { return CPM_REF; }
-    };
-
-    class CPMSD_EXPR : public CPMSyntaxDetector
-    {
-    private:
-        //bool closed;
-        int pcounter;
-        int itemsCount;
-        bool opened;
-    public:
-        CPMSD_EXPR();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_EXPR; }
-    };
-
-    class CPMSD_LINE : public CPMSyntaxDetector
-    {
-    private:
-        int itemsCount;
-    public:
-        CPMSD_LINE();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_LINE; }
-    };
-
-    class CPMSD_BLOCK :public CPMSyntaxDetector
-    {
-    private:
-        int pcounter;
-    public:
-        CPMSD_BLOCK();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_BLOCK; }
     };
 
     inline bool CharIsDigit(char c) { return c >= '0' && c <= '9'; }
@@ -184,6 +131,11 @@ namespace CPM
 
     void DeleteSyntaxTree(CPMSyntaxTreeNode* root);
 
+    // Validate a sequence after its semantic context identifies it as a call.
+    // Declarations and named struct-field bindings do not use call separators.
+    bool CPMValidateCall(CPMSyntaxTreeNode* node, Logger* logger);
+    bool CPMValidateDeclaration(CPMSyntaxTreeNode* node, Logger* logger);
+
     class CPMParser
     {
     private:
@@ -193,14 +145,12 @@ namespace CPM
         Logger* compilerLog;
 
         void pass_CHAR(string sourceFileName);
-        void pass_Comments();
+        void pass_LiteralsAndComments();
+        void pass_Groups();
+        CPMSyntaxTreeNode* groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
+                                        CPMSyntaxNodeType type);
+        void syntaxError(CPMSyntaxTreeNode* node, const string& message);
         template <typename DetectorType> bool pass_Detector(CPMSyntaxNodeType NodeType);
-
-        /*void pass_STR();
-        void pass_ID_NUM();
-        void pass_EXPR();
-        void pass_LINE();
-        void pass_BLOCK();*/
 
         void pushSyntaxTreeNode(CPMSyntaxTreeNode* node, list<CPMSyntaxTreeNode*>::iterator childrenSeqStart, list<CPMSyntaxTreeNode*>::iterator childrenSeqFinish, CPMSyntaxDetector* detector);
     public:

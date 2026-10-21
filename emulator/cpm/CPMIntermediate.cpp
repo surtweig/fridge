@@ -133,6 +133,8 @@ namespace CPM
             CPMSyntaxTreeNode* line = SyntaxNode()->children[childIndex];
             if (line->type == CPM_LINE)
             {
+                if (line->children.size() == 1 && line->children[0]->type == CPM_EXPR)
+                    line = line->children[0];
                 if (line->children.size() > 0)
                 {
                     CPMSyntaxTreeNode* opname = line->children[0];
@@ -156,6 +158,11 @@ namespace CPM
 
                         if (dataType > 0)
                         {
+                            if (!CPMValidateDeclaration(line, CompilerLog()))
+                            {
+                                Error();
+                                return;
+                            }
                             children.push_back(new CPMOperator_Alloc(dataType, isPtr, this, line));
                         }
                         else if (dataType == CPM_DATATYPE_AMBIGUOUS)
@@ -172,6 +179,16 @@ namespace CPM
                         }
                         else
                         {
+                            // Control statements and storage declarations have
+                            // their own grammar; all other executable lines
+                            // use the same separators as parenthesized calls.
+                            const string& op = opname->text;
+                            if (op != "if" && op != "else" && op != "for" && op != "return" &&
+                                op != R_STATIC && op != R_CONST && !CPMValidateCall(line, CompilerLog()))
+                            {
+                                Error();
+                                return;
+                            }
                             if (opname->text == OP_ASSIGN)
                             {
                                 children.push_back(new CPMOperator_Assign(this, line));
