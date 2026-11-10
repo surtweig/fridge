@@ -80,6 +80,7 @@ namespace CPM
     {
     protected:
         map<string, CPMDataSymbol*> locals;
+        vector<unique_ptr<CPMDataSymbol>> localStorage;
         FRIDGE_DWORD stackOffset;
 
         CPMSemanticBlock(CPMSyntaxTreeNode* syntaxNode, CPMFunctionSymbol* ownerFunction);
@@ -103,7 +104,7 @@ namespace CPM
     class CPMOperator_Alloc : public CPMExecutableSemanticNode
     {
     public:
-        CPMOperator_Alloc(CPMDataType dataType, bool isPtr, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
+        CPMOperator_Alloc(const CPMType& type, CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode);
         virtual CPMRelativeCodeChunk* GenerateCode();
         virtual void procreate() {};
     };

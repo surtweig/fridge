@@ -141,6 +141,12 @@ namespace CPM
                 seq.push_back(cur);
             if (next)
             {
+                if (next->type == CPM_TYPE_OPEN || next->type == CPM_TYPE_CLOSE)
+                {
+                    complete = seq.size() > 1;
+                    if (!complete) seq.clear();
+                    return false;
+                }
                 if (next->type == CPM_CHAR)
                 {
                     char c = next->text[0];
@@ -186,6 +192,7 @@ namespace CPM
 
         pass_CHAR(sourceFileName);
         pass_LiteralsAndComments();
+        pass_Angles();
         pass_Detector<CPMSD_ID>(CPM_ID);
         pass_Detector<CPMSD_NUM>(CPM_NUM);
         while (pass_Detector<CPMSD_REF>(CPM_REF)) {}
@@ -310,6 +317,24 @@ namespace CPM
         noErrors = false;
     }
 
+    bool CPMSD_TYPEEXPR::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode*, Logger*)
+    {
+        if (complete) return false;
+        if (!opened)
+        {
+            opened = cur->type == CPM_TYPE_OPEN;
+            return opened;
+        }
+        if (cur->type == CPM_TYPE_CLOSE)
+        {
+            complete = true;
+            return false;
+        }
+        if (!IsTrivia(cur) && !IsChar(cur, CPM_OPERAND_DELIM))
+            seq.push_back(cur);
+        return true;
+    }
+
     void CPMParser::pass_LiteralsAndComments()
     {
         vector<CPMSyntaxTreeNode*> raw(layer.begin(), layer.end());
@@ -369,6 +394,78 @@ namespace CPM
         }
     }
 
+    void CPMParser::pass_Angles()
+    {
+        vector<CPMSyntaxTreeNode*> raw(layer.begin(), layer.end());
+        layer.clear();
+        vector<char> delimiters;
+        for (size_t i = 0; i < raw.size(); ++i)
+        {
+            auto node = raw[i];
+            if (IsChar(node, CPM_BLOCK_OPEN))
+                delimiters.push_back(CPM_BLOCK_OPEN);
+            else if (IsChar(node, CPM_BLOCK_CLOSE))
+            {
+                // Grouping reports mismatches. Recover the lexical context so
+                // later comparisons do not inherit an unclosed type context.
+                while (!delimiters.empty() && delimiters.back() == CPM_TYPE_OPEN_DELIM)
+                    delimiters.pop_back();
+                if (!delimiters.empty()) delimiters.pop_back();
+            }
+            else if (IsChar(node, CPM_LINE_END))
+            {
+                while (!delimiters.empty() && delimiters.back() == CPM_TYPE_OPEN_DELIM)
+                    delimiters.pop_back();
+            }
+            else if (IsChar(node, CPM_TYPE_OPEN_DELIM) || IsChar(node, CPM_TYPE_CLOSE_DELIM))
+            {
+                const char angle = node->text[0];
+                auto following = i + 1 < raw.size() ? raw[i + 1] : nullptr;
+                const bool closeType = angle == CPM_TYPE_CLOSE_DELIM && !delimiters.empty() &&
+                    delimiters.back() == CPM_TYPE_OPEN_DELIM;
+                size_t typeStart = i + 1;
+                while (typeStart < raw.size() && IsChar(raw[typeStart], CPM_TYPE_OPEN_DELIM)) ++typeStart;
+                const bool openType = angle == CPM_TYPE_OPEN_DELIM && typeStart < raw.size() &&
+                    raw[typeStart]->type == CPM_CHAR && CharIsIdentifierStart(raw[typeStart]->text[0]);
+                if (openType)
+                {
+                    node->type = CPM_TYPE_OPEN;
+                    delimiters.push_back(CPM_TYPE_OPEN_DELIM);
+                }
+                else if (closeType)
+                {
+                    node->type = CPM_TYPE_CLOSE;
+                    delimiters.pop_back();
+                    if (following && IsChar(following, '='))
+                        syntaxError(node, "A type closes with '>', not '>='; comparisons in array sizes must be parenthesized.");
+                }
+                else
+                {
+                    // Comparison tokens stay IDs for existing expression users.
+                    // Only a real source whitespace byte can start an operand.
+                    node->type = CPM_ID;
+                    if (following && (IsChar(following, '=') || IsChar(following, angle)))
+                    {
+                        node->text += following->text;
+                        DeleteSyntaxTree(following);
+                        ++i;
+                        following = i + 1 < raw.size() ? raw[i + 1] : nullptr;
+                    }
+                    if (!following || following->type != CPM_CHAR || !CharIsWhiteSpace(following->text[0]))
+                        syntaxError(node, "Whitespace is required after a comparison operator; a type must start immediately with its type name or '<'.");
+                    if (!layer.empty())
+                    {
+                        auto previous = layer.back();
+                        if (!(previous->type == CPM_CHAR && CharIsWhiteSpace(previous->text[0])) &&
+                            !IsChar(previous, CPM_BLOCK_OPEN))
+                            syntaxError(node, "A comparison operator must be a separate token.");
+                    }
+                }
+            }
+            layer.push_back(node);
+        }
+    }
+
     CPMSyntaxTreeNode* CPMParser::groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
                                                CPMSyntaxNodeType type)
     {
@@ -402,6 +499,10 @@ namespace CPM
             {
                 if (comma && !whitespace)
                     syntaxError(child, "Whitespace is required after an operand comma.");
+                if (!node->children.empty() &&
+                    (node->children.back()->type == CPM_TYPEEXPR || child->type == CPM_TYPEEXPR) &&
+                    !whitespace && !comma)
+                    syntaxError(child, "Whitespace is required after a type expression before a name or type component.");
                 if (node->children.empty())
                 {
                     node->sourceFileName = child->sourceFileName;
@@ -417,6 +518,13 @@ namespace CPM
         }
         if (comma)
             syntaxError(node, "Trailing commas are not allowed in operator calls.");
+        if (type == CPM_LINE && !node->children.empty())
+        {
+            const string& head = node->children[0]->text;
+            if ((head == "<" || head == ">" || head == "<=" || head == ">=") &&
+                !CPMValidateCall(node, compilerLog))
+                noErrors = false;
+        }
         return node;
     }
 
@@ -461,41 +569,99 @@ namespace CPM
         function<CPMSyntaxTreeNode*(CPMSyntaxTreeNode*)> group;
         group = [&](CPMSyntaxTreeNode* opening) -> CPMSyntaxTreeNode*
         {
+            const bool typeGroup = opening->type == CPM_TYPE_OPEN;
+            CPMSD_TYPEEXPR typeDetector;
+            if (typeGroup) typeDetector.PutNode(opening, nullptr, compilerLog);
             vector<CPMSyntaxTreeNode*> contents;
             CPMSyntaxTreeNode* closing = nullptr;
             while (position < tokens.size())
             {
                 auto token = tokens[position++];
-                if (IsChar(token, CPM_BLOCK_OPEN))
-                    contents.push_back(group(token));
-                else if (IsChar(token, CPM_BLOCK_CLOSE))
+                if (IsChar(token, CPM_BLOCK_OPEN) || token->type == CPM_TYPE_OPEN)
+                {
+                    auto child = group(token);
+                    contents.push_back(child);
+                    if (typeGroup) typeDetector.PutNode(child, nullptr, compilerLog);
+                }
+                else if ((!typeGroup && IsChar(token, CPM_BLOCK_CLOSE)) ||
+                         (typeGroup && token->type == CPM_TYPE_CLOSE))
                 {
                     closing = token;
+                    if (typeGroup) typeDetector.PutNode(token, nullptr, compilerLog);
+                    break;
+                }
+                else if (IsChar(token, CPM_BLOCK_CLOSE) || token->type == CPM_TYPE_CLOSE ||
+                         (typeGroup && IsChar(token, CPM_LINE_END)))
+                {
+                    // Leave the mismatched delimiter for the enclosing group or
+                    // top-level recovery; do not swallow the next declaration.
+                    --position;
                     break;
                 }
                 else
+                {
                     contents.push_back(token);
+                    if (typeGroup) typeDetector.PutNode(token, nullptr, compilerLog);
+                }
             }
             if (!closing)
             {
-                syntaxError(opening, "Unclosed parenthesized group.");
+                syntaxError(opening, typeGroup ? "Unclosed type expression; expected '>'." :
+                                                "Unclosed parenthesized group; expected ')'.");
                 closing = new CPMSyntaxTreeNode{};
-                closing->type = CPM_CHAR;
+                closing->type = typeGroup ? CPM_TYPE_CLOSE : CPM_CHAR;
                 closing->sourceFileName = opening->sourceFileName;
                 closing->lineNumber = opening->lineNumber;
             }
-            const bool block = any_of(contents.begin(), contents.end(),
+            const bool block = !typeGroup && any_of(contents.begin(), contents.end(),
                 [](CPMSyntaxTreeNode* n) { return IsChar(n, CPM_LINE_END); });
             CPMSyntaxTreeNode* result;
-            if (!block)
+            if (typeGroup)
+            {
+                result = groupSequence(contents, typeDetector.Type());
+                // The detector and shared sequence builder see the same grouped
+                // atoms; only the latter retains their source separator metadata.
+                typeDetector.CopySeqTo(result->children);
+                const auto& c = result->children;
+                if (c.empty() || (c[0]->type != CPM_ID && c[0]->type != CPM_REF && c[0]->type != CPM_TYPEEXPR))
+                    syntaxError(opening, "A type expression must start with a type name or nested type.");
+                if (find(result->commaBefore.begin(), result->commaBefore.end(), true) != result->commaBefore.end())
+                    syntaxError(opening, "Type components use whitespace, not operand commas.");
+                for (size_t i = 1; i < c.size(); ++i)
+                {
+                    if (!result->whitespaceBefore[i])
+                        syntaxError(c[i], "Whitespace is required between type components.");
+                    if (c[i]->type != CPM_ID || (c[i]->text != "ptr" && c[i]->text != "array"))
+                    {
+                        syntaxError(c[i], "Expected 'ptr' or 'array' in a type expression.");
+                        break;
+                    }
+                    if (c[i]->text == "array")
+                    {
+                        if (++i == c.size())
+                        {
+                            syntaxError(opening, "An array modifier requires a count.");
+                            break;
+                        }
+                        if (!result->whitespaceBefore[i])
+                            syntaxError(c[i], "Whitespace is required before an array count.");
+                        if (c[i]->type != CPM_ID && c[i]->type != CPM_REF && c[i]->type != CPM_NUM && c[i]->type != CPM_EXPR)
+                            syntaxError(c[i], "An array count must be a constant name, number, or parenthesized expression.");
+                    }
+                }
+                result->text = opening->text + result->text + closing->text;
+                result->lineNumber = opening->lineNumber;
+                result->sourceFileName = opening->sourceFileName;
+                DeleteSyntaxTree(opening);
+                DeleteSyntaxTree(closing);
+            }
+            else if (!block)
             {
                 result = groupSequence(contents, CPM_EXPR);
-                // Keep legacy type groups until the separate angle-type migration.
                 const auto& c = result->children;
-                const bool typeGroup = c.size() >= 2 && c[1]->type == CPM_ID &&
-                    (c[1]->text == "ptr" || c[1]->text == "array");
+                const bool typedParameter = c.size() == 2 && c[0]->type == CPM_TYPEEXPR && c[1]->type == CPM_ID;
                 const bool arrayParameter = c.size() >= 3 && c[2]->type == CPM_ID && c[2]->text == "array";
-                if (!typeGroup && !arrayParameter && c.size() > 1)
+                if (!typedParameter && !arrayParameter && c.size() > 1)
                 {
                     if (c[0]->type != CPM_ID && c[0]->type != CPM_REF)
                         syntaxError(opening, "Initializer elements require semicolons; a call must start with an operator.");
@@ -552,16 +718,16 @@ namespace CPM
         while (position < tokens.size())
         {
             auto token = tokens[position++];
-            if (IsChar(token, CPM_BLOCK_OPEN))
+            if (IsChar(token, CPM_BLOCK_OPEN) || token->type == CPM_TYPE_OPEN)
                 line.push_back(group(token));
             else if (IsChar(token, CPM_LINE_END))
             {
                 finishLine();
                 DeleteSyntaxTree(token);
             }
-            else if (IsChar(token, CPM_BLOCK_CLOSE))
+            else if (IsChar(token, CPM_BLOCK_CLOSE) || token->type == CPM_TYPE_CLOSE)
             {
-                syntaxError(token, "Unexpected closing parenthesis.");
+                syntaxError(token, "Unexpected closing delimiter.");
                 DeleteSyntaxTree(token);
             }
             else
@@ -630,6 +796,12 @@ namespace CPM
             s += "ID"; break;
         case CPM_REF:
             s += "REF"; break;
+        case CPM_TYPE_OPEN:
+            s += "TYPE_OPEN"; break;
+        case CPM_TYPE_CLOSE:
+            s += "TYPE_CLOSE"; break;
+        case CPM_TYPEEXPR:
+            s += "TYPEEXPR"; break;
         case CPM_EXPR:
             s += "EXPR"; break;
         case CPM_LINE:

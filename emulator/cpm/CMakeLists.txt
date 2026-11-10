@@ -46,4 +46,15 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     )
     add_test(NAME cpm_separators COMMAND cpm_separator_tests)
+    add_executable(cpm_type_tests
+        tests/type_expressions.cpp
+        CPMParser.cpp CPMCompiler.cpp CPMIntermediate.cpp Logger.cpp
+    )
+    target_include_directories(cpm_type_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    )
+    target_compile_definitions(cpm_type_tests PRIVATE
+        CPM_EXAMPLE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/test.cpm"
+    )
+    add_test(NAME cpm_types COMMAND cpm_type_tests)
 endif()

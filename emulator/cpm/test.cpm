@@ -1,3 +1,5 @@
+// Declaration/type-expression integration example. Runtime call/control-flow
+// lowering remains incomplete; see doc/cpm-refactor-plan.md.
 //include "vtext.binc";
 //include "stdapp.cinc";
  
@@ -32,7 +34,7 @@ namespace VTEXT imports "vtext.bin"
     (
         __mvi_b column;
         __mvi_c row;
-        __lxi_hl (uint16 str);
+        __lxi_hl (cast uint16, str);
         __callsub 0x00A3;
     );
 );
@@ -42,10 +44,10 @@ namespace VTEXT imports "vtext.bin"
 /*
 const type name;
 const type name value;
-const type name array size;
-const type name array size value;
-const type name imports addr;
-const type name array size imports addr;
+const <type array size> name;
+const <type array size> name value;
+static type name imports addr;
+static <type array size> name imports addr;
 */
 
 struct uint8pair
@@ -70,7 +72,7 @@ static char charTest 'x';
 
 static string stringTest "zuzu";
 
-static char textTest array 5 "12345";//("1"; "2"; "3");//"1234567890";
+static <char array 5> textTest ('1'; '2'; '3'; '4'; '5');
 
 const uint8 intArraySize (+ 2, 3);
 
@@ -78,13 +80,13 @@ const uint16 constAnswer 42;
 
 const string helloConst "Hello, const!";
 
-static uint8 MyStaticArray array intArraySize (0; + 1, 1; 2; 3; 4);
+static <uint8 array intArraySize> MyStaticArray (0; + 1, 1; 2; 3; 4);
 
 static X2AL.Zuzu MyStaticZuzu (a 5; b 10; c 15);
 
 const X2AL.Zuzu constZuzu (a 1; b 2; c 3);
 
-static string stringArrayTest array 2 ("ab"; "cd");
+static <string array 2> stringArrayTest ("ab"; "cd");
 
 static person me (name "zuzu"; age 36);
 
@@ -92,14 +94,14 @@ const person nobody (name "none"; age 0);
 
 struct intArray
 (   
-    uint8 data array intArraySize;
+    <uint8 array intArraySize> data;
 );
 
 struct complexStruct
 (
     string name;
     intArray arr;
-    char text array 256;
+    <char array 256> text;
     string text2;
     //complexStruct zuzu;
     //cs2 _cs2;
@@ -116,24 +118,24 @@ struct cs1
     complexStruct _cS;
 );
 */
-uint8 func(#uint8 a; #uint8 b)
+uint8 func(<uint8 ptr> a; <uint8 ptr> b)
 (
-    return (+ ^a, ^b);
+    return (+ (at a), (at b));
 );
 
-uint8 func(#uint8 b; uint8 x) ( ; );
+uint8 func(<uint8 ptr> b; uint8 x) ( ; );
 
 void main()
 (
     //intArray myArray 0;
     uint16 y;
-    uint8 myArray array intArraySize;
-    uint8 ttt array 3 (1;2;3);
+    <uint8 array intArraySize> myArray;
+    <uint8 array 3> ttt (1;2;3);
     uint16 x;
     uint8 z (+ 54, 12);
-    //= (myArray 0) 1;
-    //= (myArray 1) (myArray.data (- (myArray.data 0) 1));
-    if (== (myArray.data 0), 1)
+    //= (at myArray, 0), 1;
+    //= (at myArray, 1), (at myArray, (- (at myArray, 0), 1));
+    if (== (at myArray, 0), 1)
         (putstr 0, 0, "Hello, World!")
     else if (0)
         (putstr 0, 0, "No way!")
@@ -145,15 +147,15 @@ void main()
         if (== i, 2)
         (
             putstr 0, 0, "i == 2";
-            //= (myArray.data i) i;
+            //= (at myArray, i), i;
         );
-        //= (myArray.data i) i;
+        //= (at myArray, i), i;
     );
 
-    //= (myArray.data i) i;
+    //= (at myArray, i), i;
     = x, 15;
     = z, x;
     = x, z;
-    //= x (+ 5 z);
-    //= #x 10;
+    //= x, (+ 5, z);
+    //= (at (addr x)), 10;
 );

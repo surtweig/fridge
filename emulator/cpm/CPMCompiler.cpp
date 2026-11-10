@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <functional>
 #include <stdlib.h>
+#include <cerrno>
+#include <limits>
 
 namespace CPM
 {
@@ -24,104 +26,7 @@ namespace CPM
     {
     }
 
-    CPMDataType CPMDataSymbol::legacyType() const
-    {
-        // The "element type" view: for an array, the child's base; for a
-        // pointer, the child's base; for a base, the base itself. Only valid
-        // for the legacy-supported flat shapes.
-        switch (typeExpr.kind)
-        {
-        case CPM_TYPE_BASE:  return typeExpr.base;
-        case CPM_TYPE_PTR:   return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
-        case CPM_TYPE_ARRAY: return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
-        case CPM_TYPE_VOID:  return CPM_DATATYPE_UNDEFINED;
-        }
-        return CPM_DATATYPE_UNDEFINED;
-    }
 
-    bool CPMDataSymbol::legacyIsPtr() const
-    {
-        return typeExpr.kind == CPM_TYPE_PTR;
-    }
-
-    int CPMDataSymbol::legacyCount() const
-    {
-        return typeExpr.kind == CPM_TYPE_ARRAY ? typeExpr.arrayCount : 1;
-    }
-
-    void CPMDataSymbol::setLegacyType(CPMDataType base, bool isPtr, int count)
-    {
-        typeExpr.child.reset();
-        typeExpr.arrayCount = 0;
-        if (isPtr)
-        {
-            typeExpr.kind = CPM_TYPE_PTR;
-            typeExpr.child.reset(new CPMType());
-            typeExpr.child->kind = CPM_TYPE_BASE;
-            typeExpr.child->base = base;
-        }
-        else if (count > 1)
-        {
-            typeExpr.kind = CPM_TYPE_ARRAY;
-            typeExpr.arrayCount = count;
-            typeExpr.child.reset(new CPMType());
-            typeExpr.child->kind = CPM_TYPE_BASE;
-            typeExpr.child->base = base;
-        }
-        else
-        {
-            typeExpr.kind = CPM_TYPE_BASE;
-            typeExpr.base = base;
-        }
-    }
-
-    CPMDataType CPMArgumentSignature::legacyType() const
-    {
-        switch (typeExpr.kind)
-        {
-        case CPM_TYPE_BASE:  return typeExpr.base;
-        case CPM_TYPE_PTR:   return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
-        case CPM_TYPE_ARRAY: return typeExpr.child ? typeExpr.child->base : CPM_DATATYPE_UNDEFINED;
-        case CPM_TYPE_VOID:  return CPM_DATATYPE_UNDEFINED;
-        }
-        return CPM_DATATYPE_UNDEFINED;
-    }
-
-    bool CPMArgumentSignature::legacyIsPtr() const
-    {
-        return typeExpr.kind == CPM_TYPE_PTR;
-    }
-
-    int CPMArgumentSignature::legacyCount() const
-    {
-        return typeExpr.kind == CPM_TYPE_ARRAY ? typeExpr.arrayCount : 1;
-    }
-
-    void CPMArgumentSignature::setLegacyType(CPMDataType base, bool isPtr, int count)
-    {
-        typeExpr.child.reset();
-        typeExpr.arrayCount = 0;
-        if (isPtr)
-        {
-            typeExpr.kind = CPM_TYPE_PTR;
-            typeExpr.child.reset(new CPMType());
-            typeExpr.child->kind = CPM_TYPE_BASE;
-            typeExpr.child->base = base;
-        }
-        else if (count > 1)
-        {
-            typeExpr.kind = CPM_TYPE_ARRAY;
-            typeExpr.arrayCount = count;
-            typeExpr.child.reset(new CPMType());
-            typeExpr.child->kind = CPM_TYPE_BASE;
-            typeExpr.child->base = base;
-        }
-        else
-        {
-            typeExpr.kind = CPM_TYPE_BASE;
-            typeExpr.base = base;
-        }
-    }
 
     // ---- CPMType ----
 
@@ -347,9 +252,9 @@ namespace CPM
 
         readNamespaces();
         readStatics(1);
-        readStructs();
-        readStatics(2);
-        readFunctions();
+        if (noErrors) readStructs();
+        if (noErrors) readStatics(2);
+        if (noErrors) readFunctions();
 
         if (noErrors)
         {
@@ -604,76 +509,30 @@ namespace CPM
         return nullptr;
     }
 
-    CPMStaticSymbol* CPMCompiler::addStatic(string name, CPMNamespace* ns, bool isConst, bool isPtr, CPMDataType type, FRIDGE_DWORD count, int importSource)
+    CPMStaticSymbol* CPMCompiler::addStatic(string name, CPMNamespace* ns, bool isConst,
+                                             const CPMType& type, int importSource)
     {
-        ns->statics[name].field.name = name;
-        CPMStaticSymbol* ss = &(ns->statics.find(name)->second);
-        ss->isconst = isConst;
-        // Reconstruct the canonical CPMType from the legacy flat triple. This
-        // helper exists because callers (readStatics/readStructFields/etc.)
-        // are still on the old API; once they are migrated to parseTypeExpr
-        // (step 4 follow-up) this addStatic overload can disappear in favour
-        // of one that takes CPMType directly.
-        if (isPtr)
+        auto& symbol = ns->statics[name];
+        symbol.field.name = name;
+        symbol.field.typeExpr = type;
+        symbol.field.owner = ns;
+        symbol.isconst = isConst;
+        symbol.importSource = importSource;
+        const bool immediate = isConst && (type.isPtr() ||
+            (type.isBase() && (type.isString() || IsImmediateDataType(type.base))));
+        if (!immediate && importSource < 0)
         {
-            ss->field.typeExpr.kind = CPM_TYPE_PTR;
-            ss->field.typeExpr.child.reset(new CPMType());
-            ss->field.typeExpr.child->kind = CPM_TYPE_BASE;
-            ss->field.typeExpr.child->base = type;
-        }
-        else if (count > 1)
-        {
-            ss->field.typeExpr.kind = CPM_TYPE_ARRAY;
-            ss->field.typeExpr.arrayCount = (int)count;
-            ss->field.typeExpr.child.reset(new CPMType());
-            ss->field.typeExpr.child->kind = CPM_TYPE_BASE;
-            ss->field.typeExpr.child->base = type;
-        }
-        else
-        {
-            ss->field.typeExpr.kind = CPM_TYPE_BASE;
-            ss->field.typeExpr.base = type;
-        }
-        ss->field.owner = ns;
-        ss->field.offset = 0;
-
-        bool isString = ss->field.typeExpr.kind == CPM_TYPE_BASE && ss->field.typeExpr.base == CPM_DATATYPE_STRING;
-        // Pointers and 1-2 byte primitives fold into immediateData; strings
-        // fold to the relative address of their chars. Arrays and structs
-        // always need buffer storage.
-        bool canFold = ss->isconst && count == 1 &&
-            (isPtr || isString || (ss->field.typeExpr.kind == CPM_TYPE_BASE && IsImmediateDataType(ss->field.typeExpr.base)));
-
-        if (canFold)
-        {
-            ss->staticData = nullptr;
-            ss->immediateData = 0;
-        }
-        else
-        {
-            if (importSource < 0)
+            const int size = sizeOfTypeExpr(type);
+            symbol.staticData = ns->staticAllocate(nullptr, size, 1);
+            if (!symbol.staticData)
             {
-                if (!isPtr)
-                    ss->staticData = ns->staticAllocate(nullptr, sizeOfType(type), count);
-                else
-                    ss->staticData = ns->staticAllocate(nullptr, sizeOfType(CPM_DATATYPE_POINTER), count);
-
-                if (ss->staticData == nullptr)
-                {
-                    compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '")->Add(ns->name)->Add(".")->Add(name)->Add("'");
-                    Error();
-                }
-                else
-                    ss->field.offset = (FRIDGE_DWORD)ns->getStaticRelativeAddress(ss->staticData);
+                compilerLog.Add(LOG_ERROR, "Failed to allocate static data for symbol '" + ns->name + "." + name + "'.");
+                Error();
             }
             else
-            {
-                ss->staticData = nullptr;
-                ss->importSource = importSource;
-            }
+                symbol.field.offset = (FRIDGE_DWORD)ns->getStaticRelativeAddress(symbol.staticData);
         }
-
-        return ss;
+        return &symbol;
     }
 
     void CPMCompiler::readStatics(int phase)
@@ -688,198 +547,61 @@ namespace CPM
 
     void CPMCompiler::detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, int phase)
     {
-        if (node->type != CPM_LINE || node->children.size() == 0)
-            return;
-        if (node->children[0]->type != CPM_ID)
-            return;
-
-        bool declIsConst = node->children[0]->text == R_CONST;
-        bool declIsStatic = node->children[0]->text == R_STATIC;
-        if (!declIsConst && !declIsStatic)
-            return;
-        if (phase == 1 && !declIsConst)
-            return; // the first pass reads constants only
-        if (!CPMValidateDeclaration(node, &compilerLog))
+        if (node->type != CPM_LINE || node->children.empty()) return;
+        const string& storage = node->children[0]->text;
+        if (storage != R_CONST && storage != R_STATIC) return;
+        const bool isConst = storage == R_CONST;
+        // Only bare primitive constants are needed before struct layout. Defer
+        // compound types until every struct name and layout is available.
+        if (phase == 1)
         {
-            noErrors = false;
+            if (!isConst || node->children.size() < 3 || node->children[1]->type != CPM_ID) return;
+            auto type = namespaces[GlobalNamespace]->datatypes.find(node->children[1]->text);
+            if (type == namespaces[GlobalNamespace]->datatypes.end() || type->second <= 0 ||
+                type->second >= CPM_DATATYPE_USER) return;
+        }
+        auto fail = [&](const string& message)
+        {
+            compilerLog.Add(LOG_ERROR, message, node->sourceFileName, node->lineNumber);
+            Error();
+        };
+        if (!CPMValidateDeclaration(node, &compilerLog)) { Error(); return; }
+        if (node->children.size() < 3 || node->children.size() > 5 || node->children[2]->type != CPM_ID)
+        { fail("Invalid static or const declaration syntax."); return; }
+        auto name = node->children[2];
+        auto existing = owner->statics.find(name->text);
+        if (existing != owner->statics.end())
+        {
+            if (existing->second.declNode != node)
+                fail("Static symbol '" + name->text + "' is already declared in " + owner->name + " namespace.");
             return;
         }
-
-        bool isInvalid = false;
-
-        if (node->children.size() < 3 || node->children.size() > 7)
+        CPMType type;
+        if (!parseTypeExpr(node->children[1], type, getSourceFile(node->sourceFileName), owner)) return;
+        if (type.isVoid()) { fail("Void type is not allowed for static or const data."); return; }
+        int size = sizeOfTypeExpr(type);
+        if (size <= 0 || size > DataMaxSize) { fail("Static symbol '" + name->text + "' is too large."); return; }
+        CPMSyntaxTreeNode* value = nullptr;
+        int address = -1;
+        if (node->children.size() == 5)
         {
-            isInvalid = true;
+            auto keyword = node->children[3];
+            auto source = node->children[4];
+            if (keyword->type != CPM_ID || keyword->text != R_IMPORT || source->type != CPM_NUM)
+            { fail("Expected 'imports address'; array modifiers belong inside '<...>'."); return; }
+            address = parseNum(source->text);
+            if (isConst || address < 0 || address > 65535 || size > 65536 - address)
+            { fail("Invalid imported static address or size."); return; }
         }
-        else
+        else if (node->children.size() == 4)
         {
-            CPMSyntaxTreeNode* typeNode = node->children[1];
-            CPMSyntaxTreeNode* nameNode = node->children[2];
-            CPMSyntaxTreeNode* countNode = NULL;
-            CPMSyntaxTreeNode* valueNode = NULL;
-            CPMSyntaxTreeNode* importSourceNode = NULL;
-            if (nameNode->type == CPM_ID && (typeNode->type == CPM_ID || typeNode->type == CPM_REF))
-            {
-                bool isArray = false;
-                bool isImported = false;
-                int count = 1;
-                int importSource = 0;
-
-                // Grammar (see test.cpm header comment):
-                //   decl T name;                         (3 children)
-                //   decl T name value;                   (4)
-                //   decl T name array N;                 (5)
-                //   decl T name imports addr;            (5)
-                //   decl T name array N value;           (6)
-                //   decl T name array N imports addr;    (7)
-                if (node->children.size() == 4)
-                {
-                    if (node->children[3]->text == R_ARRAY || node->children[3]->text == R_IMPORT)
-                        isInvalid = true;
-                    else
-                        valueNode = node->children[3];
-                }
-                else if (node->children.size() == 5)
-                {
-                    if (node->children[3]->text == R_ARRAY)
-                    {
-                        isArray = true;
-                        countNode = node->children[4];
-                    }
-                    else if (node->children[3]->text == R_IMPORT)
-                    {
-                        isImported = true;
-                        importSourceNode = node->children[4];
-                    }
-                    else
-                        isInvalid = true;
-                }
-                else if (node->children.size() == 6)
-                {
-                    if (node->children[3]->text == R_ARRAY)
-                    {
-                        isArray = true;
-                        countNode = node->children[4];
-                        valueNode = node->children[5];
-                    }
-                    else
-                        isInvalid = true;
-                }
-                else if (node->children.size() == 7)
-                {
-                    if (node->children[3]->text == R_ARRAY && node->children[5]->text == R_IMPORT)
-                    {
-                        isArray = true;
-                        countNode = node->children[4];
-                        isImported = true;
-                        importSourceNode = node->children[6];
-                    }
-                    else
-                        isInvalid = true;
-                }
-
-                if (!isInvalid)
-                {
-                    map<string, CPMStaticSymbol>::iterator iss = owner->statics.find(nameNode->text);
-                    if (iss != owner->statics.end())
-                    {
-                        if (iss->second.declNode == node)
-                            return; // already processed in the first pass
-
-                        if (phase == 2)
-                        {
-                            compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' is already declared in " + owner->name + " namespace.", node->sourceFileName, nameNode->lineNumber);
-                            noErrors = false;
-                        }
-                        return;
-                    }
-
-                    bool isPtr = false;
-                    CPMDataType stype = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
-
-                    if (phase == 1 && (stype < CPM_DATATYPE_BOOL || stype >= CPM_DATATYPE_USER))
-                        return; // struct types are unknown before readStructs(); defer to the second pass
-
-                    if (stype == CPM_DATATYPE_UNDEFINED)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    else if (stype == CPM_DATATYPE_AMBIGUOUS)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    else if (stype == CPM_DATATYPE_VOID)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for static or const data.", node->sourceFileName, node->children[0]->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-
-                    if (isArray)
-                    {
-                        count = parseArraySizeDecl(countNode, owner);
-                    }
-
-                    if (isImported)
-                    {
-                        if (importSourceNode->type == CPM_NUM)
-                            importSource = parseNum(importSourceNode->text);
-                        else
-                        {
-                            compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' import address must be an integer.", node->sourceFileName, importSourceNode->lineNumber);
-                            noErrors = false;
-                            return;
-                        }
-                    }
-                    else
-                        importSource = -1;
-
-                    CPMStaticSymbol* ss = addStatic(nameNode->text, owner, declIsConst, isPtr, stype, count, importSource);
-                    ss->declNode = node;
-
-                    if (sizeOfData(&ss->field) > DataMaxSize)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Static symbol '" + nameNode->text + "' is too large.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-
-                    // addStatic has already decided immediate-vs-buffer-backed
-                    // and allocated buffer storage; here we only fill in values.
-                    if (valueNode)
-                        parseLiteralValue(ss, ss->field, valueNode);
-
-                    compilerLog.Add(LOG_MESSAGE, "Static symbol " + nameNode->text + " in " + owner->name + "; data = ", node->sourceFileName, nameNode->lineNumber);
-                    if (ss->staticData != nullptr)
-                        compilerLog.AddHex((FRIDGE_DWORD)ss->field.offset);
-                    else if (ss->importSource >= 0)
-                        compilerLog.Add("imported from ")->AddHex((FRIDGE_DWORD)ss->importSource);
-                    else if (ss->isconst)
-                        if (ss->field.legacyType() == CPM_DATATYPE_STRING)
-                            compilerLog.Add("const string ")->Add(owner->staticReadString(ss->immediateData));
-                        else
-                            compilerLog.Add("const ")->Add(ss->immediateData);
-                    else
-                        compilerLog.Add("<null>");
-                }
-            }
-            else
-                isInvalid = true;
+            value = node->children[3];
+            if (value->text == R_ARRAY || value->text == R_IMPORT)
+            { fail("Invalid declaration initializer; compound types use '<...>'."); return; }
         }
-
-        if (isInvalid)
-        {
-            // Malformed declarations are reported once, in the second pass.
-            if (phase == 2)
-            {
-                compilerLog.Add(LOG_ERROR, "Invalid static or const declaration syntax.", node->sourceFileName, node->children[0]->lineNumber);
-                noErrors = false;
-            }
-        }
+        auto symbol = addStatic(name->text, owner, isConst, type, address);
+        symbol->declNode = node;
+        if (noErrors && value) parseLiteralValue(symbol, symbol->field, value);
     }
 
     void CPMCompiler::readStructs()
@@ -898,6 +620,22 @@ namespace CPM
         {
             computeStructDataSize(ist->second);
         }
+        if (noErrors)
+            for (const auto& entry : structTypes)
+            {
+                auto structure = entry.second;
+                function<bool(const CPMType&)> valid = [&](const CPMType& type)
+                {
+                    if (type.child && !valid(*type.child)) return false;
+                    return sizeOfTypeExpr(type) >= 0;
+                };
+                for (const auto& field : structure->fields)
+                    if (!valid(field.second.typeExpr))
+                    {
+                        compilerLog.Add(LOG_ERROR, "Field type exceeds 65535 bytes.", structure->node->sourceFileName, structure->node->lineNumber);
+                        Error();
+                    }
+            }
     }
 
     void CPMCompiler::detectStruct(CPMSyntaxTreeNode* node, CPMNamespace* owner)
@@ -942,120 +680,42 @@ namespace CPM
         return dataTypeCounter++;
     }
 
-    void CPMCompiler::readStructFields(CPMStructSymbol* structSymbol)
+    void CPMCompiler::readStructFields(CPMStructSymbol* structure)
     {
-        for (int i = 1; i < structSymbol->node->children.size()-1; i++)
+        for (size_t i = 1; i + 1 < structure->node->children.size(); ++i)
         {
-            CPMSyntaxTreeNode* node = structSymbol->node->children[i];
-
-            if (node->type == CPM_LINE)
+            auto node = structure->node->children[i];
+            if (node->type == CPM_LINE && node->children.empty()) continue;
+            if (node->type != CPM_LINE || node->children.size() != 2 || node->children[1]->type != CPM_ID ||
+                !CPMValidateDeclaration(node, &compilerLog))
             {
-                if (node->children.size() == 0)
-                    continue;
-
-                CPMSyntaxTreeNode* typeNode;
-                CPMSyntaxTreeNode* nameNode;
-                CPMSyntaxTreeNode* countNode = NULL;
-
-                if (!CPMValidateDeclaration(node, &compilerLog))
-                {
-                    noErrors = false;
-                    return;
-                }
-
-                if (node->children.size() != 2 && node->children.size() != 4)
-                {
-                    compilerLog.Add(LOG_ERROR, "Invalid struct field declaration.", node->sourceFileName, node->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-
-                typeNode = node->children[0];
-                nameNode = node->children[1];
-
-                map<string, CPMDataSymbol>::iterator fi = structSymbol->fields.find(nameNode->text);
-                if (fi == structSymbol->fields.end())
-                {
-
-                    if ((typeNode->type != CPM_ID && typeNode->type != CPM_REF) || nameNode->type != CPM_ID)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Invalid struct field declaration.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-
-                    if (node->children.size() == 4)
-                    {
-                        if (node->children[2]->type != CPM_ID || node->children[2]->text != R_ARRAY)
-                        {
-                            compilerLog.Add(LOG_ERROR, "Invalid struct array field declaration.", node->sourceFileName, node->lineNumber);
-                            noErrors = false;
-                            return;
-                        }
-                        countNode = node->children[3];
-                    }
-
-                    structSymbol->fields[nameNode->text].name = nameNode->text;
-                    CPMDataSymbol* sfield = &(structSymbol->fields[nameNode->text]);
-                    sfield->owner = structSymbol->owner;
-                    string typeName = typeNode->text;
-
-                    bool isPtr = false;
-                    CPMDataType fieldType = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], structSymbol->owner);
-
-                    if (fieldType == CPM_DATATYPE_UNDEFINED)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Undefined type '" + typeName + "'.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    if (fieldType == CPM_DATATYPE_AMBIGUOUS)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Type reference '" + typeName + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                    if (fieldType == CPM_DATATYPE_VOID)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Void type is not allowed for structures fields.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-
-                    int count = 1;
-                    if (countNode)
-                        count = parseArraySizeDecl(countNode, structSymbol->owner);
-
-                    sfield->setLegacyType(fieldType, isPtr, count);
-
-                    if (sizeOfData(sfield) > DataMaxSize)
-                    {
-                        compilerLog.Add(LOG_ERROR, "Field '" + structSymbol->name + "." + nameNode->text + "' is too large.", node->sourceFileName, node->lineNumber);
-                        noErrors = false;
-                        return;
-                    }
-                }
-                else
-                {
-                    compilerLog.Add(LOG_ERROR, "Field '" + structSymbol->name + "." + nameNode->text + "' is already declared.", node->sourceFileName, node->lineNumber);
-                    noErrors = false;
-                    return;
-                }
+                compilerLog.Add(LOG_ERROR, "Invalid struct field declaration; use 'type-expr name'.", node->sourceFileName, node->lineNumber);
+                Error(); return;
             }
-            else
+            const string& name = node->children[1]->text;
+            if (structure->fields.count(name))
             {
-                compilerLog.Add(LOG_ERROR, "Unexpected syntax inside struct declaration.", node->sourceFileName, node->lineNumber);
-                noErrors = false;
-                return;
+                compilerLog.Add(LOG_ERROR, "Field '" + structure->name + "." + name + "' is already declared.", node->sourceFileName, node->lineNumber);
+                Error(); return;
             }
+            CPMType type;
+            if (!parseTypeExpr(node->children[0], type, getSourceFile(node->sourceFileName), structure->owner)) return;
+            if (type.isVoid())
+            {
+                compilerLog.Add(LOG_ERROR, "Void type is not allowed for struct fields.", node->sourceFileName, node->lineNumber);
+                Error(); return;
+            }
+            auto& field = structure->fields[name];
+            field.name = name;
+            field.owner = structure->owner;
+            field.typeExpr = std::move(type);
+            structure->fieldOrder.push_back(name);
         }
-        if (structSymbol->fields.size() == 0)
+        if (structure->fields.empty())
         {
-            compilerLog.Add(LOG_ERROR, "Empty structs are not allowed.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
-            noErrors = false;
-            return;
+            compilerLog.Add(LOG_ERROR, "Empty structs are not allowed.", structure->node->sourceFileName, structure->node->lineNumber);
+            Error();
         }
-        compilerLog.Add(LOG_MESSAGE, "Struct fields " + structSymbol->name, structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
     }
 
     int CPMCompiler::parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS)
@@ -1079,7 +739,7 @@ namespace CPM
             {
                 if (sizeConst->isconst)
                 {
-                    if (IsIntDataType(sizeConst->field.legacyType()) && sizeConst->field.legacyCount() == 1)
+                    if (sizeConst->field.typeExpr.isBase() && IsIntDataType(sizeConst->field.typeExpr.base))
                     {
                         int size = (int)sizeConst->immediateData;
                         if (size > 0)
@@ -1126,58 +786,54 @@ namespace CPM
         computeStructDataSize(structSymbol, visitedStructs);
     }
 
-    void CPMCompiler::computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs)
+    void CPMCompiler::computeStructDataSize(CPMStructSymbol* structure, unordered_set<CPMDataType>& active)
     {
-        structSymbol->size = -1;
-        int sizeAccum = 0;
-        for (map<string, CPMDataSymbol>::iterator ifield = structSymbol->fields.begin(); ifield != structSymbol->fields.end(); ++ifield)
+        if (structure->size >= 0) return;
+        if (!active.insert(structure->type).second)
         {
-            int fieldSize = 0;
-
-            CPMDataType fieldType = ifield->second.legacyType();
-            if (!ifield->second.legacyIsPtr() && (fieldType == CPM_DATATYPE_BOOL || fieldType == CPM_DATATYPE_CHAR || fieldType == CPM_DATATYPE_INT8 || fieldType == CPM_DATATYPE_UINT8))
-                fieldSize = 1;
-            else if (ifield->second.legacyIsPtr() || fieldType == CPM_DATATYPE_STRING || fieldType == CPM_DATATYPE_INT16 || fieldType == CPM_DATATYPE_UINT16)
-                fieldSize = 2;
-            else if (fieldType >= CPM_DATATYPE_USER)
-            {
-                unordered_set<CPMDataType>::iterator visitedStruct = visitedStructs.find(fieldType);
-                if (visitedStruct != visitedStructs.end())
-                {
-                    compilerLog.Add(LOG_ERROR, "Circular struct declaration in '" + structSymbol->name + "." + ifield->first + "'.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-                if (structTypes[fieldType]->size < 0)
-                {
-                    visitedStructs.insert(structSymbol->type);
-                    computeStructDataSize(structTypes[fieldType], visitedStructs);
-                    visitedStructs.erase(structSymbol->type);
-                }
-                fieldSize = structTypes[fieldType]->size;
-            }
-
-            fieldSize *= ifield->second.legacyCount();
-
-            if (structSymbol->isUnion)
-            {
-                if (sizeAccum == 0)
-                    sizeAccum = fieldSize;
-                else if (sizeAccum != fieldSize)
-                {
-                    compilerLog.Add(LOG_ERROR, "Field '" + structSymbol->name + "." + ifield->second.name + "' size does not match with the union size.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-            }
-            else
-                sizeAccum += fieldSize;
-
+            compilerLog.Add(LOG_ERROR, "Circular by-value struct declaration in '" + structure->name + "'.",
+                            structure->node->sourceFileName, structure->node->lineNumber);
+            Error(); return;
         }
-        structSymbol->size = sizeAccum;
-        buildStructLayout(structSymbol);
-        compilerLog.Add(LOG_MESSAGE, structSymbol->name + " size = ", structSymbol->node->sourceFileName, structSymbol->node->lineNumber)
-            ->Add(structSymbol->size);
+        function<int(const CPMType&)> sizeOf = [&](const CPMType& type) -> int
+        {
+            if (type.isPtr()) return 2; // A pointer breaks by-value recursion.
+            if (type.isArray())
+            {
+                int element = sizeOf(*type.child);
+                return element <= 0 || type.arrayCount > 65535 / element ? -1 : element * type.arrayCount;
+            }
+            if (type.isBase() && type.base >= CPM_DATATYPE_USER)
+            {
+                auto target = structTypes.at(type.base);
+                computeStructDataSize(target, active);
+                return target->size;
+            }
+            return sizeOfTypeExpr(type);
+        };
+        int total = 0;
+        for (const auto& name : structure->fieldOrder)
+        {
+            int size = sizeOf(structure->fields.at(name).typeExpr);
+            if (!noErrors) break;
+            if (size <= 0 || (!structure->isUnion && size > 65535 - total))
+            {
+                compilerLog.Add(LOG_ERROR, "Struct type exceeds 65535 bytes.", structure->node->sourceFileName, structure->node->lineNumber);
+                Error(); break;
+            }
+            if (structure->isUnion && total && total != size)
+            {
+                compilerLog.Add(LOG_ERROR, "Union fields must have equal sizes.", structure->node->sourceFileName, structure->node->lineNumber);
+                Error(); break;
+            }
+            total = structure->isUnion ? size : total + size;
+        }
+        active.erase(structure->type);
+        if (noErrors)
+        {
+            structure->size = total;
+            buildStructLayout(structure);
+        }
     }
 
     void CPMCompiler::readFunctions()
@@ -1188,14 +844,36 @@ namespace CPM
             for (int i = 0; i < ns->nodes.size(); i++)
                 detectFunction(ns->nodes[i], ns);
         }
-        // Validate statements even in branches/loops whose executable lowering
-        // is still unfinished. Initializer blocks have a different grammar.
         for (auto& ns : namespaces)
             for (auto& entry : ns.second->functions)
             {
-                auto& functionSymbol = entry.second;
-                function<void(CPMSyntaxTreeNode*)> validate;
-                validate = [&](CPMSyntaxTreeNode* node)
+                auto& function = entry.second;
+                // Type operands may occur inside initializers, return values,
+                // and nested calls even where executable lowering is pending.
+                std::function<void(CPMSyntaxTreeNode*)> validateCasts = [&](CPMSyntaxTreeNode* node)
+                {
+                    if (node->type == CPM_TYPEEXPR) return;
+                    if ((node->type == CPM_EXPR || node->type == CPM_LINE) && !node->children.empty() &&
+                        node->children[0]->text == R_CAST)
+                    {
+                        if (node->children.size() != 3 || !CPMValidateCall(node, &compilerLog))
+                        {
+                            compilerLog.Add(LOG_ERROR, "Cast takes a type and one value.", node->sourceFileName, node->lineNumber);
+                            Error(); return;
+                        }
+                        CPMType type;
+                        if (!parseTypeExpr(node->children[1], type, getSourceFile(node->sourceFileName), function.owner)) return;
+                        if (type.isVoid() || type.isArray() || type.isStruct())
+                        {
+                            compilerLog.Add(LOG_ERROR, "Cast requires a scalar target type.", node->sourceFileName, node->lineNumber);
+                            Error(); return;
+                        }
+                        validateCasts(node->children[2]);
+                        return;
+                    }
+                    for (auto child : node->children) validateCasts(child);
+                };
+                std::function<void(CPMSyntaxTreeNode*)> validate = [&](CPMSyntaxTreeNode* node)
                 {
                     if (node->type == CPM_BLOCK)
                     {
@@ -1204,198 +882,109 @@ namespace CPM
                     }
                     if (node->type != CPM_LINE || node->children.empty()) return;
                     auto head = node->children[0];
-                    if (head->type != CPM_ID && head->type != CPM_REF) return;
                     const string& op = head->text;
-                    if (op == R_STATIC || op == R_CONST || op == "return")
-                    {
-                        if (!CPMValidateDeclaration(node, &compilerLog)) noErrors = false;
-                        return;
-                    }
                     if (op == "if" || op == "else" || op == "for")
                     {
-                        for (auto child : node->children) validate(child);
+                        for (size_t i = 1; i < node->children.size(); ++i) validate(node->children[i]);
                         return;
                     }
-                    bool pointer = false;
-                    auto type = resolveDataTypeName(head, pointer, getSourceFile(node->sourceFileName), functionSymbol.owner);
-                    if (type > 0)
+                    if (isTypeDeclaration(node, function.owner))
                     {
-                        if (!CPMValidateDeclaration(node, &compilerLog)) noErrors = false;
+                        CPMType type;
+                        parseDataDeclaration(node, type, function.owner);
                     }
-                    else if (!CPMValidateCall(node, &compilerLog)) noErrors = false;
+                    else if (op == R_STATIC || op == R_CONST || op == "return")
+                    {
+                        if (!CPMValidateDeclaration(node, &compilerLog)) Error();
+                        if (op == R_STATIC || op == R_CONST)
+                        {
+                            // Strip storage only for declaration/type validation.
+                            CPMSyntaxTreeNode declaration;
+                            declaration.type = CPM_LINE;
+                            declaration.sourceFileName = node->sourceFileName;
+                            declaration.lineNumber = node->lineNumber;
+                            declaration.children.assign(node->children.begin() + 1, node->children.end());
+                            CPMType type;
+                            parseDataDeclaration(&declaration, type, function.owner);
+                        }
+                    }
+                    else if (!CPMValidateCall(node, &compilerLog)) Error();
                 };
-                validate(functionSymbol.bodyNode);
+                if (function.bodyNode)
+                {
+                    validateCasts(function.bodyNode);
+                    validate(function.bodyNode);
+                }
             }
     }
 
     void CPMCompiler::detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner)
     {
-        if (node->type == CPM_LINE && node->children.size() == 4)
+        if (node->type != CPM_LINE || node->children.size() < 3) return;
+        auto head = node->children[0];
+        if (head->text == R_STATIC || head->text == R_CONST || head->text == R_STRUCT ||
+            head->text == R_UNION) return;
+        auto name = node->children[1];
+        auto args = node->children[2];
+        if (name->type != CPM_ID || (args->type != CPM_EXPR && args->type != CPM_BLOCK)) return;
+        auto fail = [&](const string& message)
         {
-            CPMSyntaxTreeNode* typeNode = node->children[0];
-            CPMSyntaxTreeNode* nameNode = node->children[1];
-            CPMSyntaxTreeNode* argsNode = node->children[2];
-            CPMSyntaxTreeNode* bodyNode = node->children[3];
-
-            if ((typeNode->type == CPM_ID || typeNode->type == CPM_REF) && nameNode->type == CPM_ID && (argsNode->type == CPM_EXPR || argsNode->type == CPM_BLOCK) && bodyNode->type == CPM_BLOCK)
-            {
-                if (!CPMValidateDeclaration(node, &compilerLog))
-                {
-                    noErrors = false;
-                    return;
-                }
-                string typeName = typeNode->text;
-
-                bool isPtr = false;
-                /*
-                if (typeName[0] == PtrPrefix)
-                {
-                    isPtr = true;
-                    typeName = typeName.substr(1, typeName.size() - 1);
-                }
-                */
-                CPMDataType type = resolveDataTypeName(typeNode, isPtr, &sources[node->sourceFileName], owner);
-                if (type == CPM_DATATYPE_UNDEFINED)
-                {
-                    compilerLog.Add(LOG_ERROR, "Undefined type '" + typeNode->text + "'.", node->sourceFileName, node->children[0]->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-                if (type == CPM_DATATYPE_AMBIGUOUS)
-                {
-                    compilerLog.Add(LOG_ERROR, "Type reference '" + typeNode->text + "' is ambiguous in this context. See the message above.", node->sourceFileName, node->children[0]->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-
-                CPMFunctionSignature signature;
-                signature.name = nameNode->text;
-
-                if (argsNode->children.size() > 0)
-                {
-                    CPMSyntaxTreeNode* argNode = argsNode->type == CPM_EXPR ? argsNode : argsNode->children[1];
-                    for (int i = 1; i < argsNode->children.size() - 1; ++i)
-                    {
-                        if (!CPMValidateDeclaration(argNode, &compilerLog))
-                        {
-                            noErrors = false;
-                            return;
-                        }
-                        CPMArgumentSignature argSign;
-                        bool argIsPtr = false;
-                        int argCount = 1;
-                        if (argNode->children.size() < 2 || argNode->children.size() > 5)
-                        {
-                            compilerLog.Add(LOG_ERROR, "Invalid function argument declaration syntax.", argNode->sourceFileName, argNode->lineNumber);
-                            noErrors = false;
-                            return;
-                        }
-
-                        string argType = argNode->children[0]->text;
-                        CPMDataType argBaseType = resolveDataTypeName(argNode->children[0], argIsPtr, &sources[node->sourceFileName], owner);
-                        if (argBaseType == CPM_DATATYPE_UNDEFINED)
-                        {
-                            compilerLog.Add(LOG_ERROR, "Undefined type '" + argType + "'.", argNode->sourceFileName, argNode->lineNumber);
-                            noErrors = false;
-                            return;
-                        }
-                        if (argBaseType == CPM_DATATYPE_AMBIGUOUS)
-                        {
-                            compilerLog.Add(LOG_ERROR, "Type reference '" + argType + "' is ambiguous in this context. See the message above.", argNode->sourceFileName, argNode->lineNumber);
-                            noErrors = false;
-                            return;
-                        }
-
-                        argSign.name = argNode->children[1]->text;
-
-                        if (argNode->children.size() > 2)
-                        {
-                            CPMSyntaxTreeNode* countNode = NULL;
-                            if (argNode->children.size() >= 4)
-                            {
-                                if (argNode->children[2]->text == R_ARRAY)
-                                {
-                                    countNode = argNode->children[3];
-                                    argCount = parseArraySizeDecl(countNode, owner);
-                                }
-                                else
-                                {
-                                    compilerLog.Add(LOG_ERROR, "Invalid function argument '" + argNode->children[2]->text + "' declaration syntax.", argNode->sourceFileName, argNode->lineNumber);
-                                    noErrors = false;
-                                    return;
-                                }
-                            }
-                            /*
-                            if (argNode->children[argNode->children.size()-1]->text == R_REF)
-                            {
-                                argSign.isRef = true;
-                            }
-
-                            else*/ if (argNode->children.size() != 4)
-                            {
-                                compilerLog.Add(LOG_ERROR, "Invalid symbol attribute '" + argNode->children[argNode->children.size() - 1]->text + "' for argument " + argSign.name + " .", argNode->sourceFileName, argNode->lineNumber);
-                                noErrors = false;
-                                return;
-                            }
-                        }
-
-                        argSign.setLegacyType(argBaseType, argIsPtr, argCount);
-                        signature.arguments.push_back(argSign);
-
-                        if (argsNode->type == CPM_EXPR)
-                            break;
-                        argNode = argsNode->children[i+1];
-                    }
-                }
-
-                map<CPMFunctionSignature, CPMFunctionSymbol>::iterator fi = owner->functions.find(signature);
-                if (fi == owner->functions.end())
-                {
-                    owner->functions[signature].signature = signature;
-                    CPMFunctionSymbol* func = &owner->functions[signature];
-                    func->owner = owner;
-                    // Build returnType from the legacy flat triple (type/isPtr).
-                    // For a function, "array of T" return is invalid (an array
-                    // return type makes no sense without an enclosing struct),
-                    // so we only need the BASE/PTR distinction here.
-                    if (isPtr)
-                    {
-                        func->returnType.kind = CPM_TYPE_PTR;
-                        func->returnType.child.reset(new CPMType());
-                        func->returnType.child->kind = CPM_TYPE_BASE;
-                        func->returnType.child->base = type;
-                    }
-                    else
-                    {
-                        func->returnType.kind = CPM_TYPE_BASE;
-                        func->returnType.base = type;
-                    }
-                    func->compiler = this;
-                    func->bodyNode = bodyNode;
-                    func->arguments.resize(signature.arguments.size());
-                    compilerLog.Add(LOG_MESSAGE, "Function '" + nameNode->text + "' : " + typeName + " (", node->sourceFileName, node->lineNumber);
-                    for (int i = 0; i < signature.arguments.size(); ++i)
-                    {
-                        func->arguments[i].name = signature.arguments[i].name;
-                        compilerLog.Add(" " + func->arguments[i].name + ":");
-                        func->arguments[i].owner = owner;
-                        func->arguments[i].typeExpr = signature.arguments[i].typeExpr;
-                        compilerLog.Add("[" + to_string(func->arguments[i].legacyCount()) + "]");
-                        compilerLog.Add(to_string(func->arguments[i].legacyType()));
-                        if (func->arguments[i].legacyIsPtr())
-                            compilerLog.Add(PtrPrefix);
-                        //if (signature.arguments[i].isRef)
-                        //    compilerLog.Add("&");
-                    }
-                    compilerLog.Add(" )");
-                }
-                else
-                {
-                    compilerLog.Add(LOG_ERROR, "Function '" + nameNode->text + "' with the same argument list is already declared in " + owner->name + " namespace.", node->sourceFileName, node->children[0]->lineNumber);
-                    noErrors = false;
-                    return;
-                }
-            }
+            compilerLog.Add(LOG_ERROR, message, node->sourceFileName, node->lineNumber);
+            Error();
+        };
+        if (!CPMValidateDeclaration(node, &compilerLog)) { Error(); return; }
+        if (node->children.size() > 4 || (node->children.size() == 4 && node->children[3]->type != CPM_BLOCK))
+        { fail("Invalid function declaration syntax."); return; }
+        CPMType result;
+        if (!parseTypeExpr(head, result, getSourceFile(node->sourceFileName), owner)) return;
+        CPMFunctionSignature signature;
+        signature.name = name->text;
+        vector<CPMSyntaxTreeNode*> parameters;
+        if (args->type == CPM_BLOCK)
+        {
+            for (size_t i = 1; i + 1 < args->children.size(); ++i)
+                if (!args->children[i]->children.empty()) parameters.push_back(args->children[i]);
+        }
+        else if (!args->children.empty()) parameters.push_back(args);
+        unordered_set<string> names;
+        for (auto parameter : parameters)
+        {
+            CPMArgumentSignature argument;
+            if (parameter->children.size() != 2 || parameter->children[1]->type != CPM_ID ||
+                !CPMValidateDeclaration(parameter, &compilerLog))
+            { fail("Invalid function parameter; use 'type-expr name'."); return; }
+            if (!parseTypeExpr(parameter->children[0], argument.typeExpr, getSourceFile(node->sourceFileName), owner)) return;
+            if (argument.typeExpr.isVoid()) { fail("Void type is not allowed for function parameters."); return; }
+            argument.name = parameter->children[1]->text;
+            if (!names.insert(argument.name).second) { fail("Duplicate function parameter '" + argument.name + "'."); return; }
+            signature.arguments.push_back(std::move(argument));
+        }
+        auto found = owner->functions.find(signature);
+        auto body = node->children.size() == 4 ? node->children[3] : nullptr;
+        if (found != owner->functions.end())
+        {
+            auto& function = found->second;
+            if (function.returnType != result) { fail("Conflicting function return types."); return; }
+            for (size_t i = 0; i < signature.arguments.size(); ++i)
+                if (function.signature.arguments[i].name != signature.arguments[i].name)
+                { fail("Function parameter names must match the earlier declaration."); return; }
+            if (function.bodyNode && body) { fail("Function is already defined."); return; }
+            if (body) function.bodyNode = body;
+            return;
+        }
+        auto& function = owner->functions[signature];
+        function.signature = signature;
+        function.returnType = std::move(result);
+        function.owner = owner;
+        function.compiler = this;
+        function.bodyNode = body;
+        for (const auto& argument : signature.arguments)
+        {
+            CPMDataSymbol symbol;
+            symbol.name = argument.name;
+            symbol.typeExpr = argument.typeExpr;
+            symbol.owner = owner;
+            function.arguments.push_back(std::move(symbol));
         }
     }
 
@@ -1484,27 +1073,20 @@ namespace CPM
         else if (type < CPM_DATATYPE_USER)
             return 2;
         else
-            return structTypes[type]->size;
+            return structTypes.count(type) ? structTypes.at(type)->size : -1;
     }
 
-    int CPMCompiler::sizeOfData(CPMDataSymbol* dataSymbol)
+    int CPMCompiler::sizeOfData(CPMDataSymbol* symbol)
     {
-        // Prefer the recursive sizeOfTypeExpr when the shape is one it handles
-        // natively (PTR / ARRAY of BASE); fall back to the legacy flat formula
-        // for the BASE case to keep sizeOfType(CPMDataType) as the primitive
-        // size oracle.
-        if (dataSymbol->typeExpr.isArray())
-            return dataSymbol->typeExpr.arrayCount * sizeOfTypeExpr(*dataSymbol->typeExpr.child);
-        if (dataSymbol->typeExpr.isPtr())
-            return 2;
-        return sizeOfType(dataSymbol->typeExpr.base);
+        return sizeOfTypeExpr(symbol->typeExpr);
     }
 
     void CPMCompiler::buildStructLayout(CPMStructSymbol* structSymbol)
     {
         unsigned int position = 0;
-        for (map<string, CPMDataSymbol>::iterator fi = structSymbol->fields.begin(); fi != structSymbol->fields.end(); ++fi)
+        for (const auto& name : structSymbol->fieldOrder)
         {
+            auto fi = structSymbol->fields.find(name);
             if (structSymbol->isUnion)
                 fi->second.offset = 0;
             else
@@ -1512,7 +1094,7 @@ namespace CPM
                 fi->second.offset = position;
                 //compilerLog.Add(LOG_MESSAGE, "Field '" + structSymbol->name + "." + fi->second.name + "' offset = ", structSymbol->node->sourceFileName, structSymbol->node->lineNumber)->Add(fi->second.offset);
                 position += sizeOfData(&fi->second);
-                if (position > DataMaxSize)
+                if (position > 65535)
                 {
                     compilerLog.Add(LOG_ERROR, "Struct '" + structSymbol->name + "' is too large.", structSymbol->node->sourceFileName, structSymbol->node->lineNumber);
                     noErrors = false;
@@ -1558,6 +1140,13 @@ namespace CPM
         return "<undefined>";
     }
 
+    string CPMCompiler::GetTypeName(const CPMType& type)
+    {
+        if (type.isVoid()) return "void";
+        if (type.isBase()) return GetTypeName(type.base);
+        return "<" + GetTypeName(*type.child) + (type.isPtr() ? " ptr>" : " array " + to_string(type.arrayCount) + ">");
+    }
+
     // Internal helper: try to match `typeName` (which may include a
     // namespace-qualified `NS.Name` form) against a primitive or a
     // user-defined struct type, returning the matching CPMDataType and
@@ -1593,167 +1182,119 @@ namespace CPM
                 return true;
             }
         }
-        // Global namespace:
+        vector<CPMNamespace*> matches;
+        auto consider = [&](CPMNamespace* ns)
         {
-            CPMNamespace* gns = namespaces[GlobalNamespace];
-            map<string, CPMDataType>::iterator idt = gns->datatypes.find(typeName);
-            if (idt != gns->datatypes.end())
-            {
-                outBase = idt->second;
-                outOwnerNS = gns;
-                return true;
-            }
-        }
-        // Using-list:
-        for (size_t i = 0; i < sourceFile->usingNamespaces.size(); ++i)
+            if (!ns->datatypes.count(typeName) || find(matches.begin(), matches.end(), ns) != matches.end()) return;
+            matches.push_back(ns);
+        };
+        consider(namespaces.at(GlobalNamespace));
+        if (sourceFile)
+            for (const auto& name : sourceFile->usingNamespaces)
+                if (namespaces.count(name)) consider(namespaces.at(name));
+        if (matches.size() != 1)
         {
-            const string& ns = sourceFile->usingNamespaces[i];
-            map<string, CPMNamespace*>::iterator ins = namespaces.find(ns);
-            if (ins == namespaces.end()) continue;
-            map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(typeName);
-            if (idt != ins->second->datatypes.end())
+            if (matches.size() > 1)
             {
-                outBase = idt->second;
-                outOwnerNS = ins->second;
-                return true;
+                compilerLog.Add(LOG_ERROR, "Ambiguous type '" + typeName + "'.");
+                Error();
             }
+            return false;
         }
-        // Ambiguity check across using-list + global: multiple namespaces'
-        // datatypes equal? Today's behaviour (mirrors the old resolveDataTypeName)
-        // is "last match wins"; the spec wants ambiguity to be an error, but
-        // that tightening is deferred to a later step to keep this commit
-        // purely additive.
-        return false;
+        outOwnerNS = matches[0];
+        outBase = matches[0]->datatypes.at(typeName);
+        return true;
     }
 
     bool CPMCompiler::parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
     {
-        if (!node) return false;
-
-        // Case 1: (T ptr) or (T array n) — a CPM_EXPR.
-        if (node->type == CPM_EXPR)
+        auto fail = [&](const string& message) -> bool
         {
-            // At minimum: inner-type-expr, modifier keyword. For "array" we
-            // also need a count.
-            if (node->children.size() < 2)
-            {
-                compilerLog.Add(LOG_ERROR, "Malformed type expression.", node->sourceFileName, node->lineNumber);
-                return false;
-            }
-
-            CPMSyntaxTreeNode* innerNode = node->children[0];
-            CPMSyntaxTreeNode* modifierNode = node->children[1];
-            if (modifierNode->type != CPM_ID)
-            {
-                compilerLog.Add(LOG_ERROR, "Expected 'ptr' or 'array' in type expression.", modifierNode->sourceFileName, modifierNode->lineNumber);
-                return false;
-            }
-
-            const string& modifier = modifierNode->text;
-
-            if (modifier == R_PTR)
-            {
-                CPMType inner;
-                if (!parseTypeExpr(innerNode, inner, sourceFile, currentNS))
-                    return false;
-                // `void ptr` is illegal — pointers to void don't make sense
-                // on an 8080 target (a pointer is always a 16-bit address to
-                // *something* typed).
-                if (inner.isVoid())
-                {
-                    compilerLog.Add(LOG_ERROR, "Pointer to void is not allowed.", node->sourceFileName, node->lineNumber);
-                    return false;
-                }
-                out.kind = CPM_TYPE_PTR;
-                out.child.reset(new CPMType(std::move(inner)));
-                return true;
-            }
-
-            if (modifier == R_ARRAY)
-            {
-                if (node->children.size() < 3)
-                {
-                    compilerLog.Add(LOG_ERROR, "Array type expression requires a count, e.g. `(uint8 array 10)`.", node->sourceFileName, node->lineNumber);
-                    return false;
-                }
-                CPMSyntaxTreeNode* countNode = node->children[2];
-                int count = parseArraySizeDecl(countNode, currentNS);
-                if (count <= 0)
-                {
-                    // parseArraySizeDecl already logged.
-                    return false;
-                }
-                CPMType inner;
-                if (!parseTypeExpr(innerNode, inner, sourceFile, currentNS))
-                    return false;
-                // `void array n` is also nonsensical.
-                if (inner.isVoid())
-                {
-                    compilerLog.Add(LOG_ERROR, "Array of void is not allowed.", node->sourceFileName, node->lineNumber);
-                    return false;
-                }
-                out.kind = CPM_TYPE_ARRAY;
-                out.arrayCount = count;
-                out.base = CPM_DATATYPE_VOID;
-                out.child.reset(new CPMType(std::move(inner)));
-                return true;
-            }
-
-            compilerLog.Add(LOG_ERROR, "Unknown type modifier '" + modifier + "'. Expected 'ptr' or 'array'.", modifierNode->sourceFileName, modifierNode->lineNumber);
+            compilerLog.Add(LOG_ERROR, message, node ? node->sourceFileName : "", node ? node->lineNumber : -1);
+            noErrors = false;
             return false;
-        }
+        };
+        if (!node) return fail("Missing type expression.");
 
-        // Case 2: a bare CPM_ID naming a primitive or unqualified struct.
-        if (node->type == CPM_ID)
+        CPMType result;
+        if (node->type == CPM_TYPEEXPR)
+        {
+            if (node->children.size() < 2)
+                return fail("An angle-delimited type requires a 'ptr' or 'array' modifier.");
+            if (!parseTypeExpr(node->children[0], result, sourceFile, currentNS))
+                return false;
+            // Modifiers wrap the preceding type from left to right. This makes
+            // <T ptr ptr> equivalent to <<T ptr> ptr>, without flattening it.
+            for (size_t i = 1; i < node->children.size(); ++i)
+            {
+                auto modifier = node->children[i];
+                if (modifier->type != CPM_ID || (modifier->text != R_PTR && modifier->text != R_ARRAY))
+                    return fail("Expected 'ptr' or 'array' in a type expression.");
+                if (result.isVoid())
+                    return fail("Pointers to void and arrays of void are not allowed.");
+                CPMType wrapped;
+                if (modifier->text == R_PTR)
+                    wrapped.kind = CPM_TYPE_PTR;
+                else
+                {
+                    if (++i == node->children.size())
+                        return fail("An array modifier requires a constant count.");
+                    auto countNode = node->children[i];
+                    int count = 0;
+                    if (countNode->type == CPM_EXPR)
+                    {
+                        vector<CPMUnfoldedExpressionNode> unfolded;
+                        if (!parseExpression(countNode, unfolded)) return false;
+                        bool ok = false;
+                        count = staticEvalNum(unfolded, ok, currentNS);
+                        if (!ok) return false;
+                    }
+                    else
+                        count = parseArraySizeDecl(countNode, currentNS);
+                    if (count <= 0)
+                        return fail("Array size must be a positive constant integer.");
+                    const int childSize = sizeOfTypeExpr(result, currentNS);
+                    if (count > 65535 || (childSize > 0 && count > 65535 / childSize))
+                        return fail("The total size of a type expression must not exceed 65535 bytes.");
+                    wrapped.kind = CPM_TYPE_ARRAY;
+                    wrapped.arrayCount = count;
+                }
+                wrapped.child.reset(new CPMType(std::move(result)));
+                result = std::move(wrapped);
+            }
+        }
+        else if (node->type == CPM_ID)
         {
             CPMDataType base;
-            CPMNamespace* ownerNS = nullptr;
-            if (!resolveBaseTypeName(node->text, sourceFile, currentNS, base, ownerNS))
-            {
-                compilerLog.Add(LOG_ERROR, "Unknown type '" + node->text + "'.", node->sourceFileName, node->lineNumber);
-                return false;
-            }
-            out.kind = CPM_TYPE_BASE;
-            out.base = base;
-            return true;
+            CPMNamespace* owner = nullptr;
+            if (!resolveBaseTypeName(node->text, sourceFile, currentNS, base, owner))
+                return fail("Unknown type '" + node->text + "'.");
+            result.kind = base == CPM_DATATYPE_VOID ? CPM_TYPE_VOID : CPM_TYPE_BASE;
+            result.base = base;
         }
-
-        // Case 3: a CPM_REF joining `NS.Name` — qualified struct access. Per
-        // the parser's CPMSD_REF detector, a 2-child CPM_REF has children
-        // [nsID, localID].
-        if (node->type == CPM_REF && node->children.size() == 2)
+        else if (node->type == CPM_REF && node->children.size() == 2)
         {
             const string& nsName = node->children[0]->text;
             const string& localName = node->children[1]->text;
-
-            // Primitives are never namespace-qualified.
             if (localName == "void" || localName == "bool" || localName == "char" ||
-                localName == "uint8" || localName == "uint16" ||
-                localName == "int8" || localName == "int16" || localName == "string")
-            {
-                compilerLog.Add(LOG_ERROR, "Primitive type '" + localName + "' cannot be namespace-qualified.", node->sourceFileName, node->lineNumber);
-                return false;
-            }
-
-            map<string, CPMNamespace*>::iterator ins = namespaces.find(nsName);
-            if (ins == namespaces.end())
-            {
-                compilerLog.Add(LOG_ERROR, "Unknown namespace '" + nsName + "' in type reference.", node->sourceFileName, node->lineNumber);
-                return false;
-            }
-            map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(localName);
-            if (idt == ins->second->datatypes.end())
-            {
-                compilerLog.Add(LOG_ERROR, "Type '" + localName + "' not found in namespace '" + nsName + "'.", node->sourceFileName, node->lineNumber);
-                return false;
-            }
-            out.kind = CPM_TYPE_BASE;
-            out.base = idt->second;
-            return true;
+                localName == "uint8" || localName == "uint16" || localName == "int8" ||
+                localName == "int16" || localName == "string")
+                return fail("Primitive type '" + localName + "' cannot be namespace-qualified.");
+            auto ns = namespaces.find(nsName);
+            if (ns == namespaces.end()) return fail("Unknown namespace '" + nsName + "' in type expression.");
+            auto type = ns->second->datatypes.find(localName);
+            if (type == ns->second->datatypes.end())
+                return fail("Type '" + localName + "' not found in namespace '" + nsName + "'.");
+            result.kind = CPM_TYPE_BASE;
+            result.base = type->second;
         }
+        else if (node->type == CPM_EXPR)
+            return fail("Compound types use '<...>'; parentheses group value expressions.");
+        else
+            return fail("Expected a type name or angle-delimited type expression.");
 
-        compilerLog.Add(LOG_ERROR, "Unexpected node type in type expression.", node->sourceFileName, node->lineNumber);
-        return false;
+        out = std::move(result);
+        return true;
     }
 
     int CPMCompiler::sizeOfTypeExpr(const CPMType& type, CPMNamespace* currentNS)
@@ -1768,87 +1309,47 @@ namespace CPM
             return 2; // Fridge pointer width is 16-bit.
         case CPM_TYPE_ARRAY:
             if (!type.child) return 0;
-            return type.arrayCount * sizeOfTypeExpr(*type.child, currentNS);
+            {
+                int element = sizeOfTypeExpr(*type.child, currentNS);
+                if (element <= 0 || type.arrayCount <= 0 || type.arrayCount > 65535 / element) return -1;
+                return type.arrayCount * element;
+            }
         }
         return 0;
     }
 
-    CPMDataType CPMCompiler::resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS)
+    bool CPMCompiler::isTypeDeclaration(CPMSyntaxTreeNode* node, CPMNamespace* owner)
     {
-        //vector<string> parsedName = CPMCompiler::ParseSymbolName(typeName);
+        if (node->children.empty()) return false;
+        auto head = node->children[0];
+        if (head->type == CPM_TYPEEXPR) return true;
+        if (head->type == CPM_REF)
+            return head->children.size() == 2 && namespaces.count(head->children[0]->text) &&
+                namespaces.at(head->children[0]->text)->datatypes.count(head->children[1]->text);
+        if (head->type == CPM_ID && !head->text.empty() && head->text[0] == '#') return true;
+        if (head->type != CPM_ID) return false;
+        CPMDataType base;
+        CPMNamespace* ns = nullptr;
+        if (resolveBaseTypeName(head->text, getSourceFile(node->sourceFileName), owner, base, ns)) return true;
+        return false;
+    }
 
-        CPMDataType result = CPM_DATATYPE_UNDEFINED;
-
-        if (nameNode->type == CPM_REF && nameNode->children.size() == 2)
+    bool CPMCompiler::parseDataDeclaration(CPMSyntaxTreeNode* node, CPMType& type, CPMNamespace* owner)
+    {
+        if (node->children.size() < 2 || node->children.size() > 3 || node->children[1]->type != CPM_ID ||
+            (node->children.size() == 3 && (node->children[2]->text == R_ARRAY || node->children[2]->text == R_IMPORT)) ||
+            !CPMValidateDeclaration(node, &compilerLog))
         {
-            string nsName = nameNode->children[0]->text;
-            isPtr = false;
-            if (nsName[0] == PtrPrefix)
-            {
-                isPtr = true;
-                nsName = nsName.substr(1, nsName.size() - 1);
-            }
-
-            map<string, CPMNamespace*>::iterator ins = namespaces.find(nsName);
-            if (ins != namespaces.end())
-            {
-                map<string, CPMDataType>::iterator idt = ins->second->datatypes.find(nameNode->children[1]->text);
-                if (idt != ins->second->datatypes.end())
-                {
-                    return idt->second;
-                }
-            }
+            compilerLog.Add(LOG_ERROR, "Invalid data declaration; use 'type-expr name [initializer]'.", node->sourceFileName, node->lineNumber);
+            Error(); return false;
         }
-        else if (nameNode->type == CPM_ID)
+        if (!parseTypeExpr(node->children[0], type, getSourceFile(node->sourceFileName), owner)) return false;
+        if (type.isVoid() || sizeOfTypeExpr(type) > DataMaxSize)
         {
-            string typeName = nameNode->text;
-            isPtr = false;
-            if (typeName[0] == PtrPrefix)
-            {
-                isPtr = true;
-                typeName = typeName.substr(1, typeName.size() - 1);
-            }
-
-            vector<string> candidatesNamespaces;
-            map<string, CPMDataType>::iterator idt;
-            if (currentNS)
-            {
-                idt = currentNS->datatypes.find(typeName);
-                if (idt != currentNS->datatypes.end())
-                    return idt->second;
-            }
-            idt = namespaces[GlobalNamespace]->datatypes.find(typeName);
-            if (idt != namespaces[GlobalNamespace]->datatypes.end())
-            {
-                result = idt->second;
-                candidatesNamespaces.push_back(GlobalNamespace);
-            }
-
-            for (int i = 0; i < sourceFile->usingNamespaces.size(); i++)
-            {
-                string ns = sourceFile->usingNamespaces[i];
-                idt = namespaces[ns]->datatypes.find(typeName);
-                if (idt != namespaces[ns]->datatypes.end())
-                {
-                    result = idt->second;
-                    candidatesNamespaces.push_back(ns);
-                }
-            }
-
-            if (candidatesNamespaces.size() > 1)
-            {
-                compilerLog.Add(LOG_ERROR, "Ambiguous type reference '" + typeName + "'. Candidates are: ", sourceFile->name);
-                for (int i = 0; i < candidatesNamespaces.size(); i++)
-                {
-                    compilerLog.Add(candidatesNamespaces[i] + CPM_SUBSCRIPT_DELIM + typeName);
-                    if (i < candidatesNamespaces.size() - 1)
-                        compilerLog.Add(", ");
-                }
-                return CPM_DATATYPE_AMBIGUOUS;
-            }
+            compilerLog.Add(LOG_ERROR, "Local data must have a non-void type fitting available memory.", node->sourceFileName, node->lineNumber);
+            Error(); return false;
         }
-
-        return result;
+        return true;
     }
 
     CPMStaticSymbol* CPMCompiler::resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS)
@@ -1880,7 +1381,7 @@ namespace CPM
             {
                 for (; nameCounter < parsedName.size(); ++nameCounter)
                 {
-                    if (result->field.legacyType() >= CPM_DATATYPE_USER)
+                    if (result->field.typeExpr.base >= CPM_DATATYPE_USER)
                     {
                         result->field
                     }
@@ -1958,12 +1459,26 @@ namespace CPM
         if (num.size() >= 3)
             if (num[0] == '0' && num[1] == 'x')
                 base = 16;
-        return strtol(num.c_str(), nullptr, base);
+        errno = 0;
+        char* end = nullptr;
+        long long value = strtoll(num.c_str(), &end, base);
+        if (errno == ERANGE || end == num.c_str() || *end ||
+            value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max())
+        {
+            compilerLog.Add(LOG_ERROR, "Invalid or oversized integer literal '" + num + "'.");
+            Error(); return 0;
+        }
+        return static_cast<int>(value);
     }
 
     bool CPMCompiler::parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode> &unfolded)
     {
-        CPM_ASSERT(root->type == CPM_EXPR || root->type == CPM_LINE || root->type == CPM_ID || root->type == CPM_NUM || root->type == CPM_REF);
+        if (root->type != CPM_EXPR && root->type != CPM_LINE && root->type != CPM_ID &&
+            root->type != CPM_NUM && root->type != CPM_REF)
+        {
+            compilerLog.Add(LOG_ERROR, "Expected a value expression, not a type or initializer list.", root->sourceFileName, root->lineNumber);
+            Error(); return false;
+        }
 
         if (root->type == CPM_EXPR || root->type == CPM_LINE)
         {
@@ -1979,6 +1494,16 @@ namespace CPM
             {
                 noErrors = false;
                 return false;
+            }
+            if (root->children[0]->text == R_CAST)
+            {
+                if (root->children.size() != 3)
+                {
+                    compilerLog.Add(LOG_ERROR, "Cast takes a type and one value.", root->sourceFileName, root->lineNumber);
+                    Error(); return false;
+                }
+                unfolded.push_back({1, root->children[0], root->children[1]});
+                return parseExpression(root->children[2], unfolded);
             }
             unfolded.push_back({ (int)root->children.size() - 1, root->children[0] });
             for (int i = 1; i < root->children.size(); ++i)
@@ -2010,7 +1535,7 @@ namespace CPM
                     {
                         if (sym->isconst)
                         {
-                            if (IsIntDataType(sym->field.legacyType()) && sym->field.legacyCount() == 1)
+                            if (sym->field.typeExpr.isBase() && IsIntDataType(sym->field.typeExpr.base))
                             {
                                 evalStack.push((int)sym->immediateData);
                             }
@@ -2070,36 +1595,64 @@ namespace CPM
 
                 string op = unfolded[i].syntaxNode->text;
                 int result = 0;
-                if (op == "+")
+                auto checked = [&](long long value)
+                {
+                    if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max())
+                    {
+                        compilerLog.Add(LOG_ERROR, "Constant expression exceeds the integer evaluator's range.",
+                            unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                        Error(); ok = false; return false;
+                    }
+                    result = static_cast<int>(value);
+                    return true;
+                };
+                if (unfolded[i].castTarget)
+                {
+                    CPMType target;
+                    if (!parseTypeExpr(unfolded[i].castTarget, target,
+                        getSourceFile(unfolded[i].syntaxNode->sourceFileName), currentNS))
+                    { ok = false; return 0; }
+                    if (target.isVoid() || target.isArray() || target.isStruct())
+                    {
+                        compilerLog.Add(LOG_ERROR, "Cast requires a scalar target type.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                        Error(); ok = false; return 0;
+                    }
+                    int bits = sizeOfTypeExpr(target) * 8;
+                    result = args[0] & ((1 << bits) - 1);
+                    if (target.isBase() && (target.base == CPM_DATATYPE_INT8 || target.base == CPM_DATATYPE_INT16) &&
+                        (result & (1 << (bits - 1)))) result -= 1 << bits;
+                    if (target.isBase() && target.base == CPM_DATATYPE_BOOL) result = args[0] != 0;
+                }
+                else if (op == "+")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
-                        result += args[argi];
+                        if (!checked(static_cast<long long>(result) + args[argi])) return 0;
                 }
                 else if (op == "-")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
-                        result -= args[argi];
+                        if (!checked(static_cast<long long>(result) - args[argi])) return 0;
                 }
                 else if (op == "*")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
-                        result *= args[argi];
+                        if (!checked(static_cast<long long>(result) * args[argi])) return 0;
                 }
                 else if (op == "/")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
                     {
-                        if (args[i] == 0)
+                        if (args[argi] == 0)
                         {
                             compilerLog.Add(LOG_ERROR, "Division by zero.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
                             noErrors = false;
                             return 0;
                         }
-                        result /= args[argi];
+                        if (!checked(static_cast<long long>(result) / args[argi])) return 0;
                     }
                 }
                 else if (op == "&")
@@ -2130,17 +1683,51 @@ namespace CPM
                     for (int argi = 1; argi < args.size(); ++argi)
                         result ^= args[argi];
                 }
+                else if (op == "<" || op == "<=" || op == ">" || op == ">=" || op == "==" || op == "!=")
+                {
+                    if (args.size() < 2)
+                    {
+                        compilerLog.Add(LOG_ERROR, "Comparison requires at least two operands.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                        Error(); ok = false; return 0;
+                    }
+                    result = 1;
+                    for (size_t n = 1; n < args.size(); ++n)
+                    {
+                        if (op == "<") result &= args[n - 1] < args[n];
+                        else if (op == "<=") result &= args[n - 1] <= args[n];
+                        else if (op == ">") result &= args[n - 1] > args[n];
+                        else if (op == ">=") result &= args[n - 1] >= args[n];
+                        else if (op == "==") result &= args[n - 1] == args[n];
+                        else
+                            for (size_t previous = 0; previous < n; ++previous)
+                                result &= args[previous] != args[n];
+                    }
+                }
                 else if (op == ">>")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
+                    {
+                        if (args[argi] < 0 || args[argi] >= std::numeric_limits<unsigned int>::digits)
+                        {
+                            compilerLog.Add(LOG_ERROR, "Constant shift count is out of range.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                            Error(); ok = false; return 0;
+                        }
                         result >>= args[argi];
+                    }
                 }
                 else if (op == "<<")
                 {
                     result = args[0];
                     for (int argi = 1; argi < args.size(); ++argi)
-                        result <<= args[argi];
+                    {
+                        if (args[argi] < 0 || args[argi] >= std::numeric_limits<unsigned int>::digits)
+                        {
+                            compilerLog.Add(LOG_ERROR, "Constant shift count is out of range.", unfolded[i].syntaxNode->sourceFileName, unfolded[i].syntaxNode->lineNumber);
+                            Error(); ok = false; return 0;
+                        }
+                        if (!checked(static_cast<long long>(result) * (1LL << args[argi]))) return 0;
+                    }
                 }
                 else
                 {
@@ -2167,10 +1754,10 @@ namespace CPM
             return false;
         }
 
-        map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.find(field.legacyType());
+        map<CPMDataType, CPMStructSymbol*>::iterator ist = structTypes.find(field.typeExpr.base);
         if (ist == structTypes.end())
         {
-            compilerLog.Add(LOG_ERROR, "Unknown structure type '" + GetTypeName(field.legacyType()) + "'.", valueNode->sourceFileName, valueNode->lineNumber);
+            compilerLog.Add(LOG_ERROR, "Unknown structure type '" + GetTypeName(field.typeExpr.base) + "'.", valueNode->sourceFileName, valueNode->lineNumber);
             noErrors = false;
             return false;
         }
@@ -2207,7 +1794,7 @@ namespace CPM
             if (fi != structInstance->fields.end())
             {
                 CPMDataSymbol sfield = fi->second;
-                sfield.offset += field.offset + index * sizeOfType(field.legacyType());
+                sfield.offset += field.offset + index * sizeOfType(field.typeExpr.base);
                 // The field's layout entry belongs to the struct's
                 // namespace, which may differ from the namespace the
                 // static was declared in; redirect writes and name
@@ -2226,118 +1813,82 @@ namespace CPM
         return true;
     }
 
-    bool CPMCompiler::parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode)
+    bool CPMCompiler::parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* value)
     {
-        if (field.legacyCount() > 1)
+        if (value->type == CPM_LINE && value->children.size() == 1) value = value->children[0];
+        if (field.typeExpr.isArray())
         {
-            // Semicolon-separated elements keep their LINE wrappers. A
-            // comma-separated expression is a call, never an array literal.
             vector<CPMSyntaxTreeNode*> elements;
-            if (valueNode->type == CPM_BLOCK)
+            if (value->type == CPM_BLOCK)
+                elements.assign(value->children.begin() + 1, value->children.end() - 1);
+            else if (value->type == CPM_EXPR)
+                elements.push_back(value); // Single element, with no trailing semicolon.
+            if (elements.size() != (size_t)field.typeExpr.arrayCount)
             {
-                for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
-                    elements.push_back(valueNode->children[i]);
+                compilerLog.Add(LOG_ERROR, "Array initializer must supply exactly its declared number of semicolon-separated elements.", value->sourceFileName, value->lineNumber);
+                Error(); return false;
             }
-            else if (field.legacyType() == CPM_DATATYPE_CHAR && valueNode->type == CPM_STR)
+            CPMDataSymbol element = field;
+            element.typeExpr = *field.typeExpr.child;
+            const int stride = sizeOfTypeExpr(element.typeExpr);
+            for (size_t i = 0; i < elements.size(); ++i)
             {
-                // Retained independently of separator changes until type migration.
-                for (size_t i = 1; i + 1 < valueNode->children.size(); ++i)
-                    elements.push_back(valueNode->children[i]);
+                element.offset = field.offset + i * stride;
+                auto item = elements[i];
+                if (item->type == CPM_EXPR && item->children.size() == 1) item = item->children[0];
+                if (!parseLiteralValue(symbol, element, item)) return false;
             }
-            else
-            {
-                compilerLog.Add(LOG_ERROR, "Array initializer elements must be separated by semicolons.", valueNode->sourceFileName, valueNode->lineNumber);
-                noErrors = false;
-                return false;
-            }
-
-            if (elements.size() != (size_t)field.legacyCount())
-            {
-                compilerLog.Add(LOG_ERROR, "Declared items count does not match array size.", valueNode->sourceFileName, valueNode->lineNumber);
-                noErrors = false;
-                return false;
-            }
-
-            for (int index = 0; index < field.legacyCount(); ++index)
-            {
-                CPMSyntaxTreeNode* itemNode = elements[index];
-
-                if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
-                {
-                    if (!parseLiteralNumber(symbol, field, itemNode, index))
-                        return false;
-                }
-                else
-                {
-                    // Unwrap a single array element before its per-type parser.
-                    if (itemNode->type == CPM_LINE)
-                    {
-                        if (itemNode->children.size() == 1)
-                            itemNode = itemNode->children[0];
-                        else
-                        {
-                            compilerLog.Add(LOG_ERROR, "Invalid array item syntax.", itemNode->sourceFileName, itemNode->lineNumber);
-                            noErrors = false;
-                            return false;
-                        }
-                    }
-
-                    if (field.legacyType() == CPM_DATATYPE_STRING)
-                    {
-                        if (!parseAndAllocateLiteralString(symbol, field, itemNode, index))
-                            return false;
-                    }
-                    else if (field.legacyType() == CPM_DATATYPE_CHAR)
-                    {
-                        if (!parseLiteralChar(symbol, field, itemNode, index))
-                            return false;
-                    }
-                    else if (field.legacyType() >= CPM_DATATYPE_USER)
-                    {
-                        if (!parseLiteralStruct(symbol, field, itemNode, index))
-                            return false;
-                    }
-                }
-            }
-
             return true;
         }
-
-        // Scalar (count <= 1).
-        CPMSyntaxTreeNode* itemNode = valueNode;
-        if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
-        {
-            if (!parseLiteralNumber(symbol, field, itemNode, 0))
-                return false;
-        }
-        else if (field.legacyType() == CPM_DATATYPE_STRING)
-        {
-            if (!parseAndAllocateLiteralString(symbol, field, itemNode, 0))
-                return false;
-        }
-        else if (field.legacyType() == CPM_DATATYPE_CHAR)
-        {
-            if (!parseLiteralChar(symbol, field, itemNode, 0))
-                return false;
-        }
-        else if (field.legacyType() >= CPM_DATATYPE_USER)
-        {
-            if (!parseLiteralStruct(symbol, field, itemNode, 0))
-                return false;
-        }
-        return true;
+        if (field.typeExpr.isPtr() || IsIntDataType(field.typeExpr.base) || field.typeExpr.base == CPM_DATATYPE_BOOL)
+            return parseLiteralNumber(symbol, field, value);
+        if (field.typeExpr.isString()) return parseAndAllocateLiteralString(symbol, field, value);
+        if (field.typeExpr.base == CPM_DATATYPE_CHAR) return parseLiteralChar(symbol, field, value);
+        if (field.typeExpr.isStruct()) return parseLiteralStruct(symbol, field, value);
+        compilerLog.Add(LOG_ERROR, "Invalid initializer type.", value->sourceFileName, value->lineNumber);
+        Error(); return false;
     }
 
     bool CPMCompiler::parseLiteralNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index, bool autoType)
     {
         if (!autoType)
-            CPM_ASSERT(IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
+            CPM_ASSERT(IsIntDataType(field.typeExpr.base) || field.typeExpr.isPtr() || field.typeExpr.base == CPM_DATATYPE_BOOL)
+
+        while ((valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE) && valueNode->children.size() == 1)
+            valueNode = valueNode->children[0];
+        CPMType valueType;
+        bool typedValue = false;
+        CPMStaticSymbol* reference = nullptr;
+        if ((valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE) && valueNode->children.size() == 3 &&
+            valueNode->children[0]->text == R_CAST)
+        {
+            if (!parseTypeExpr(valueNode->children[1], valueType, getSourceFile(valueNode->sourceFileName), field.owner)) return false;
+            typedValue = true;
+        }
+        else if (valueNode->type == CPM_ID || valueNode->type == CPM_REF)
+        {
+            reference = resolveStaticSymbolName(valueNode, getSourceFile(valueNode->sourceFileName), valueNode, field.owner);
+            if (reference) { valueType = reference->field.typeExpr; typedValue = true; }
+        }
+        if (!autoType && (field.typeExpr.isPtr() || (typedValue && valueType.isPtr())) &&
+            (!typedValue || valueType != field.typeExpr))
+        {
+            compilerLog.Add(LOG_ERROR, "Pointer initialization requires its exact type; use an explicit cast.", valueNode->sourceFileName, valueNode->lineNumber);
+            Error(); return false;
+        }
+        if (autoType && typedValue)
+        {
+            field.typeExpr = valueType;
+            autoType = false;
+        }
 
         if (valueNode->type == CPM_NUM || valueNode->type == CPM_ID || valueNode->type == CPM_REF || valueNode->type == CPM_EXPR || valueNode->type == CPM_LINE)
         {
             int val;
             if (valueNode->type == CPM_NUM)
                 val = parseNum(valueNode->text);
+            else if (reference && reference->isconst && reference->field.typeExpr.isPtr())
+                val = reference->immediateData;
             else
             {
                 vector<CPMUnfoldedExpressionNode> unfolded;
@@ -2371,13 +1922,13 @@ namespace CPM
                 }
             }
 
-            if (field.legacyType() == CPM_DATATYPE_BOOL)
+            if (field.typeExpr.base == CPM_DATATYPE_BOOL)
                 val = val > 0 ? 1 : 0;
 
             bool outofrange = false;
-            if (!field.legacyIsPtr())
+            if (!field.typeExpr.isPtr())
             {
-                switch (field.legacyType())
+                switch (field.typeExpr.base)
                 {
                 case CPM_DATATYPE_INT8:
                     if (val < INT8_Min || val > INT8_Max)
@@ -2420,7 +1971,7 @@ namespace CPM
                     symbol->immediateData = val;
                 else
                 {
-                    int typeSize = field.legacyIsPtr() ? (int)sizeof(FRIDGE_DWORD) : sizeOfType(field.legacyType());
+                    int typeSize = field.typeExpr.isPtr() ? (int)sizeof(FRIDGE_DWORD) : sizeOfType(field.typeExpr.base);
 
                     if (typeSize == 1)
                         field.owner->staticWrite(field.offset + index*typeSize, (FRIDGE_WORD)val);
@@ -2441,7 +1992,7 @@ namespace CPM
 
     bool CPMCompiler::parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(field.legacyType() == CPM_DATATYPE_STRING);
+        CPM_ASSERT(field.typeExpr.base == CPM_DATATYPE_STRING);
 
         if (valueNode->type == CPM_STR)
         {
@@ -2494,7 +2045,7 @@ namespace CPM
     }
 bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index)
     {
-        CPM_ASSERT(field.legacyType() == CPM_DATATYPE_CHAR);
+        CPM_ASSERT(field.typeExpr.base == CPM_DATATYPE_CHAR);
 
         FRIDGE_WORD val;
         if (valueNode->type == CPM_CHARLIT)
@@ -2521,14 +2072,6 @@ bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field
             }
             val = (FRIDGE_WORD)ccode;
         }
-        else if (valueNode->type == CPM_CHAR)
-        {
-            // Item node of a quoted string used as a char array initializer
-            // (e.g. the legacy `char text array 5 "12345"` shortcut). Spec
-            // §5.6 removes the implicit string→char-array coercion; this
-            // branch is kept only until test.cpm is rewritten in step 9.
-            val = (FRIDGE_WORD)valueNode->text[0];
-        }
         else
         {
             compilerLog.Add(LOG_ERROR, "Cannot parse '" + valueNode->text + "' as a char literal.", valueNode->sourceFileName, valueNode->lineNumber);
@@ -2544,40 +2087,6 @@ bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field
         return true;
     }
 
-    /*
-    void CPMCompiler::writeStaticNum(CPMStaticSymbol* symbol, int value)
-    {
-        switch (symbol->field.legacyType())
-        {
-        case CPM_DATATYPE_INT16:
-            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_INT16));
-            (*(CPM_INT16*)symbol->data) = (CPM_INT16)value;
-            break;
-        case CPM_DATATYPE_INT8:
-            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_INT8));
-            (*(CPM_INT8*)symbol->data) = (CPM_INT8)value;
-            break;
-        case CPM_DATATYPE_UINT16:
-            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_UINT16));
-            (*(CPM_UINT16*)symbol->data) = (CPM_UINT16)value;
-            break;
-        case CPM_DATATYPE_UINT8:
-            symbol->data = (FRIDGE_WORD*)malloc(sizeof(CPM_UINT8));
-            (*(CPM_UINT8*)symbol->data) = (CPM_UINT8)value;
-            break;
-        case CPM_DATATYPE_CHAR:
-            symbol->data = (FRIDGE_WORD*)malloc(sizeof(char));
-            (*(char*)symbol->data) = (char)value;
-            break;
-        }
-    }
-
-    int CPMCompiler::readStaticNum(CPMStaticSymbol* symbol)
-    {
-
-    }
-    */
-
     void CPMCompiler::getNamespaces(vector<CPMNamespace*>& nslist)
     {
         nslist.clear();
@@ -2587,46 +2096,34 @@ bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field
 
     string CPMCompiler::printStaticValue(CPMStaticSymbol* symbol, CPMDataSymbol& field)
     {
-        string s = GetTypeName(field.legacyType()) + " " + field.name + " = ";
-
-        if (symbol->staticData == nullptr)
+        string result = GetTypeName(field.typeExpr) + " " + field.name + " = ";
+        if (symbol->importSource >= 0) return result + "imports " + to_string(symbol->importSource);
+        if (!symbol->staticData)
+            return result + (field.typeExpr.isString() ? field.owner->staticReadString(symbol->immediateData) : to_string(symbol->immediateData));
+        if (field.typeExpr.isArray())
         {
-            // Immediate symbol: numbers and pointers print as values, const
-            // strings print from their chars in the namespace buffer.
-            if (field.legacyType() == CPM_DATATYPE_STRING && !field.legacyIsPtr())
-                s += string((char*)&(symbol->field.owner->staticBuffer[symbol->immediateData]));
-            else
-                s += to_string(symbol->immediateData);
-            return s;
+            result += "(";
+            CPMDataSymbol element = field;
+            element.typeExpr = *field.typeExpr.child;
+            for (int i = 0; i < field.typeExpr.arrayCount; ++i)
+            {
+                element.offset = field.offset + i * sizeOfTypeExpr(element.typeExpr);
+                if (i) result += "; ";
+                result += printStaticValue(symbol, element);
+            }
+            return result + ")";
         }
-
-        if (field.legacyCount() > 1)
-            s += "(";
-
-        for (int i = 0; i < field.legacyCount(); ++i)
-        {
-            if (IsIntDataType(field.legacyType()) || field.legacyIsPtr() || field.legacyType() == CPM_DATATYPE_BOOL)
-                s += printStaticNumber(symbol, field, i);
-            else if (field.legacyType() == CPM_DATATYPE_STRING)
-                s += printStaticString(symbol, field, i);
-            else if (field.legacyType() == CPM_DATATYPE_CHAR)
-                s += printStaticChar(symbol, field, i);
-            else if (field.legacyType() >= CPM_DATATYPE_USER)
-                s += printStaticStruct(symbol, field, i);
-
-            if (i < field.legacyCount()-1)
-                s += "; ";
-        }
-
-        if (field.legacyCount() > 1)
-            s += ")";
-        return s;
+        if (field.typeExpr.isPtr() || IsIntDataType(field.typeExpr.base) || field.typeExpr.base == CPM_DATATYPE_BOOL)
+            return result + printStaticNumber(symbol, field);
+        if (field.typeExpr.isString()) return result + printStaticString(symbol, field);
+        if (field.typeExpr.base == CPM_DATATYPE_CHAR) return result + printStaticChar(symbol, field);
+        return result + printStaticStruct(symbol, field);
     }
 
     string CPMCompiler::printStaticNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         int val = 0;
-        size_t typeSize = field.legacyIsPtr() ? sizeof(FRIDGE_DWORD) : sizeOfType(field.legacyType());
+        size_t typeSize = field.typeExpr.isPtr() ? sizeof(FRIDGE_DWORD) : sizeOfType(field.typeExpr.base);
         if (typeSize == 1)
             val = field.owner->staticBuffer[field.offset + index];
         else if (typeSize == 2)
@@ -2650,9 +2147,9 @@ bool CPMCompiler::parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field
     string CPMCompiler::printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index)
     {
         string s = "(";
-        CPMStructSymbol* ss = structTypes[field.legacyType()];
+        CPMStructSymbol* ss = structTypes[field.typeExpr.base];
 
-        FRIDGE_DWORD typeSize = sizeOfType(field.legacyType());
+        FRIDGE_DWORD typeSize = sizeOfType(field.typeExpr.base);
         for (map<string, CPMDataSymbol>::iterator fi = ss->fields.begin(); fi != ss->fields.end(); ++fi)
         {
             CPMDataSymbol sfield = fi->second;

@@ -1,24 +1,30 @@
 # Frion Compiler Refactor Plan
 
-> **Lexer follow-up:** [cpm-lexer-plan.md](cpm-lexer-plan.md) plans dedicated
-> `<...>` type delimiters and mandatory whitespace in operator calls and
-> between a type and its declaration name. Its lexical rules supersede the
-> parenthesized compound-type examples below when that follow-up is implemented.
-> The completed steps below describe the earlier implementation work.
+> **Lexer milestone implemented:** [cpm-lexer-plan.md](cpm-lexer-plan.md)
+> records angle-delimited type grouping, nested comparison disambiguation, and
+> whitespace rules. **Declaration migration is complete:** statics/constants,
+> fields, function returns/parameters, locals, and cast targets use `parseTypeExpr`.
+> Recursive layout, initialization, printing, and signature identity preserve the
+> complete type. Legacy flat accessors/resolution and pointer sigil constants are
+> removed. `cpm_types` and `cpm_separators` cover this milestone. Historical step
+> descriptions below are superseded by the completion note in §0.
 
 > Bringing `emulator/cpm/` in line with `doc/cpm-language-spec.md`.
 > This document is the implementation plan for the parser and compiler
 > changes that follow from the language-design decisions locked into the spec:
 >
 > - **Type-exprs replace postfix modifiers.** `uint8 x array 10` becomes
->   `(uint8 array 10) x`; `#uint8` becomes `(uint8 ptr)`. Nesting is
->   unrestricted: `((uint8 array 10) array 20)`, `(T ptr ptr)`, etc.
-> - **Sigils are removed.** `#`, `^`, `&` are not part of the language.
->   `CPM_REF`, `CPMSD_REF`, `PtrPrefix`, `RefPrefix`, `R_REF` go away.
-> - **Indexing is a first-class operator.** `(at arr, i)` for arrays,
->   `(at ptr)` for pointers (Optional-deref form). Call-style `(arr i)`
->   indexing is removed.
-> - **Address-of is an operator.** `(addr lvalue)` yields `(T ptr)`.
+>   `<uint8 array 10> x`; `#uint8` becomes `<uint8 ptr>`. Nesting is
+>   unrestricted: `<<uint8 array 10> array 20>`, `<T ptr ptr>`, etc.
+> - **Pointer/reference sigils are removed.** `PtrPrefix`, `RefPrefix`, and
+>   `R_REF` are gone. `^`/`&` remain bitwise operators; `CPM_REF`/`CPMSD_REF`
+>   remain lexical dot-qualified-name nodes.
+> - **Indexing is a first-class operator.** `(at arr, i)` indexes arrays;
+>   `(at ptr)` / `(at ptr, i)` access elements of any pointer target type,
+>   scaling the index by its size. Strings support the same optional-index
+>   forms with `char` elements; `<string ptr>` has `string` elements.
+>   Call-style `(arr i)` indexing is removed. Bounds and mutability are separate.
+> - **Address-of is an operator.** `(addr lvalue)` yields `<T ptr>`.
 > - **`[ ]` is removed.** `CPM_INDEX`, `CPMSD_INDEX`, `CPM_INDEX_OPEN`,
 >   `CPM_INDEX_CLOSE` are deleted. `[ ]` may be repurposed later as an
 >   array-literal token, but not in this pass.
@@ -31,12 +37,48 @@
 >   This supersedes the earlier comma-in-initializers decision; see §3.7.
 > - **String literals are static, deduplicated, null-terminated.** A `string`
 >   value is the address of its first char. No implicit array↔pointer decay;
->   no implicit null termination of `(char array N)`.
+>   no implicit null termination of `<char array N>`.
 > - **Struct return ABI fixed.** `sizeof(T) <= 2` returns in HL;
->   larger returns use a hidden leading `(T ptr)` out-argument.
+>   larger returns use a hidden leading `<T ptr>` out-argument.
 > - **No struct padding.** Field offsets are the running sum of field sizes.
 
 ## 0. Migration style
+
+### Declaration/type-expression milestone — complete
+
+- Every declaration path stores the parsed recursive type directly. Array and
+  pointer nesting, one-element arrays, qualified types, and modifier chains no
+  longer pass through a flat compatibility representation.
+- Struct fields retain declaration order. Recursive size computation follows
+  by-value array elements, detects cycles, and stops at pointer boundaries.
+  Forward struct references are sized after fields are read; pointer-to-array
+  targets are checked after all layouts are available. Type size is bounded at
+  65535 bytes; allocated objects remain subject to the existing memory budget.
+- Static initialization and printing recurse through arrays and struct fields;
+  string relocation slots follow the subobject offsets. String literals do not
+  implicitly initialize character arrays. Explicit pointer constant casts retain
+  their complete target type; integer/pointer initializers require that cast.
+- Function signatures retain recursive argument/return types, including arrays.
+  Prototypes merge only with matching return types and parameter names; duplicate
+  parameter names or function bodies are errors. This records type identity;
+  runtime calls and aggregate returns still need their codegen/ABI work.
+- Locals retain recursive types and reserve their complete storage size. Type
+  validation also covers declarations in nested blocks and loop headers. Runtime
+  initializer/control-flow lowering remains unfinished in the existing compiler.
+- Cast targets are validated inside nested expressions, and constant casts fold
+  without treating a type node as an integer operand. Shift operators remain
+  distinct from nested angle delimiters in constant array sizes.
+- `test.cpm` uses the new declarations and compiles in `cpm_types`. The old
+  `doc/cpm-intermediate.txt` remains a historical dump, not current expected output.
+
+Validate with `cmake -S emulator/cpm -B build-cpm` (use a fresh directory if the
+cache points to another checkout), `cmake --build build-cpm`, and
+`ctest --test-dir build-cpm --output-on-failure`.
+
+The remaining work is executable expression/operator lowering, runtime local
+initializers, control flow, complete binary/static-data emission, and the calling
+convention. Numeric literal typing, contextual `null`, and string deduplication
+also retain their separate implementation stages.
 
 - **Invasive.** Rip out `isPtr`/`count` everywhere in one pass. The spec
   change is a hard break; a half-migrated state will be harder to debug than
@@ -65,8 +107,13 @@ expression/line/block detector sweeps with recursive grouping:
   records which children had commas and source whitespace before them.
 - `CPMValidateCall` checks call separators, while `CPMValidateDeclaration`
   prevents operand commas from leaking into declaration components.
-- Bracket indexing remains removed. Parenthesized compound types remain
-  transitional; the separate `cpm-lexer-plan.md` describes the angle migration.
+- Bracket indexing remains removed. `pass_Angles` classifies type boundaries
+  before IDs, preserving comparison operators as IDs. `CPMSD_TYPEEXPR` groups
+  type components inside the recursive traversal. Parenthesized groups remain
+  value expressions; the semantic type parser rejects them in type positions.
+- Declaration consumers now use the recursive type parser directly. Nested and
+  chained modifiers, constant counts, and the 65535-byte type-size limit apply
+  across declarations; the legacy flat compatibility API has been removed.
 
 ## 2. CPMCompiler.h changes
 
@@ -80,8 +127,8 @@ currently scattered across `CPMDataSymbol`, `CPMArgumentSignature`,
 enum CPMTypeKind {
     CPM_TYPE_VOID,
     CPM_TYPE_BASE,    // a primitive or named struct
-    CPM_TYPE_PTR,     // (T ptr)
-    CPM_TYPE_ARRAY,   // (T array n)
+    CPM_TYPE_PTR,     // <T ptr>
+    CPM_TYPE_ARRAY,   // <T array n>
 };
 
 struct CPMType {
@@ -103,8 +150,8 @@ struct CPMType {
 
 `string` is treated as `CPM_TYPE_BASE` with `base == CPM_DATATYPE_STRING`
 internally — it stays a special primitive that the codegen knows is a
-null-terminated pointer — rather than desugaring to `(char ptr)`. This keeps
-the existing `staticAllocate(string)` path working; an explicit `(char ptr)`
+null-terminated pointer — rather than desugaring to `<char ptr>`. This keeps
+the existing `staticAllocate(string)` path working; an explicit `<char ptr>`
 typed by the user is a different `CPMType` and does *not* share the string
 literal pool. (Two distinct concepts, two distinct code paths. Document this
 clearly in `GetTypeName` and the printer.)
@@ -179,7 +226,7 @@ provides that.
   - accept `CPM_CHARLIT` from `parseLiteralChar` (was: the `"x"`-as-char hack),
   - retain `;` as the initializer-element separator and reject comma lists,
   - accept and validate commas between operator/call operands,
-  - reject string literals as initializers for `(char array N)` (no auto
+  - reject string literals as initializers for `<char array N>` (no auto
     coercion; spec §5.6).
 - `CPMNamespace::staticAllocate(string)` — header signature stays. The `.cpp`
   gains a dedup pass: scan the existing buffer for identical null-terminated
@@ -194,7 +241,7 @@ Approximately 40 references in `CPMCompiler.cpp` and 1 in
 ### 3.1 `PtrPrefix` checks (delete)
 Lines 447, 636, 841, 882, 966, 1146, 1166 in `CPMCompiler.cpp`. Each is
 of the form `if (typeName[0] == PtrPrefix) { isPtr = true; … }`. All
-replaced by `parseTypeExpr` recognising the `(T ptr)` shape.
+replaced by `parseTypeExpr` recognising the `<T ptr>` shape.
 
 ### 3.2 `CPM_REF` reads (delete)
 Lines 383, 612, 714, 835, 1142, 1218, 1326, 1353, 1624 in `CPMCompiler.cpp`
@@ -208,12 +255,12 @@ lexical representation without the old semantic pointer interpretation.
 ### 3.3 `R_REF` arg-mode check (delete)
 Line 922: `if (argNode->children[…]->text == R_REF)`. The `ref`-as-arg-mode
 keyword is gone; pass-by-reference is now done by declaring the argument
-type as `(T ptr)` and passing `(addr x)` at the call site.
+type as `<T ptr>` and passing `(addr x)` at the call site.
 
 ### 3.4 `R_ARRAY` postfix-array-mode recongnition (rewrite)
 Lines 395, 621, 909 check `node->children[…]->text == R_ARRAY` to detect
 postfix `array n` on a declaration. Under the new grammar `array` only
-appears inside `(T array n)` type-exprs and is consumed by `parseTypeExpr`.
+appears inside `<T array n>` type-exprs and is consumed by `parseTypeExpr`.
 The declaration parser becomes simpler: parse a type-expr, parse a name,
 parse an optional initializer. No more "name flanked by type and modifier".
 
@@ -374,11 +421,16 @@ A reasonable commit sequence:
    Recursive grouping now handles nested semicolon lists; executable support
    for fully nested type expressions remains separate work.
 
-7. **Remove `PtrPrefix`/`RefPrefix`/`R_REF`** and sweep the 40 references.
+7. **Remove `PtrPrefix`/`RefPrefix`/`R_REF` — done** with declaration migration.
 8. **String dedup.** Add the `stringPool` map in `CPMNamespace`.
-9. **Rewrite `test.cpm`** in the new syntax. Verify it parses and lowers.
+9. **Rewrite `test.cpm` — done** for the declaration/type milestone. The sample
+   compiles in the integration suite; runtime lowering limitations remain.
 10. **Codegen for `(at …)`/`(addr …)`/`(cast …)`** — first in the
     intermediate (`CPMIntermediate.cpp`); then Fridge-Assembly emission.
+    `at` must preserve the recursive element type, support indexed pointers,
+    scale offsets by `sizeof(T)`, and provide direct character access for the
+    distinct string type. String parameter conversions remain explicit casts.
+    The existing arity-only placeholders do not implement these semantics.
 11. **Struct return ABI** — hidden out-arg in `detectFunction` and the call
     site lowering in `CPMIntermediate.cpp`.
 

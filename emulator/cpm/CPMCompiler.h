@@ -52,14 +52,14 @@ namespace CPM
     // Recursive type-expr. Replaces the (CPMDataType type; bool isPtr; int count)
     // triple that was scattered across CPMDataSymbol / CPMArgumentSignature /
     // CPMFunctionSymbol. Note: `string` stays a special primitive
-    // (CPM_DATATYPE_STRING); an explicit `(char ptr)` typed by the user is a
+    // (CPM_DATATYPE_STRING); an explicit `<char ptr>` typed by the user is a
     // different CPMType and does NOT share the string literal pool.
     enum CPMTypeKind
     {
         CPM_TYPE_VOID,
         CPM_TYPE_BASE,    // a primitive or named struct
-        CPM_TYPE_PTR,     // (T ptr)
-        CPM_TYPE_ARRAY,   // (T array n)
+        CPM_TYPE_PTR,     // <T ptr>
+        CPM_TYPE_ARRAY,   // <T array n>
     };
 
     struct CPMType
@@ -84,8 +84,8 @@ namespace CPM
         bool isPtr()       const { return kind == CPM_TYPE_PTR; }
         bool isArray()     const { return kind == CPM_TYPE_ARRAY; }
         bool isBase()      const { return kind == CPM_TYPE_BASE; }
-        bool isPrimitive() const { return kind == CPM_TYPE_BASE && base != CPM_DATATYPE_USER && base != CPM_DATATYPE_VOID; }
-        bool isStruct()    const { return kind == CPM_TYPE_BASE && base == CPM_DATATYPE_USER; }
+        bool isPrimitive() const { return kind == CPM_TYPE_BASE && base > CPM_DATATYPE_VOID && base < CPM_DATATYPE_USER; }
+        bool isStruct()    const { return kind == CPM_TYPE_BASE && base >= CPM_DATATYPE_USER; }
         bool isString()    const { return kind == CPM_TYPE_BASE && base == CPM_DATATYPE_STRING; }
     };
 
@@ -103,10 +103,7 @@ namespace CPM
     const string R_ADDR = "addr";
     const string R_CAST = "cast";
     const string R_NULL = "null";
-    const string R_REF = "ref";          // LEGACY: removed in step 7
     const string GlobalNamespace = "global";
-    const char PtrPrefix = '#';          // LEGACY: removed in step 7
-    const char RefPrefix = '&';          // LEGACY: removed in step 7
     const char ServiceSymbol = '$';
     const string OP_ASSIGN = "=";
 
@@ -138,19 +135,6 @@ namespace CPM
         CPMDataSymbol();
         //FRIDGE_RAM_ADDR serialize(vector<FRIDGE_WORD>& output);
         ~CPMDataSymbol();
-
-        // ---- Legacy accessors (transitional, to be removed in step 4b) ----
-        // These compute the old flat view from the recursive CPMType. They
-        // only make sense for the legacy-supported shapes (BASE, PTR, ARRAY
-        // of BASE/PTR). For the new fully-nested forms they return a best-
-        // effort approximation; new code should prefer typeExpr directly.
-        CPMDataType legacyType() const;   // the "element" base type id
-        bool        legacyIsPtr() const;  // true iff top-level kind is PTR
-        int         legacyCount() const;  // 1 for non-arrays, arrayCount for arrays
-        // Reconstruct typeExpr from the legacy flat triple. Used by the
-        // un-migrated detect/read functions; once they call parseTypeExpr
-        // directly this helper disappears.
-        void setLegacyType(CPMDataType base, bool isPtr, int count);
     };
 
     // Compile-time representative of every static, const and literal in the
@@ -192,6 +176,7 @@ namespace CPM
         bool isUnion;
         int size;
         map<string, CPMDataSymbol> fields;
+        vector<string> fieldOrder; // packed layout follows source declaration order
         CPMNamespace* owner;
 
         CPMStructSymbol();
@@ -200,13 +185,7 @@ namespace CPM
     struct CPMArgumentSignature
     {
         string name;
-        CPMType typeExpr;          // was: CPMDataType type; int count; bool isPtr;
-
-        // ---- Legacy accessors (transitional) ----
-        CPMDataType legacyType() const;
-        bool        legacyIsPtr() const;
-        int         legacyCount() const;
-        void setLegacyType(CPMDataType base, bool isPtr, int count);
+        CPMType typeExpr;
     };
 
     struct CPMFunctionSignature
@@ -377,6 +356,7 @@ namespace CPM
     {
         int operandsNumber;
         CPMSyntaxTreeNode* syntaxNode;
+        CPMSyntaxTreeNode* castTarget = nullptr;
     };
 
     class CPMCompiler
@@ -397,7 +377,7 @@ namespace CPM
         void readNamespaces();
         CPMStaticSymbol* addNumStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type, int data);
         CPMStaticSymbol* addStrStatic(string name, CPMNamespace* ns, bool isConst, string data);
-        CPMStaticSymbol* addStatic(string name, CPMNamespace* ns, bool isConst, bool isPtr, CPMDataType type, FRIDGE_DWORD count = 1, int importSource = -1);
+        CPMStaticSymbol* addStatic(string name, CPMNamespace* ns, bool isConst, const CPMType& type, int importSource = -1);
 
         void readStructs();
         void detectStruct(CPMSyntaxTreeNode* node, CPMNamespace* owner);
@@ -444,16 +424,16 @@ namespace CPM
         FRIDGE_RAM_ADDR getGlobalOffset() { return globalOffset; }
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
-        CPMDataType resolveDataTypeName(CPMSyntaxTreeNode* nameNode, bool& isPtr, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        bool isTypeDeclaration(CPMSyntaxTreeNode* node, CPMNamespace* owner);
+        bool parseDataDeclaration(CPMSyntaxTreeNode* node, CPMType& type, CPMNamespace* owner);
         // Recursive type-expr parser per spec §3. Recognises:
         //   - bare primitive/struct name (CPM_ID)
         //   - qualified NS.Name (CPM_REF with two ID children)
-        //   - (T ptr)        (CPM_EXPR with children [type-expr, "ptr"])
-        //   - (T array n)    (CPM_EXPR with children [type-expr, "array", n])
+        //   - <T ptr> / <T array n> (CPM_TYPEEXPR)
+        //   - nested and chained modifiers, e.g. <<T array 4> ptr>, <T ptr ptr>
+        // Array counts may be constant names, literals, or constant expressions.
         // On success returns true and fills `out`; on failure returns false
         // and emits an error to compilerLog. Does not modify `out` on failure.
-        // Exists in parallel with the legacy resolveDataTypeName during the
-        // migration; step 4 replaces the legacy walker and deletes it.
         bool parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
         // Helper for parseTypeExpr: resolve a bare type name (from a CPM_ID
         // already split out of any NS.Name qualifier) to a primitive or a
@@ -484,6 +464,7 @@ namespace CPM
         CPMStaticSymbol* addLiteral(CPMFunctionSymbol* func, CPMSyntaxTreeNode* valueNode);
         //static vector<string> ParseSymbolName(const string& name);
         string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
+        string GetTypeName(const CPMType& type);
     };
 
 }

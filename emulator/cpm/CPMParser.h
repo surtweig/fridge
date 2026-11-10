@@ -19,7 +19,10 @@ namespace CPM
         CPM_ID,
         CPM_REF,        // "."-joined identifier sequence: NS.Name, a.b.c
                         // (lexical joiner only — NOT a pointer/ref indicator;
-                        // pointer types are expressed as `(T ptr)` type-exprs)
+                        // pointer types are expressed as `<T ptr>` type-exprs)
+        CPM_TYPE_OPEN,
+        CPM_TYPE_CLOSE,
+        CPM_TYPEEXPR,
         CPM_EXPR,
         CPM_LINE,
         CPM_BLOCK,
@@ -38,6 +41,8 @@ namespace CPM
     const char CPM_SUBSCRIPT_DELIM = '.';
     const char CPM_STR_DELIM = '"';
     const char CPM_CHAR_DELIM = '\'';
+    const char CPM_TYPE_OPEN_DELIM = '<';
+    const char CPM_TYPE_CLOSE_DELIM = '>';
     const string CPM_COMMENT_LINE = "//";
     const string CPM_COMMENT_BLOCK_OPEN = "/*";
     const string CPM_COMMENT_BLOCK_CLOSE = "*/";
@@ -104,7 +109,7 @@ namespace CPM
     // Joins dot-separated identifiers (NS.Name, a.b.c) into a single CPM_REF
     // node. The name CPM_REF is historical; this detector is NOT about pointer
     // or reference types — it only does lexical `.`-joining. Pointer types are
-    // written `(T ptr)` in the new grammar.
+    // written `<T ptr>` in the new grammar.
     class CPMSD_REF : public CPMSyntaxDetector
     {
     private:
@@ -114,9 +119,19 @@ namespace CPM
         CPMSyntaxNodeType Type() override { return CPM_REF; }
     };
 
+    // Receives tagged boundaries and already-grouped nested types/expressions.
+    class CPMSD_TYPEEXPR : public CPMSyntaxDetector
+    {
+        bool opened = false;
+    public:
+        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
+        CPMSyntaxNodeType Type() override { return CPM_TYPEEXPR; }
+    };
+
     inline bool CharIsDigit(char c) { return c >= '0' && c <= '9'; }
     inline bool CharIsHexDigit(char c) { return CharIsDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
     inline bool CharIsWhiteSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+    inline bool CharIsIdentifierStart(char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'; }
     inline bool CharIsDelimiter(char c) {
         return c == CPM_LINE_END ||
                c == CPM_OPERAND_DELIM ||
@@ -146,6 +161,7 @@ namespace CPM
 
         void pass_CHAR(string sourceFileName);
         void pass_LiteralsAndComments();
+        void pass_Angles();
         void pass_Groups();
         CPMSyntaxTreeNode* groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
                                         CPMSyntaxNodeType type);
