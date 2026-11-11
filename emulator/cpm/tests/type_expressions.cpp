@@ -14,14 +14,14 @@ int main()
     try
     {
         Fixture fixture;
-        fixture.compile(R"(
+        fixture.check(R"(
             const uint8 count (+ 1, 1);
             struct Node ( <Node ptr> next; <<uint16 array count> array 2> words; );
             struct Envelope ( <Tail array 2> z; <Node ptr ptr> a; );
             struct Tail ( uint8 z; uint16 a; );
-            static <<uint16 array count> array 2> grid ((1; 258); (3; 4));
+            static <<uint16 array count> array 2> grid ((1d; 258d); (3d; 4d));
             const <uint8 array 1> single (7);
-            static <Tail array 2> tails ((z 5; a 258); (z 6; a 772));
+            static <Tail array 2> tails ((z 5; a 258d); (z 6; a 772d));
             static <<string array 1> array 2> texts (("ab"); ("cd"));
             static <uint8 ptr ptr> chain;
             const <uint8 ptr ptr> address (cast <uint8 ptr ptr>, 0x1234);
@@ -31,14 +31,14 @@ int main()
             static <uint8 array (cast uint8, (> count, 1))> compared;
             static <uint8 array 1> imported imports 0x1000;
             static Envelope envelope;
-            <uint8 array 2> make(<uint8 ptr ptr> p; <Tail array 1> values) ( ; );
+            <uint8 array 2> make(<uint8 ptr ptr> p; <Tail array 1> values) (return (cast <uint8 array 2>, 0d););
             void overload(<uint8 ptr> p) ( ; );
             void overload(<<uint8 array 1> ptr> p) ( ; );
             void overload(<uint8 array 1> p) ( ; );
             void overload(uint8 p) ( ; );
             void locals(<Tail ptr> arg) (
-                <<uint8 array 2> array 3> grid;
-                <Tail ptr ptr> chain;
+                <<uint8 array 2> array 3> local_grid;
+                <Tail ptr ptr> local_chain;
                 <Tail array 1> one;
                 uint8 scalar;
             );
@@ -85,7 +85,7 @@ int main()
                     CPMFunctionSemanticBlock block(&function);
                     require(block.StackOffset() == 12, "Local allocation used flattened sizes");
                     require(block.resolveLocalSymbolName("one")->typeExpr.isArray(), "Local array-one identity lost");
-                    require(block.resolveLocalSymbolName("chain")->typeExpr.child->isPtr(), "Local pointer chain lost");
+                    require(block.resolveLocalSymbolName("local_chain")->typeExpr.child->isPtr(), "Local pointer chain lost");
                     require(block.resolveLocalSymbolName("arg") == &function.arguments[0], "Parameter missing from scope");
                 }
             }
@@ -96,12 +96,12 @@ int main()
         fixture.compile("struct A (<B ptr> b;); struct B (<A ptr> a;); static A a;", true);
         fixture.compile("struct A (<<A array 2> ptr> p;); static A a;", true);
         fixture.compile("void f(<uint8 ptr> p); void f(<uint8 ptr> p) (;);", true);
-        fixture.compile("void f() (;); void main() (cast <uint8 ptr ptr>, 0;);", true);
-        fixture.compile("struct Huge (<uint8 array 65535> data;); static <Huge ptr> p;", true);
-        fixture.compile("void main() (if (1) (<uint8 array 2> a;););", true);
+        fixture.check("void f() (;); void main() (cast <uint8 ptr ptr>, 0d;);", true);
+        fixture.compile("struct Huge (<uint8 array 65535d> data;); static <Huge ptr> p;", true);
+        fixture.check("void main() (if (true) (<uint8 array 2> a;););", true);
         std::ifstream example(CPM_EXAMPLE_SOURCE);
         require(example.good(), "Missing type-expression example");
-        fixture.compile(string(std::istreambuf_iterator<char>(example), {}), true);
+        fixture.check(string(std::istreambuf_iterator<char>(example), {}), true);
         for (const string& source : {
             "static <void ptr> p;", "static void value;", "struct P (void field;);",
             "static <uint8 ptr> p 0;", "static <uint8 ptr> p (cast <char ptr>, 0);",
@@ -120,19 +120,19 @@ int main()
             "static <char array 2> a \"ab\";",
             "static <uint8 array 1> a (1; 2);", "static <uint8 array 1> a 1;",
             "static <<uint8 array 2> array 2> a ((1; 2); (3));",
-            "static <uint8 array 0> a;", "static <uint16 array 65535> a;",
+            "static <uint8 array 0> a;", "static <uint16 array 65535d> a;",
             "static <uint8 array 4294967297> a;",
-            "static <uint8 array (* 65535, 65535)> a;",
+            "static <uint8 array (* 256d, 256d)> a;",
             "static <uint8 array (<< 1, 32)> a;", "static <uint8 array (<< 1, 31)> a;",
             "struct A (<A array 1> a;);", "struct A (<B array 2> b;); struct B (<A array 1> a;);",
-            "struct A (<B array 40000> b;); struct B (uint16 value;);",
-            "struct A (<<B array 40000> ptr> p;); struct B (uint16 value;);",
+            "struct A (<B array 40000d> b;); struct B (uint16 value;);",
+            "struct A (<<B array 40000d> ptr> p;); struct B (uint16 value;);",
             "void f(uint8 a; uint8 a) (;);", "void f(uint8 a); void f(uint8 renamed) (;);",
             "void f(<uint8 array 1> a) (;); void f(<uint8 array 1> a) (;);",
             "namespace A (struct P (uint8 x;);); namespace B (struct P (uint8 x;);); using A; using B; static <P ptr> p;",
             "static <uint8 array 2> a imports 0xFFFF;",
             "void main() (if (1) (<void ptr> p;););",
-            "void main() (<uint8 array 40000> a; <uint8 array 40000> b;);"
+            "void main() (<uint8 array 40000d> a; <uint8 array 40000d> b;);"
         }) fixture.compile(source, false);
         std::cout << "CPM type-expression tests passed\n";
     }

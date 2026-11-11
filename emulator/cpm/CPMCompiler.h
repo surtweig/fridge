@@ -102,6 +102,7 @@ namespace CPM
     const string R_AT = "at";
     const string R_ADDR = "addr";
     const string R_CAST = "cast";
+    const string R_CONVERT = "convert";
     const string R_NULL = "null";
     const string GlobalNamespace = "global";
     const char ServiceSymbol = '$';
@@ -111,11 +112,16 @@ namespace CPM
     {
         string name;
 
-        CPMParser* parser;
+        CPMParser* parser = nullptr;
         vector<string> usingNamespaces;
     };
 
     struct CPMNamespace;
+    struct CPMCheckedExpression;
+    struct CPMCheckedFunction;
+    class CPMSemanticAnalyzer;
+
+    enum class CPMCompileMode { Emit, Check };
 
     struct CPMDataSymbol
     {
@@ -129,7 +135,7 @@ namespace CPM
         //    field inside the struct (running sum of preceding field sizes);
         //  - for a function local: offset inside the stack frame.
         FRIDGE_DWORD offset;
-        FRIDGE_RAM_ADDR globalAddress;
+        FRIDGE_RAM_ADDR globalAddress = 0;
         CPMNamespace* owner;
 
         CPMDataSymbol();
@@ -154,7 +160,7 @@ namespace CPM
     //
     // Struct instance data is flat inside the buffer; nested fields are
     // addressed by accumulating the layout offsets onto the parent offset
-    // (see parseLiteralStruct) — no nested CPMStaticSymbols are spawned.
+    // without creating nested CPMStaticSymbols.
     struct CPMStaticSymbol
     {
         CPMDataSymbol field;
@@ -163,7 +169,8 @@ namespace CPM
         FRIDGE_WORD* staticData;
         int immediateData; // value of immediate symbols (see invariant above)
         vector<FRIDGE_DWORD> staticStrings; // buffer offsets of all 2-byte slots holding string addresses (patched to absolute at code generation)
-        CPMSyntaxTreeNode* declNode; // declaration node; distinguishes "already processed" from a duplicate declaration across the two read passes
+        CPMSyntaxTreeNode* declNode; // declaration node; distinguishes "already processed" from a duplicate declaration during dependency resolution
+        shared_ptr<CPMCheckedExpression> initializer;
 
         CPMStaticSymbol();
     };
@@ -177,6 +184,7 @@ namespace CPM
         int size;
         map<string, CPMDataSymbol> fields;
         vector<string> fieldOrder; // packed layout follows source declaration order
+        vector<vector<string>> views;
         CPMNamespace* owner;
 
         CPMStructSymbol();
@@ -186,6 +194,7 @@ namespace CPM
     {
         string name;
         CPMType typeExpr;
+        CPMSyntaxTreeNode* nameNode = nullptr;
     };
 
     struct CPMFunctionSignature
@@ -206,13 +215,11 @@ namespace CPM
         CPMType returnType;          // was: bool isPtr; CPMDataType type;
         CPMNamespace* owner;
         CPMCompiler* compiler;
-        FRIDGE_RAM_ADDR globalAddress;
+        FRIDGE_RAM_ADDR globalAddress = 0;
         CPMSyntaxTreeNode* bodyNode;
-        // Compile-time representatives of every literal used in this function's
-        // body. Stored by value in a deque so &literals.back() stays valid while
-        // more literals are appended. Numbers/chars are immediate; string
-        // literals keep their chars in owner->staticBuffer and the relative
-        // address in immediateData (see CPMStaticSymbol invariant).
+        shared_ptr<CPMCheckedFunction> checkedBody;
+        // Immediate scalar operands used by the legacy emitter. The deque
+        // keeps addresses stable while more operands are appended.
         deque<CPMStaticSymbol> literals;
     };
 
@@ -242,7 +249,7 @@ namespace CPM
             return (size_t)ptr - (size_t)staticBuffer;
         }
 
-        FRIDGE_WORD* staticAllocate(FRIDGE_WORD* data, size_t typesize, size_t count)
+        FRIDGE_WORD* staticAllocate(const FRIDGE_WORD* data, size_t typesize, size_t count)
         {
             //CPM_ASSERT(count > 0);
             //CPM_ASSERT(typesize > 0);
@@ -352,19 +359,19 @@ namespace CPM
         }
     };
 
-    struct CPMUnfoldedExpressionNode
-    {
-        int operandsNumber;
-        CPMSyntaxTreeNode* syntaxNode;
-        CPMSyntaxTreeNode* castTarget = nullptr;
-    };
-
     class CPMCompiler
     {
+        friend class CPMSemanticAnalyzer;
     private:
         map<string, CPMSourceFile> sources;
         map<string, CPMNamespace*> namespaces;
         map<CPMDataType, CPMStructSymbol*> structTypes;
+        vector<CPMSyntaxTreeNode*> sourceNodes;
+        vector<pair<CPMNamespace*, CPMSyntaxTreeNode*>> declarations;
+        map<const CPMSyntaxTreeNode*, size_t> declarationOrder;
+        map<CPMNamespace*, map<string, CPMSyntaxTreeNode*>> staticDeclarations;
+        unordered_set<const CPMSyntaxTreeNode*> activeStatics;
+        unordered_set<CPMDataType> activeLayouts;
         string outputFileName;
         vector<string> includeFolders;
         bool noErrors;
@@ -376,25 +383,19 @@ namespace CPM
         void preprocessSourceFile(string rootFolder, string filename);
         void readNamespaces();
         CPMStaticSymbol* addNumStatic(string name, CPMNamespace* ns, bool isConst, CPMDataType type, int data);
-        CPMStaticSymbol* addStrStatic(string name, CPMNamespace* ns, bool isConst, string data);
         CPMStaticSymbol* addStatic(string name, CPMNamespace* ns, bool isConst, const CPMType& type, int importSource = -1);
 
-        void readStructs();
+        void readDeclarations();
+        void ensureValueLayout(const CPMType& type);
+        bool validTypeLayout(const CPMType& type);
         void detectStruct(CPMSyntaxTreeNode* node, CPMNamespace* owner);
         CPMDataType registerStructDataType(CPMStructSymbol* structSymbol);
         void readStructFields(CPMStructSymbol* structSymbol);
         void computeStructDataSize(CPMStructSymbol* structSymbol);
-        void computeStructDataSize(CPMStructSymbol* structSymbol, unordered_set<CPMDataType> &visitedStructs);
-        void buildStructLayout(CPMStructSymbol* structSymbol);
-
-        // Statics are read in two phases around readStructs():
-        //  - phase 1 processes const declarations whose type resolves to a
-        //    primitive, so their values can size struct array fields;
-        //    anything else (struct-typed consts, statics) is silently deferred;
-        //  - phase 2 processes statics and the deferred consts, performing all
-        //    validation and error reporting exactly once per node.
-        void readStatics(int phase);
-        void detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner, int phase);
+        const CPMStaticSymbol* findStatic(CPMNamespace* ns, const string& name,
+                                          const CPMSyntaxTreeNode* before);
+        void detectStatic(CPMSyntaxTreeNode* node, CPMNamespace* owner);
+        void storeInitializer(CPMStaticSymbol& symbol, const CPMCheckedExpression& value, size_t offset);
 
         void readFunctions();
         void detectFunction(CPMSyntaxTreeNode* node, CPMNamespace* owner);
@@ -408,7 +409,8 @@ namespace CPM
         string printStaticChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
         string printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
     public:
-        CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders);
+        CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders,
+                    CPMCompileMode mode = CPMCompileMode::Emit);
         inline Logger* CompilerLog() { return &compilerLog; }
         inline void Error() { noErrors = false; }
         inline bool NoErrors() { return noErrors; }
@@ -425,7 +427,8 @@ namespace CPM
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool isTypeDeclaration(CPMSyntaxTreeNode* node, CPMNamespace* owner);
-        bool parseDataDeclaration(CPMSyntaxTreeNode* node, CPMType& type, CPMNamespace* owner);
+        bool parseDataDeclaration(CPMSyntaxTreeNode* node, CPMType& type, CPMNamespace* owner,
+                                  CPMSemanticAnalyzer* analyzer = nullptr);
         // Recursive type-expr parser per spec §3. Recognises:
         //   - bare primitive/struct name (CPM_ID)
         //   - qualified NS.Name (CPM_REF with two ID children)
@@ -434,7 +437,8 @@ namespace CPM
         // Array counts may be constant names, literals, or constant expressions.
         // On success returns true and fills `out`; on failure returns false
         // and emits an error to compilerLog. Does not modify `out` on failure.
-        bool parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
+        bool parseTypeExpr(CPMSyntaxTreeNode* node, CPMType& out, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL,
+                           CPMSemanticAnalyzer* analyzer = nullptr);
         // Helper for parseTypeExpr: resolve a bare type name (from a CPM_ID
         // already split out of any NS.Name qualifier) to a primitive or a
         // user-defined struct CPMDataType, walking the regular scope chain.
@@ -447,24 +451,10 @@ namespace CPM
         // sum-of-fields for structs, count*childSize for arrays).
         int sizeOfTypeExpr(const CPMType& type, CPMNamespace* currentNS = NULL);
         CPMStaticSymbol* resolveStaticSymbolName(CPMSyntaxTreeNode* nameNode, CPMSourceFile* sourceFile, CPMSyntaxTreeNode* syntaxNode, CPMNamespace* currentNS = NULL);
-        CPMFunctionSymbol* resolveFunctionSymbolName(const string &name, CPMSourceFile* sourceFile, CPMNamespace* currentNS = NULL);
-        int parseNum(const string& num);
-        bool parseExpression(CPMSyntaxTreeNode* root, vector<CPMUnfoldedExpressionNode>& unfolded);
-        int staticEvalNum(vector<CPMUnfoldedExpressionNode>& unfolded, bool& ok, CPMNamespace* currentNS = NULL, bool silent = false);
-        bool parseLiteralValue(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode);
-        bool parseLiteralNumber(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0, bool autoType = false);
-        bool parseAndAllocateLiteralString(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralChar(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
-        bool parseLiteralStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, CPMSyntaxTreeNode* valueNode, int index = 0);
-        // Create the compile-time representative for a literal used inside a
-        // function body and append it to func->literals. Numbers/chars fold
-        // into immediateData; string chars are appended to the function's
-        // owner-namespace static buffer and the relative address kept in
-        // immediateData. Returns nullptr on error (already logged).
         CPMStaticSymbol* addLiteral(CPMFunctionSymbol* func, CPMSyntaxTreeNode* valueNode);
         //static vector<string> ParseSymbolName(const string& name);
         string GetTypeName(CPMDataType typeId, CPMNamespace* ns = nullptr);
-        string GetTypeName(const CPMType& type);
+        string GetTypeName(const CPMType& type, bool qualifyAggregates = false);
     };
 
 }

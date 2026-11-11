@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "CPMIntermediate.h"
 #include "CPMCompiler.h"
+#include "CPMSemantic.h"
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <cstring>
@@ -576,24 +578,7 @@ namespace CPM
     CPMOperator_Cast::CPMOperator_Cast(CPMExecutableSemanticNode* parent, CPMSyntaxTreeNode* syntaxNode)
         : CPMExecutableSemanticNode(parent, syntaxNode, parent->OwnerFunction())
     {
-        // Spec §5.1: `(cast type-expr expr)` — exactly two operands.
-        int operands = (int)syntaxNode->children.size() - 1;
-        if (operands != 2)
-        {
-            CompilerLog()->Add(LOG_ERROR, "Operator 'cast' takes exactly 2 operands (got ",
-                syntaxNode->sourceFileName, syntaxNode->lineNumber)->Add(operands)->Add(").");
-            Error();
-            return;
-        }
-        CPMType target;
-        if (!OwnerFunction()->compiler->parseTypeExpr(syntaxNode->children[1], target,
-            OwnerFunction()->compiler->getSourceFile(syntaxNode->sourceFileName), OwnerFunction()->owner)) return;
-        if (target.isVoid() || target.isArray() || target.isStruct())
-        {
-            CompilerLog()->Add(LOG_ERROR, "Cast requires a scalar target type.", syntaxNode->sourceFileName, syntaxNode->lineNumber);
-            Error();
-        }
-        // Executable conversion lowering is a separate codegen stage.
+        // Type checking is complete before the legacy lowering pass.
     }
 
     CPMRelativeCodeChunk* CPMOperator_Cast::GenerateCode()
@@ -602,10 +587,47 @@ namespace CPM
         return nullptr;
     }
 
+    namespace
+    {
+        bool hasLegacyLowering(const CPMCheckedStatement& statement, const CPMCheckedFunction& function)
+        {
+            if (statement.kind == CPMStatementKind::Declaration)
+            {
+                const auto* local = statement.declaration;
+                return !local->isConst && !local->isStatic && statement.expressions.empty();
+            }
+            if (statement.kind != CPMStatementKind::Expression) return false;
+            const auto& expression = statement.expressions.front();
+            if (expression.kind != CPMExprKind::Operator || expression.syntax->text != OP_ASSIGN)
+                return false;
+            const auto& destination = expression.operands[0];
+            const auto& source = expression.operands[1];
+            return destination.kind == CPMExprKind::Name &&
+                   (destination.type.isPrimitive() || destination.type.isPtr()) &&
+                   (source.bytes.size() == 1 || source.bytes.size() == 2) &&
+                   source.kind != CPMExprKind::Name &&
+                   any_of(function.locals.begin(), function.locals.end(),
+                          [&](const auto& local) { return destination.object == &local.symbol; });
+        }
+    }
+
     CPMIntermediate::CPMIntermediate(CPMCompiler* compiler)
     {
         vector<CPMNamespace*> nslist;
         compiler->getNamespaces(nslist);
+        for (auto ns : nslist)
+            for (const auto& entry : ns->functions)
+                if (const auto& function = entry.second.checkedBody)
+                    for (const auto& statement : function->body.statements)
+                        if (!hasLegacyLowering(statement, *function))
+                        {
+                            const auto* syntax = statement.syntax;
+                            compiler->CompilerLog()->Add(LOG_ERROR,
+                                "Executable lowering is unavailable for this statement. Use --check to analyze this source.",
+                                syntax->sourceFileName, syntax->lineNumber);
+                            compiler->Error();
+                            return;
+                        }
 
         vector<CPMRelativeCodeChunk*> ccs;
 

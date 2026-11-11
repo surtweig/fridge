@@ -176,7 +176,7 @@ namespace CPM
     class CPMIntermediate
     {
     private:
-        CPMRelativeCodeChunk* objectCode;
+        CPMRelativeCodeChunk* objectCode = nullptr;
     public:
         CPMIntermediate(CPMCompiler* compiler);
         ~CPMIntermediate();

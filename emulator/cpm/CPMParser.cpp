@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <functional>
 
-#define COMPLETE_SEQ_NOT_EMPTY { complete = seq.size() > 0; return false; }
-
 namespace CPM
 {
     CPMSyntaxDetector::CPMSyntaxDetector() : seq()
@@ -19,88 +17,6 @@ namespace CPM
     {
         list.clear();
         list.insert(list.begin(), seq.begin(), seq.end());
-    }
-
-    CPMSD_NUM::CPMSD_NUM() : CPMSyntaxDetector()
-    {
-        format = CPM_DEC;
-    }
-
-    bool CPMSD_NUM::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (cur->type != CPM_CHAR)
-            return false;
-
-        char c = cur->text[0];
-
-        if (!CharIsDigit(c) && seq.size() == 0)
-            return false;
-
-        seq.push_back(cur);
-
-        if (next == NULL) COMPLETE_SEQ_NOT_EMPTY
-            if (next->type != CPM_CHAR) COMPLETE_SEQ_NOT_EMPTY
-
-                char cn = next->text[0];
-
-        if (!CharIsDigit(cn))
-        {
-            if (cn == 'x' && seq.size() == 1)
-                format = CPM_HEX;
-
-            if (format == CPM_DEC) COMPLETE_SEQ_NOT_EMPTY
-            else
-            if (!CharIsHexDigit(cn) && !(seq.size() == 1 && cn == 'x'))
-            {
-                complete = seq.size() > 2;
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    CPMSD_ID::CPMSD_ID() : CPMSyntaxDetector()
-    {
-        complete = false;
-        isNumber = false;
-    }
-
-    bool CPMSD_ID::PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog)
-    {
-        if (cur->type != CPM_CHAR)
-            return false;
-
-        char c = cur->text[0];
-
-        if (CharIsDigit(c) && seq.size() == 0)
-        {
-            isNumber = true;
-            return true;
-        }
-
-        if (CharIsWhiteSpace(c) || CharIsDelimiter(c))
-        {
-            isNumber = false;
-            return false;
-        }
-
-        if (isNumber)
-            return false;
-
-        seq.push_back(cur);
-
-        if (next == NULL)
-            COMPLETE_SEQ_NOT_EMPTY
-            if (next->type != CPM_CHAR)
-                COMPLETE_SEQ_NOT_EMPTY
-
-                char cn = next->text[0];
-
-        if (CharIsWhiteSpace(cn) || CharIsDelimiter(cn))
-            COMPLETE_SEQ_NOT_EMPTY
-
-            return true;
     }
 
     CPMSD_REF::CPMSD_REF() : CPMSyntaxDetector()
@@ -193,8 +109,7 @@ namespace CPM
         pass_CHAR(sourceFileName);
         pass_LiteralsAndComments();
         pass_Angles();
-        pass_Detector<CPMSD_ID>(CPM_ID);
-        pass_Detector<CPMSD_NUM>(CPM_NUM);
+        pass_Atoms();
         while (pass_Detector<CPMSD_REF>(CPM_REF)) {}
         pass_Groups();
     }
@@ -466,6 +381,39 @@ namespace CPM
         }
     }
 
+    void CPMParser::pass_Atoms()
+    {
+        auto partOfAtom = [](const CPMSyntaxTreeNode* node)
+        {
+            if (node->type != CPM_CHAR) return false;
+            const char c = node->text[0];
+            return !CharIsWhiteSpace(c) && !CharIsDelimiter(c);
+        };
+        for (auto it = layer.begin(); it != layer.end();)
+        {
+            if (!partOfAtom(*it))
+            {
+                ++it;
+                continue;
+            }
+            auto atom = *it;
+            atom->type = CPM_ID;
+            auto end = next(it);
+            while (end != layer.end() && partOfAtom(*end))
+            {
+                atom->text += (*end)->text;
+                DeleteSyntaxTree(*end);
+                end = layer.erase(end);
+            }
+            const auto& token = atom->text;
+            if (CharIsDigit(token.front()) ||
+                (token.size() > 1 && (token.front() == '+' || token.front() == '-') &&
+                 CharIsDigit(token[1])))
+                atom->type = CPM_NUM;
+            it = end;
+        }
+    }
+
     CPMSyntaxTreeNode* CPMParser::groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
                                                CPMSyntaxNodeType type)
     {
@@ -478,9 +426,30 @@ namespace CPM
         }
         bool whitespace = false;
         bool comma = false;
-        for (auto child : nodes)
+        for (size_t i = 0; i < nodes.size(); ++i)
         {
+            auto child = nodes[i];
             node->text += child->text;
+            if (IsChar(child, CPM_SUBSCRIPT_DELIM) && i > 0 && i + 1 < nodes.size() &&
+                !node->children.empty() && nodes[i - 1] == node->children.back() &&
+                node->children.back()->type == CPM_EXPR &&
+                (nodes[i + 1]->type == CPM_ID || nodes[i + 1]->type == CPM_REF))
+            {
+                auto receiver = node->children.back();
+                auto field = nodes[++i];
+                auto projection = new CPMSyntaxTreeNode{};
+                projection->type = CPM_MEMBER;
+                projection->sourceFileName = receiver->sourceFileName;
+                projection->lineNumber = receiver->lineNumber;
+                projection->text = receiver->text + "." + field->text;
+                projection->parent = node;
+                projection->children = {receiver, field};
+                receiver->parent = field->parent = projection;
+                node->children.back() = projection;
+                node->text += field->text;
+                DeleteSyntaxTree(child);
+                continue;
+            }
             if (IsTrivia(child))
             {
                 if (child->type == CPM_CHAR)
@@ -688,6 +657,7 @@ namespace CPM
                     result->text += token->text;
                     if (IsChar(token, CPM_LINE_END))
                     {
+                        ++result->semicolonCount;
                         result->children.push_back(groupSequence(line, CPM_LINE));
                         line.clear();
                         DeleteSyntaxTree(token);
@@ -796,6 +766,8 @@ namespace CPM
             s += "ID"; break;
         case CPM_REF:
             s += "REF"; break;
+        case CPM_MEMBER:
+            s += "MEMBER"; break;
         case CPM_TYPE_OPEN:
             s += "TYPE_OPEN"; break;
         case CPM_TYPE_CLOSE:

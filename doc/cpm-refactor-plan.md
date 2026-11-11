@@ -7,7 +7,9 @@
 > Recursive layout, initialization, printing, and signature identity preserve the
 > complete type. Legacy flat accessors/resolution and pointer sigil constants are
 > removed. `cpm_types` and `cpm_separators` cover this milestone. Historical step
-> descriptions below are superseded by the completion note in §0.
+> descriptions below are superseded by the completion note in §0. The source
+> language contract is cpm-language-spec.md; the ABI is calling-convention.md.
+> Remaining design decisions are D1-D8 in the spec, not historical proposals here.
 
 > Bringing `emulator/cpm/` in line with `doc/cpm-language-spec.md`.
 > This document is the implementation plan for the parser and compiler
@@ -28,18 +30,21 @@
 > - **`[ ]` is removed.** `CPM_INDEX`, `CPMSD_INDEX`, `CPM_INDEX_OPEN`,
 >   `CPM_INDEX_CLOSE` are deleted. `[ ]` may be repurposed later as an
 >   array-literal token, but not in this pass.
-> - **Char literals are single-quoted.** `'x'` is a `char`; `"x"` is a
->   `string` (was: both forms overloaded `"x"`).
+> - **Literal types.** `'x'` is a `char`. `"x"` is an immutable
+>   `<char array 2>` including its terminator.
 > - **Initializers retain semicolons.** `(1; 2; 3)` and
 >   `((1; 2); (3; 4))` for nesting; structs use `(field value; field value)`.
 > - **Calls use operand commas.** `(func a, b, c)` and `= x, (func a, b);`.
 >   Whitespace is required before the first operand and after each comma.
 >   This supersedes the earlier comma-in-initializers decision; see §3.7.
-> - **String literals are static, deduplicated, null-terminated.** A `string`
->   value is the address of its first char. No implicit array↔pointer decay;
+> - **String literal text is null-terminated.** Constants may share deduplicated
+>   text. Each local literal initializer gets a separate character buffer and
+>   string slot; the storage planner must reserve both. A `string` value is the
+>   address of its first char. No implicit array↔pointer decay;
 >   no implicit null termination of `<char array N>`.
-> - **Struct return ABI fixed.** `sizeof(T) <= 2` returns in HL;
->   larger returns use a hidden leading `<T ptr>` out-argument.
+> - **Stack-only ABI.** All arguments and results use exact-size stack slots.
+>   The caller reserves result storage; the callee writes it and returns normally.
+>   No HL result convention or hidden output-pointer argument remains.
 > - **No struct padding.** Field offsets are the running sum of field sizes.
 
 ## 0. Migration style
@@ -80,6 +85,15 @@ initializers, control flow, complete binary/static-data emission, and the callin
 convention. Numeric literal typing, contextual `null`, and string deduplication
 also retain their separate implementation stages.
 
+Numeric types must match exactly. `cast` preserves bytes between equal-size
+values and `convert` applies the scalar conversion table. Every use before
+declaration is an error. Subsequent uninitialized reads may warn. Writable
+`string` literal initializers need independent character storage. Conditions
+and logical operands require bool. String copies copy addresses and exact-type
+arrays support assignment by value. Unqualified function calls merge visible
+namespace overloads. Reachable fallthrough is permitted only for void functions.
+These are target rules for the upcoming semantic and IR pass.
+
 - **Invasive.** Rip out `isPtr`/`count` everywhere in one pass. The spec
   change is a hard break; a half-migrated state will be harder to debug than
   a single noisy commit. `git mv`-style commit history is fine.
@@ -115,7 +129,13 @@ expression/line/block detector sweeps with recursive grouping:
   chained modifiers, constant counts, and the 65535-byte type-size limit apply
   across declarations; the legacy flat compatibility API has been removed.
 
-## 2. CPMCompiler.h changes
+## 2. Historical type-migration design
+
+Sections 2–5 preserve the migration record. References to transitional APIs or
+past build failures describe earlier stages, not the current compiler. Current
+status is in §0; language and ABI decisions follow the linked specifications.
+
+### CPMCompiler.h changes
 
 ### 2.1 Type representation — the big change
 
@@ -229,8 +249,9 @@ provides that.
   - reject string literals as initializers for `<char array N>` (no auto
     coercion; spec §5.6).
 - `CPMNamespace::staticAllocate(string)` — header signature stays. The `.cpp`
-  gains a dedup pass: scan the existing buffer for identical null-terminated
-  sequences before allocating a fresh one. The result of dedup is observability
+  gains a constants-only dedup path: scan for identical null-terminated text
+  before allocating a fresh constant. Local literal initializers require
+  distinct writable character buffers; their storage cannot use that pool. The result of dedup is observability
   only (smaller emitted binary); the type system is unaffected.
 
 ## 3. Cascading `.cpp` work
@@ -285,7 +306,7 @@ with no comma before the first operand and no trailing/empty operands.
 Examples:
 
 ```cpm
-static uint8 values array 3 (1; (+ 1, 1); 3);
+static <uint8 array 3> values (1; (+ 1, 1); 3);
 static person me (name "zuzu"; age 36);
 = x, (func a, b, c);
 ```
@@ -303,9 +324,10 @@ binary emission. `cpm_separator_tests` covers syntax trees, malformed separators
 constant evaluation, and static array/nested struct initialization.
 
 ### 3.8 String dedup
-Add a `std::map<string, FRIDGE_WORD*> stringPool` to `CPMNamespace`. The
-`staticAllocate(string)` overload consults the pool before allocating.
-No header signature change; private member.
+Use a constant-string pool for identical constant text. Local literal
+initializers need separate character buffers, while copying an existing string
+value copies only its address. Buffer lifetime/escape choices are D4; a generic
+allocator must not silently pool writable local character storage.
 
 ## 4. test.cpm rewrite
 
@@ -431,8 +453,9 @@ A reasonable commit sequence:
     scale offsets by `sizeof(T)`, and provide direct character access for the
     distinct string type. String parameter conversions remain explicit casts.
     The existing arity-only placeholders do not implement these semantics.
-11. **Struct return ABI** — hidden out-arg in `detectFunction` and the call
-    site lowering in `CPMIntermediate.cpp`.
+11. **Stack-only call/result ABI** — exact-size result/argument slots, mixed-size
+    offsets, nested-call temporaries, and caller cleanup per calling-convention.md.
+    The old hidden-out-argument plan is superseded.
 
 Each step should leave the tree building; only step 1 intentionally breaks
 the compiler and step 2 is a no-op compile-wise (just adds a type). Steps
@@ -440,10 +463,13 @@ the compiler and step 2 is a no-op compile-wise (just adds a type). Steps
 
 ## 6. Out of scope for this pass
 
-- **Codegen for the new operators.** Spec is locked; lowering is a separate
+- **Codegen for the new operators.** Settled rules are in the spec; D1-D8
+  explicitly track remaining choices. Lowering is a separate
   phase. This plan is about getting the parser and type system to a state
   where codegen can be written against a stable IR.
 - **`falc`-emitted assembly output.** No change to the `falc` assembler.
 - **FPGA path.** No change.
-- **`break`/`continue`.** Still open questions (spec §14).
-- **`for` step generalisation.** Still open (spec §14).
+- **`break`/`continue` implementation.** Their inclusion and standard loop
+  destinations are settled in spec §7; semantic checks and lowering are pending.
+- **General `for` steps.** Assignment steps are part of the target contract;
+  mandatory bool conditions and optional init/step slots need implementation.

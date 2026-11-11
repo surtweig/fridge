@@ -11,14 +11,14 @@ endif()
 
 # CPM source files (Frion compiler)
 set(CPM_SOURCES
-    cpm.cpp
     CPMParser.cpp
     CPMCompiler.cpp
+    CPMSemantic.cpp
     CPMIntermediate.cpp
     Logger.cpp
 )
 
-add_executable(cpm ${CPM_SOURCES})
+add_executable(cpm cpm.cpp ${CPM_SOURCES})
 
 # Include paths: repo root include/ for fridge.h, local dir for peer headers
 target_include_directories(cpm PRIVATE
@@ -36,10 +36,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(cpm_separator_tests
         tests/separators.cpp
-        CPMParser.cpp
-        CPMCompiler.cpp
-        CPMIntermediate.cpp
-        Logger.cpp
+        ${CPM_SOURCES}
     )
     target_include_directories(cpm_separator_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -48,7 +45,7 @@ if(BUILD_TESTING)
     add_test(NAME cpm_separators COMMAND cpm_separator_tests)
     add_executable(cpm_type_tests
         tests/type_expressions.cpp
-        CPMParser.cpp CPMCompiler.cpp CPMIntermediate.cpp Logger.cpp
+        ${CPM_SOURCES}
     )
     target_include_directories(cpm_type_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../include
@@ -57,4 +54,9 @@ if(BUILD_TESTING)
         CPM_EXAMPLE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/test.cpm"
     )
     add_test(NAME cpm_types COMMAND cpm_type_tests)
+    add_executable(cpm_semantic_tests tests/semantics.cpp ${CPM_SOURCES})
+    target_include_directories(cpm_semantic_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    )
+    add_test(NAME cpm_semantics COMMAND cpm_semantic_tests)
 endif()

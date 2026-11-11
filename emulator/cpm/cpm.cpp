@@ -1,65 +1,38 @@
 #include "stdafx.h"
-#include <iostream>
+#include <filesystem>
 #include <fstream>
-#include <sstream>
-#include "CPMParser.h"
+#include <iostream>
 #include "CPMCompiler.h"
-#define COMPILE
-//#define PARSE
-using namespace std;
-using namespace CPM;
+
+#define XCME_VERSION_STR "v0.1"
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-   // extern Logger CPMCompilerLog;
+    std::cout << "Fridge CPM compiler " << XCME_VERSION_STR << "\n"
+              << "Copyright (c) Plus&Minus Inc. 2026\n\n";
 
-    string name;
-   /* ifstream fsrc("test.cpm");
-    if (fsrc.is_open())
+    if (argc == 3 && std::filesystem::path(argv[1]) == "--check")
     {
-        stringstream buffer;
-        buffer << fsrc.rdbuf();
+        const std::filesystem::path source(argv[2]);
+        const auto directory = source.parent_path();
+        const auto root = directory.empty() ? std::string{} : (directory / "").string();
+        CPM::CPMCompiler compiler(root, source.filename().string(),
+                                 "", {}, CPM::CPMCompileMode::Check);
+        std::cout << compiler.CompilerLog()->GetText();
+        return compiler.NoErrors() ? 0 : 1;
+    }
 
-        CPMParser parser(buffer.str());
-        cout << buffer.str();
-        cout << CPMCompilerLog.GetText() << "\n";
-        cout << parser.LayerToString();
+    //if (argc != 1)
+    {
+        std::cerr << "Usage: cpm [--check source.cpm]\n";
+        return 2;
+    }
 
-        ofstream fout("test.parsed");
-        fout << parser.LayerToString();
-        fout.close();
-    }*/
-
-#ifdef PARSE
-    Logger logger;
-    CPMParser* parser = new CPMParser("", "test2.cpm", &logger);
-    
-    ofstream fout("test.parsed");
-    fout << parser->LayerToString();
-    fout.close();
-
-    ofstream logout("test.log");
-    logout << logger.GetText();
-    logout.close();
-
-    //getline (std::cin, name);
-    delete parser;
-#endif
-
-#ifdef COMPILE
-    CPMCompiler* comp = new CPMCompiler("", "test.cpm", "test.bin", vector<string>());
-    comp->PrintStaticData();
-    ofstream fout("test.log");
-    fout << comp->CompilerLog()->GetText();
-    fout.close();
-    ofstream asmout("testasm.log");
-    asmout << comp->AsmDebugOutput()->GetText();
-    asmout.close();
-    delete comp;
-#endif    
-
-    return 0;
+    /*CPM::CPMCompiler compiler("", "test.cpm", "test.bin", {});
+    compiler.PrintStaticData();
+    std::ofstream("test.log") << compiler.CompilerLog()->GetText();
+    std::ofstream("testasm.log") << compiler.AsmDebugOutput()->GetText();
+    if (!compiler.NoErrors())
+        std::cerr << compiler.CompilerLog()->GetText();
+    return compiler.NoErrors() ? 0 : 1;*/
 }
-
-
-

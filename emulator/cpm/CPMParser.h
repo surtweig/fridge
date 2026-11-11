@@ -20,6 +20,7 @@ namespace CPM
         CPM_REF,        // "."-joined identifier sequence: NS.Name, a.b.c
                         // (lexical joiner only — NOT a pointer/ref indicator;
                         // pointer types are expressed as `<T ptr>` type-exprs)
+        CPM_MEMBER,     // grouped expression followed by a dotted field chain
         CPM_TYPE_OPEN,
         CPM_TYPE_CLOSE,
         CPM_TYPEEXPR,
@@ -27,12 +28,6 @@ namespace CPM
         CPM_LINE,
         CPM_BLOCK,
     } CPMSyntaxNodeType;
-
-    typedef enum CPMNumberFormat
-    {
-        CPM_DEC,
-        CPM_HEX,
-    } CPMNumberFormat;
 
     const char CPM_BLOCK_OPEN = '(';
     const char CPM_BLOCK_CLOSE = ')';
@@ -55,6 +50,7 @@ namespace CPM
         string text;
         string sourceFileName;
         int lineNumber;
+        size_t semicolonCount = 0;
         // Parallel to children: separators retained after punctuation is removed.
         vector<bool> commaBefore;
         vector<bool> whitespaceBefore;
@@ -81,29 +77,6 @@ namespace CPM
         virtual CPMSyntaxNodeType Type() = 0;
 
         void CopySeqTo(vector<CPMSyntaxTreeNode*> & list);
-    };
-
-    class CPMSD_NUM : public CPMSyntaxDetector
-    {
-    private:
-        CPMNumberFormat format;
-    public:
-        CPMSD_NUM();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_NUM; }
-        inline CPMNumberFormat Format() { return format; }
-    };
-
-    class CPMSD_ID : public CPMSyntaxDetector
-    {
-    private:
-        bool isNumber;
-    public:
-        CPMSD_ID();
-        bool PutNode(CPMSyntaxTreeNode* cur, CPMSyntaxTreeNode* next, Logger* compilerLog) override;
-        //bool Complete() override;
-        CPMSyntaxNodeType Type() override { return CPM_ID; }
     };
 
     // Joins dot-separated identifiers (NS.Name, a.b.c) into a single CPM_REF
@@ -162,6 +135,7 @@ namespace CPM
         void pass_CHAR(string sourceFileName);
         void pass_LiteralsAndComments();
         void pass_Angles();
+        void pass_Atoms();
         void pass_Groups();
         CPMSyntaxTreeNode* groupSequence(const vector<CPMSyntaxTreeNode*>& nodes,
                                         CPMSyntaxNodeType type);

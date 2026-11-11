@@ -117,13 +117,13 @@ int main()
                     "Array modifiers did not wrap left to right");
         });
         fixture.typeExpression("<NS.Item ptr>", true);
-        fixture.typeExpression("<uint8 array 65535>", true);
+        fixture.typeExpression("<uint8 array 65535d>", true);
         fixture.typeExpression("uint8", true);
         fixture.typeExpression("void", true, [](const auto& type, auto&) { require(type.isVoid(), "Void lost its kind"); });
         for (const auto& type : {"<uint8>", "(uint8 ptr)", "<void ptr>", "<void array 4>",
-                                 "<uint8 array 0>", "<uint16 array 40000>", "<Unknown ptr>",
+                                 "<uint8 array 0>", "<uint16 array 40000d>", "<Unknown ptr>",
                                  "<NS.Unknown ptr>", "<NS.uint8 ptr>", "<uint8 array missing>",
-                                 "<<uint8 array 65535> array 65535>"})
+                                 "<<uint8 array 65535d> array 65535d>"})
             fixture.typeExpression(type, false);
 
         for (const auto& source : {
@@ -147,7 +147,7 @@ int main()
             static uint8 target;
             void main() ( = target, (+ 1, 2); );
         )";
-        fixture.compile(program, true, [](CPMCompiler& compiler)
+        fixture.check(program, true, [](CPMCompiler& compiler)
         {
             vector<CPMNamespace*> spaces;
             compiler.getNamespaces(spaces);
@@ -167,7 +167,8 @@ int main()
             auto pairs = global->statics.at("pairs").staticData;
             require(pairs[0] == 1 && pairs[1] == 2 && pairs[2] == 3 && pairs[3] == 4, "Array of structs initialization failed");
         });
-        fixture.compile("static uint8 x; void main() ( (= x, 7); );", true);
+        fixture.check("static uint8 x; void main() ( (= x, 7); );", true);
+        fixture.compile("void main() (uint8 x; (= x, 7););", true);
         fixture.compile("static uint8 x; void main() ( = x 7; );", false);
         fixture.compile("const uint8 x (+ 1 2);", false);
         fixture.compile("static <uint8 array 2> x (1, 2);", false);

@@ -53,6 +53,17 @@ struct Fixture
         if (inspect) inspect(compiler);
     }
 
+    void check(const string& text, bool valid,
+               const std::function<void(CPMCompiler&)>& inspect = {})
+    {
+        source(text);
+        CPMCompiler compiler(directory.string() + "/", "input.cpm",
+                             (directory / "output.bin").string(), {}, CPMCompileMode::Check);
+        require(compiler.NoErrors() == valid, "Unexpected checker result for:\n" + text + compiler.CompilerLog()->GetText());
+        require(!fs::exists(directory / "output.bin"), "Check-only compilation emitted a binary");
+        if (inspect) inspect(compiler);
+    }
+
     void typeExpression(const string& text, bool valid,
                         const std::function<void(const CPMType&, CPMCompiler&)>& inspect = {})
     {

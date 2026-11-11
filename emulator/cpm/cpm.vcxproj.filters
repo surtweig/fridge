@@ -27,6 +27,9 @@
     <ClInclude Include="CPMParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CPMSemantic.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="CPMCompiler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CPMParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CPMSemantic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CPMCompiler.cpp">

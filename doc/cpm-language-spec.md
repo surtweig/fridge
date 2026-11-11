@@ -1,9 +1,17 @@
 # Frion (CPM) Language Specification — Draft
 
-> Status: design in progress. Source of truth is the parser/codegen in
-> `emulator/cpm/`. This document is a *target* spec, not a description of what
-> the current code already implements. Where the two disagree, the intent is to
-> bring the code in line with this document.
+> Status: target language contract with explicit pending choices (§14).
+> The code in `emulator/cpm/` determines current implementation behavior;
+> this document defines the settled target behavior. Where the two disagree,
+> the intent is to bring the code in line with this document.
+>
+> Contract consolidated from the Q01–Q30 answers and subsequent clarifications
+> through 2026-11-11. This specification defines source-language behavior;
+> [calling-convention.md](calling-convention.md) defines the stack ABI.
+> [cpm-design-questions.cpm](cpm-design-questions.cpm) retains the discussion and
+> intentionally invalid examples. Unsettled decisions are listed in §14;
+> recommendations there are not adopted language rules. Implementation status
+> belongs in [cpm-pre-codegen-review.md](cpm-pre-codegen-review.md).
 
 Frion is a small statically-typed language targeting the Fridge 8080 ISA. It is
 Lisp-prefix in its expression layer and C-ish in its declaration layer. Code is
@@ -27,8 +35,9 @@ assembler.
     `uint8` or `uint16` respectively. Examples: `0xFF`, `0x00A1`. Hex literals
     have no sign or suffix; signed interpretation requires `cast` (§5.6.2).
   - Char:    single-quoted single character `'x'`. No escape sequences yet.
-  - String:  double-quoted `"Hello, World!"`. No escapes yet. A string literal
-    has the distinct built-in type `string`; see §3.
+  - Quoted text: double-quoted `"Hello, World!"`. It has an immutable character
+    array value whose length includes a terminating zero (§3). Escapes are
+    reserved for future use.
   - Null pointer: `null`, contextually typed as `<T ptr>`; see §5.6.1.
 - **Identifiers**: `[A-Za-z_][A-Za-z0-9_]*`. The `.` (CPM_SUBSCRIPT_DELIM)
   separates a namespace qualifier or struct-field access: `X2AL.Zuzu`,
@@ -55,7 +64,7 @@ assembler.
 | `int8`   | 1 byte   | -128..127                              |
 | `uint16` | 2 bytes  | 0..65535  (also: pointer width)        |
 | `int16`  | 2 bytes  | -32768..32767                          |
-| `string` | 2 bytes  | pointer to null-terminated static text |
+| `string` | 2 bytes  | address of null-terminated character storage |
 
 All multi-byte values are **big-endian** in memory, matching the Fridge CPU.
 
@@ -68,7 +77,7 @@ parentheses.
 ```
 type-expr ::=
     primitive-name
-  | struct-name                       // qualified: NS.Name
+  | aggregate-name                    // struct/union; qualified: NS.Name
   | "<" type-expr modifier modifier* ">"
 modifier ::= "ptr" | "array" const-expr
 ```
@@ -105,33 +114,49 @@ Local allocation uses recursive sizes; executable initializer, call, control-flo
 and aggregate-return lowering remain separate codegen work. Cast type operands
 are resolved in constant expressions and validated throughout function bodies.
 
-`ptr` may be applied to any type-expr. `array n` requires `n` to be a compile-
-time constant expression (a `const` symbol or literal). The total static size
-of any type-expr must not exceed 65535 bytes.
+`ptr` may be applied to any non-void type-expr. `array n` requires a positive
+compile-time integer constant expression (a `const` symbol, literal, or grouped
+constant expression). Pointers to void, arrays of void, zero-length arrays, and
+empty aggregate definitions are invalid. The total size of any type-expr must
+not exceed 65535 bytes; allocated objects also obey the target memory budget.
 
-`string` is a distinct built-in type, represented by a two-byte character
-address. Its literal form is a null-terminated block in static storage. It is
-neither an array nor a type alias for `<char ptr>`; `sizeof(string)` is 2 bytes.
-A `<char ptr>` must be explicitly converted with `(cast string, pointer)` when
-assigning to a string or supplying a string parameter. The built-in `at`
-operation on strings (§5.2) does not introduce an implicit pointer conversion.
+`string` is a distinct two-byte value containing the address of null-terminated
+character storage. A pointer can be explicitly reinterpreted as a `string` with
+`cast`. The address must designate valid character storage when used.
 
-Every `"…"` string literal is therefore a **static compile-time resource**: the
-text is laid down in the namespace's static buffer with a trailing `0`, and the
-literal's value is the address of its first character. Identical literals are
-deduplicated within a namespace. A `string` variable is just a 2-byte pointer;
-it may be reassigned to another string literal or to a character address
-explicitly converted with `cast`. A character pointer can refer to writable
-array storage; string character write permissions remain a separate design
-question.
+A quoted literal denotes read-only `<char array N>` storage. `N` is the
+character byte count plus one for the terminating zero. For example, `"cat"`
+has type `<char array 4>` and `""` has type `<char array 1>`. The elements can
+be read or copied by value. Direct assignment to a literal element and taking
+its address as a writable pointer are compile errors.
 
-There is **no implicit array↔pointer decay** and no implicit null termination
-for arrays. A `<char array N>` initialized with an array literal `('a'; 'b'; 'c')`
-holds exactly N characters — no trailing `0` is added. To pass a character
-array to a string-taking function, explicitly convert the address of its first
-character: `(cast string, (addr (at buf, 0)))`. `(addr buf)` preserves the entire
-array type and yields `<<char array N> ptr>`. Ensure the buffer is manually
-null-terminated if the callee requires it.
+A quoted literal can initialize a `string` in a declaration. A writable
+`string` receives a distinct character buffer containing a copy of the
+literal's bytes, including its terminator. Local initialization copies these
+bytes each time control reaches the declaration. The `string` value continues
+to occupy two bytes. The character buffer requires additional storage.
+
+```cpm
+<char array 4> letters ("cat");
+string text ("cat");
+string alias (text);
+= (at alias, 0), 'b';                // text and alias now read "bat".
+char first (at "cat", 0);             // Reads 'c'.
+```
+
+The literal-to-`string` initialization rule applies only to declarations.
+In calls, returns, and assignments a quoted literal has its array type. A
+`string` copied from an existing `string` shares its character storage through
+the copied address. This also applies to string fields in aggregate copies.
+Writable-buffer placement and lifetime, and storage for `const string`
+initializers, remain D4 decisions (§14).
+
+Character arrays use exact types and lengths. A quoted literal includes its
+zero element, while an ordinary initializer list such as `('a'; 'b'; 'c')`
+supplies exactly the three elements shown. To reference a writable,
+null-terminated array with a `string`, use
+`(cast string, (addr (at buf, 0)))`. The expression `(addr buf)` instead yields
+a pointer to the entire array, preserving its type and length.
 
 Nesting is unrestricted. Modifiers wrap the preceding type from left to right:
 `<T ptr ptr>` equals `<<T ptr> ptr>`, and `<T array 10 array 20>` equals
@@ -143,18 +168,16 @@ is not a semantic type expression.
 
 A value of type `<T ptr>` occupies two bytes and stores a 16-bit address in
 big-endian order, with the same bit representation as a `uint16`. Address zero
-is the null pointer for every pointer type. This representation does not make
-pointers integer types: integer-to-pointer and pointer-to-integer conversions
-require an explicit `cast`, including conversion of the integer literal `0`.
-There is no assignment-only exception for zero; use `null` when a null pointer
-is intended (§5.6.1).
+is the null pointer for every pointer type. Use `cast` to reinterpret a
+two-byte integer as a pointer or vice versa. Use `null` when a null pointer is
+intended (§5.6.1).
 
 ```cpm
 uint16 address (0x1234);
 <char ptr> p (cast <char ptr>, address);
 uint16 stored_address (cast uint16, p);
 = p, 0;                              // ERROR: integer is not a pointer.
-= p, (cast <char ptr>, 0);            // Explicit zero-address pointer.
+= p, (cast <char ptr>, 0d);           // Explicit zero-address pointer.
 = p, null;                           // Context supplies <char ptr>.
 ```
 
@@ -191,10 +214,15 @@ A single binding `(field value)` is interpreted as an initializer in a struct
 initialization context. There is no comma between a field name and its value.
 Parameter declarations likewise remain semicolon-separated (§4.4).
 
+An array initializer must supply exactly its declared number of elements at
+every level; there is no partial initializer zero-fill. Struct initialization
+is named, never positional. A union initializer selects one view. Missing or
+repeated struct bindings and precise union-view selection are pending (§14, D3).
+
 Examples:
 ```
 uint8 x;
-uint16 y (+ 54, 12);
+uint16 y (+ 54d, 12d);
 <uint8 array intArraySize> myArr (0; (+ 1, 1); 2; 3; 4);
 <char array 3> buf ('a'; 'b'; 'c');
 <<uint8 array 2> array 2> grid ((1; 2); (3; 4));
@@ -219,25 +247,37 @@ storage class.
 ### 4.3 Struct and union
 
 ```
-"struct" name "(" field-decl field-decl … ")" ";"
-"union"  name "(" field-decl field-decl … ")" ";"
-field-decl ::= type-expr name ";"
+struct-decl ::= "struct" name view ";"
+union-decl  ::= "union" name view view* ";"
+view        ::= "(" field-decl field-decl* ")"
+field-decl  ::= type-expr name ";"
 ```
 
-- Fields are laid out in declaration order; `union` overlays all fields at
-  offset 0.
-- A struct's size is the sum of its field sizes. **No padding is inserted.**
-  Field offsets are the running sum of preceding field sizes, and the struct
-  occupies that sum exactly. The Fridge ISA addresses memory one byte at a
-  time and imposes no alignment constraints; padding would only inflate
-  layout with no runtime benefit. (The compiler reserves the right to
-  introduce padding later if a future target requires it; that would be a
-  layout ABI change, not a source-visible one.)
-- Struct types are registered in their owning namespace and may be referenced
-  qualified (`NS.Name`) or unqualified if `using NS` is in scope.
-- Self-referential structs are illegal (no tagged pointers). Mutually
-  recursive structs are illegal at present; the existing "forward by re-decl"
-  hack in `test.cpm` is removed.
+A struct is one packed sequence of fields. Field offsets follow declaration
+order, and its size is the sum of field sizes. No padding or alignment bytes
+are inserted. Empty structs and empty union views are invalid.
+
+A union contains one or more packed views. Each view starts at offset zero;
+fields within a view have consecutive offsets in declaration order. All views
+must have the same total size, and field names must be unique across the entire
+union. Individual fields within a view may have different sizes:
+
+```cpm
+union WordView
+(
+    uint8 high;                    // Offset 0.
+    uint8 low;                     // Offset 1.
+) (
+    uint16 word;                   // Offset 0; this view is also two bytes.
+);
+```
+
+Aggregate names are owned by their namespace and may be qualified (`NS.Name`)
+or found through `using`. A field may refer to a later aggregate definition.
+Direct or mutual by-value cycles, including cycles through array elements, are
+invalid. Pointers break that recursion, so `<Node ptr>` fields are legal in
+`Node`; pointed-to array types must still satisfy the type-size bound once
+layouts are known. Cross-view union reading rules remain pending (§14, D3).
 
 ### 4.4 Function
 
@@ -255,12 +295,15 @@ body      ::= "(" statement … ")"
   expected to resolve at link time (binary `imports`, intrinsic, or defined
   elsewhere in the same namespace).
 - A declaration with a `(...)` body is a **definition**.
-- The return type `type-expr` may be `void`.
-- Functions are **overloaded by signature** (name + arg types + arg count +
-  pointer-ness). Two definitions with identical signatures in the same
-  namespace are an error.
-- Argument names need not be unique (the `uint8 func(#uint8 b; uint8 x)` form
-  in the old test file is unrelated; pointer-ness now lives in the type-expr).
+- Returns may use any legal value type, including structs and arrays, or `void`.
+  Parameters use legal non-void types and are passed by value (§5.7, §9).
+- Functions are **overloaded by signature**: name and the ordered list of full
+  recursive parameter types. Array dimensions and nested pointer/array shapes
+  are part of those types. Return types and parameter names do not distinguish
+  overloads. Two bodies for the same signature are an error.
+- Parameter names must be unique within a function. A prototype and definition
+  for the same signature must have matching return types and parameter names;
+  disagreement is an error. Compatible prototypes may refer to the same function.
 
 ### 4.5 Intrinsics
 
@@ -297,18 +340,64 @@ bindings are not call operand lists and do not gain commas.
 
 | Op          | Arity | Meaning                                       |
 |-------------|-------|-----------------------------------------------|
-| `+ - * /`   | n     | arithmetic, n-ary folds left                  |
+| `+`         | 1+    | identity for one operand; otherwise add left to right |
+| `-`         | 1+    | negate one operand; otherwise subtract left to right |
+| `* /`       | n     | arithmetic left folds; minimum arity pending (§14) |
 | `%`         | 2     | modulo                                         |
-| `== !=`     | n     | chained equality (a==b==c)                    |
+| `==`        | n     | all operands equal                            |
+| `!=`        | n     | all operands pairwise distinct                |
 | `< > <= >=` | n     | chained comparison                            |
 | `&& \|\|`   | n     | short-circuit logical AND/OR                  |
 | `!`         | 1     | logical NOT                                    |
-| `& \| ^ ~`  | n     | bitwise AND/OR/XOR/NOT                        |
+| `& \| ^`    | n     | bitwise AND/OR/XOR                            |
+| `~`         | 1     | bitwise NOT                                   |
 | `++ --`     | 1     | in-place increment / decrement                |
 | `= += -= *= /= %=` | 2 | assignment, returns the assigned value   |
 | `at`        | 1 or 2 | array/pointer/string element access (§5.2)   |
 | `addr`      | 1     | address-of (yields `<T ptr>`)                 |
-| `cast`      | 2     | `(cast type-expr, expr)` numeric/ptr narrowing|
+| `cast`      | 2     | reinterpret bytes as an equal-size value (§5.6.3) |
+| `convert`   | 2     | explicitly convert a scalar value (§5.6.3)    |
+
+Numeric compatibility requires **exact types**. Initializers, assignments,
+function arguments, and return expressions do not implicitly widen, narrow, or
+change numeric signedness. Ordinary numeric operator operands must also have
+matching types. Literal spelling fixes the type before these checks. Use
+`convert` for numeric widening and other value conversions, or `cast` to
+reinterpret an equal-size representation.
+
+```cpm
+uint16 wide (42d);
+uint16 invalid (42);                 // ERROR: uint8 is not uint16.
+uint16 explicit_wide (convert uint16, 42);
+int16 signed_value (-1d);
+int16 invalid_sum (+ signed_value, 1); // ERROR: int16 and uint8 differ.
+int16 sum (+ signed_value, (convert int16, 1));
+```
+
+The pointer-first arithmetic forms below retain their explicitly defined
+pointer/offset operand roles. Operator result and arity details are tracked
+under D2 (§14).
+
+`if` and `for` conditions, and every operand of `!`, `&&`, and `||`, must have
+type `bool`. Logical operators return `bool`. Integers, pointers, strings, and
+`null` are not implicitly treated as conditions; use a typed comparison or a
+permitted explicit conversion. For example, `if (0)` is invalid, while
+`if (false)` and `if (== counter, 0)` are valid when `counter` is `uint8`.
+
+Operands are evaluated left-to-right. A call snapshots each by-value argument
+when that argument is evaluated, including aggregate contents. `&&` stops at
+the first false operand and `||` at the first true operand; remaining operands
+are not evaluated. Compound assignments compute their destination address,
+including any index/receiver effects, exactly once before evaluating the right
+operand and storing the result.
+
+Unsigned integer arithmetic wraps modulo the width of its type: `(+ 255, 1)`
+has type `uint8` and value zero. This behavior must agree in constant folding
+and runtime evaluation. Signed overflow and shift edge cases remain pending.
+Division follows Python-style floor division and remainder satisfies
+`a = b * floor(a/b) + remainder`. For example, `(/ -7d, +3d)` is `-3d` and
+`(% -7d, +3d)` is `+2d`. Constant division/remainder by zero is a compilation
+error; runtime division/remainder by zero sets Panic and halts (§13).
 
 #### 5.1.1 Pointer arithmetic
 
@@ -352,9 +441,9 @@ participate, with offsets scaled by `sizeof(string)` (two bytes).
 
 ### 5.2 `at` — typed element access and dereference
 
-`at` accesses contiguous elements by a zero-based integer index. An array
-requires an explicit index. Pointers and strings accept an optional index;
-omitting it is equivalent to supplying zero.
+`at` accesses contiguous elements by a zero-based `uint8` or `uint16` index.
+An array requires an explicit index. Pointers and strings accept an optional
+index that defaults to zero.
 
 | Operand type | Form | Element type |
 |---|---|---|
@@ -381,11 +470,9 @@ values; it does not access the characters of a single string:
 (at string_pointers, i)     // string_pointers: <string ptr>; yields string
 ```
 
-Reading an element yields its element type; as an assignment destination,
-`at` designates that element's storage. Existing aggregate-value restrictions
-still apply when `T` is an aggregate; this rule does not settle aggregate
-copying. Write permissions, including writes through strings or into literal
-storage, are a separate mutability decision.
+Reading an element yields its element type. For writable storage, `at` also
+designates an assignment destination. Elements of quoted literals are
+read-only (§3). Aggregate element copies follow §5.7.
 
 An array has a statically known length. Ordinary pointers and string values
 carry no buffer length, and character indexing does not search for a null
@@ -401,30 +488,32 @@ type. The lvalue may be a local, a static, a struct field access, or an
 ### 5.4 Member access
 
 `a.b` accesses field `b` of struct `a`. It chains: `screen.buf.data`.
-Member access is an lvalue when its receiver is.
+Member access is an lvalue when its receiver is. Computed lvalue member access
+through `at` is intended for indexed arrays and dereferenced pointers. Its exact
+spelling, such as `(at points, 0).x`, and treatment of other temporary receivers
+remain pending (§14, D5).
 
 ### 5.5 Function call
 
-`(name arg, arg, …)` calls a function. Overload resolution picks the unique
-function in scope whose argument count and (possibly coerced) types match;
-ambiguity is a compile error. Passing a value where a pointer is expected
-requires an explicit `(addr …)`. A `string` parameter requires a string-typed
-argument; a character pointer must be explicitly converted with `cast`.
-A `null` argument can match a pointer parameter contextually (§5.6.1); integer
-`0` cannot.
+`(name arg, arg, …)` calls a function. An unqualified call searches the merged
+overload set (§10). A qualified call searches the named namespace. The call
+must match exactly one candidate by argument count and type. Passing an
+object's address requires `(addr …)`. A `string` parameter requires a
+string-typed expression. A quoted literal is an array argument, and an
+explicit `cast` can reinterpret a pointer as a `string`. Contextual `null`
+can match a pointer parameter (§5.6.1).
 
 ### 5.6 Literals as expressions
 
-A number, char, or string literal is an expression of its explicit literal type:
-`42 : uint8`, `42d : uint16`, `+42 : int8`, `+42d : int16`, `'x' : char`,
-`"…" : string`. Integer literal spelling fixes the type before assignment or
-overload resolution; context does not change it. Narrowing requires an explicit
-`cast` (§5.6.2).
+Literal spelling determines the expression type. For example, `42` is
+`uint8`, `42d` is `uint16`, `+42` is `int8`, `+42d` is `int16`, and `'x'`
+is `char`. A quoted literal such as `"cat"` is a read-only `<char array 4>`.
+Overload resolution uses these types. Use the explicit operations in §5.6.3
+to change a value's type.
 
 Array-literal initializers `(1; 2; 3)` are **not** expressions in their own
-right — they appear only as the initializer of a `<T array N>` declaration,
-not as a value inside an expression. To get an array value into a variable
-later, use `(at …)` element-by-element.
+right: they appear in declaration initialization contexts. Existing array values
+can be copied through assignment, parameters, and results (§5.7).
 
 #### 5.6.1 `null` — contextual null-pointer literal
 
@@ -445,9 +534,9 @@ void process_point(<Point ptr> value);
 );
 ```
 
-Numeric `0` remains an integer in every context. Assigning, initializing,
-passing, or returning it as a pointer requires `(cast <T ptr>, 0)`. Conversely,
-`null` does not implicitly convert to an integer, `bool`, or `string`.
+Numeric zero has its ordinary literal type. Use `null` for a contextually
+typed zero pointer or `(cast <T ptr>, 0d)` to reinterpret a two-byte zero.
+Implicit conversion from `null` to an integer, `bool`, or `string` is invalid.
 
 When resolving overloaded calls, `null` can match any pointer parameter, but
 does not prefer one pointee type over another. If multiple signatures remain
@@ -460,7 +549,7 @@ void inspect(<char ptr> value);
 (inspect null);                      // ERROR: ambiguous pointer overloads.
 (inspect (cast <Point ptr>, null));   // Selects the <Point ptr> overload.
 (process_point 0);                   // ERROR: no implicit integer conversion.
-(process_point (cast <Point ptr>, 0));
+(process_point (cast <Point ptr>, 0d));
 ```
 
 An uncontextualized `null` has no concrete pointer type; operations requiring
@@ -471,7 +560,7 @@ arithmetic rules, and dereferencing a null pointer is undefined behavior (§13).
 This is target behavior. The compiler's existing `uint16` constant named
 `null` must be replaced by contextual literal handling during implementation.
 
-#### 5.6.2 Integer literals and explicit integer casts
+#### 5.6.2 Integer literals
 
 Decimal literals select their type through an optional adjacent sign and a
 lowercase `d` suffix. There is no automatic promotion when a literal exceeds
@@ -497,8 +586,8 @@ syntactically distinct and do not have to yield the same type:
 Validate the complete signed value directly. In particular, `-128` and
 `-32768d` are valid literals; they are not formed by negating an out-of-range
 positive signed literal. `256`, `+128`, `-129`, `65536d`, `+32768d`, and
-`-32769d` are compile-time errors. An enclosing cast cannot rescue an invalid
-literal: `(cast uint8, 256)` is invalid because `256` itself is invalid.
+`-32769d` are compile-time errors. Check the literal before applying `cast`
+or `convert`. For example, `(convert uint8, 256)` fails at the literal.
 
 Hexadecimal literals are always unsigned. Their width is determined by exactly
 two or four digits after `0x`, including leading zeros:
@@ -516,18 +605,69 @@ two or four digits after `0x`, including leading zeros:
 The `d` suffix applies only to decimal literals. In a hex literal, `d` and `D`
 are hexadecimal digits and count toward its two- or four-digit width.
 
-Explicit narrowing to an integer type retains the low bits at the destination
-width. A signed destination interprets those bits as two's complement.
-Equal-width signed/unsigned integer casts preserve the bit pattern. These
-rules apply equally during constant folding and runtime evaluation:
+#### 5.6.3 Explicit type changes
+
+`(cast T, value)` reinterprets the byte representation of a value as type
+`T`. The source and destination must have the same size. This applies to
+all value types, including scalars, pointers, strings, structs, unions,
+and arrays. Sizes and packed layouts are known at compile time. The cast
+produces a value of the destination type with the same bytes in the same
+order. A size mismatch is a compile error.
 
 ```cpm
-(cast uint8, 256d)                   // uint8, value 0: retains low 8 bits.
-(cast uint8, 0x01FF)                 // uint8, value 255.
-(cast int8, 0xFF)                    // int8, value -1: same 8-bit pattern.
-(cast int16, 0xFFFF)                 // int16, value -1: same 16-bit pattern.
-(cast uint8, -1)                     // uint8, value 255: same 8-bit pattern.
+struct Pair (uint8 high; uint8 low;);
+Pair bytes (cast Pair, 0x1234);       // high = 0x12, low = 0x34.
+int8 signed_byte (cast int8, 0xFF);   // -1.
+bool flag (cast bool, 0x80);          // True. The stored byte is 0x80.
+uint8 raw (cast uint8, flag);         // 0x80.
+uint16 invalid (cast uint16, raw);    // ERROR: the sizes differ.
 ```
+
+A bool uses one byte and has two logical values. Zero is false and all
+nonzero byte patterns are true. Boolean conditions, logical operators, and
+boolean equality use that logical value. A bit cast preserves the stored byte.
+
+`(convert T, value)` uses the following scalar conversion table. These
+conversions preserve or transform the mathematical value.
+
+| Source and destination | Rule |
+|---|---|
+| Integer to integer | Reduce the mathematical value modulo `2^destination_bits`, then interpret the result according to the destination's signedness. Signed widening sign-extends and unsigned widening zero-extends. |
+| Integer to bool | Zero yields false and nonzero yields true. |
+| Bool to integer | False yields zero and true yields one. |
+| Char and `uint8` | Preserve the character byte. |
+
+Pointer, string, and aggregate types are outside the conversion table.
+Apply the same rules in constant folding and at runtime.
+
+```cpm
+uint8 narrowed (convert uint8, 256d); // 0.
+uint16 widened (convert uint16, -1); // 65535.
+uint8 logical (convert uint8, flag); // 1.
+```
+
+Since `"a"` has the two-byte representation `0x6100`, casting it to
+`string` yields a string value containing address `0x6100`. Use the quoted
+literal initializer in §3 to create a string buffer containing those bytes.
+
+### 5.7 Aggregate values
+
+Structs, unions, and arrays are fixed-size contiguous values. They may be
+initialized from an existing value of the exact same type, assigned by value,
+passed by value, and returned by value. No implicit array-to-pointer decay or
+conversion between different dimensions, nesting, or named aggregate types occurs.
+
+```cpm
+<uint8 array 2> source (1; 2);
+<uint8 array 2> destination;
+= destination, source;              // Copy both bytes.
+```
+
+Copying an aggregate copies its representation, including array elements and
+nested aggregates. Pointer and string fields copy their addresses; their pointed-to
+storage is not cloned. Copies of potentially overlapping aggregate storage still
+need an explicit rule (§14, D3). Argument evaluation snapshots and stack result
+storage follow §5.1 and §9.
 
 ## 6. Namespaces and modules
 
@@ -539,10 +679,15 @@ using NAME;                            // bring NAME's symbols into scope
 - A namespace owns a set of structs, statics, `const`s, and functions.
 - `using NS;` makes `NS`'s public names referenceable without qualification.
   It is **not** transitive; only direct members of `NS` are visible.
-- `imports "file.bin"` marks the namespace as externally provided: its
-  prototypes and `static … imports 0xADDR;` bindings are resolved against a
-  binary ROM image rather than emitted here. The compiler emits no code for
-  such namespaces; they only influence type-checking and call lowering.
+- `imports "file.bin"` associates a namespace with a raw external library and
+  accompanying declarations. Constants describe its interface; `static … imports
+  0xADDR;` names fixed-address data. CPM wrapper function bodies in that namespace
+  are emitted normally: they receive CPM stack arguments and marshal values into
+  the external routine's register ABI using recognized intrinsics.
+- A bare prototype is not automatically bound to a function address merely
+  because a raw binary was named. Loading/placement, relocation or symbol maps,
+  unresolved-symbol policy, intrinsic effects, and external result marshaling
+  remain to be specified (§14, D8).
 - Individual `static T name imports 0xADDR;` declares a static whose address
   is fixed to `0xADDR` (a symbol imported from a ROM image). This is the
   linkage to the platform's pre-baked ROM tables and routines (`vtext`,
@@ -550,14 +695,17 @@ using NAME;                            // bring NAME's symbols into scope
 
 ## 7. Statements
 
-A function body is a sequence of statements. Statements end with `;`.
+A function body is a sequence of statements. Simple statements end with `;`;
+parentheses delimit blocks and control-statement bodies.
 
 ```
 statement ::=
     declaration          // local var
-  | assignment           // (= lvalue expr) etc.
+  | assignment           // (= lvalue, expr) etc.
   | expression ";"      // for side effects, e.g. (putstr 0, 0, "…");
   | "return" [expr] ";"
+  | "break" ";"
+  | "continue" ";"
   | "if" chain
   | "for" "(" init ";" cond ";" step ")" body
   | block
@@ -574,71 +722,107 @@ block ::= "(" statement … ")"
   ```
   The trailing `else` clause is optional; each `body` is a single statement
   (typically a block).
-- `for` has three `;`-separated syntactic slots: an initialization (a local
-  declaration or an assignment), a condition expression, and a step
-  expression. Any may be empty. The body is a single statement (typically a
-  block). `break` and `continue` are **not** provided in v1 — exit a loop via
-  a flag and an outer `if`; this keeps codegen small.
+- `for` has three `;`-separated slots: an optional initialization (a local
+  declaration or assignment), a mandatory `bool` condition, and an optional step
+  expression. Assignment expressions are allowed as steps. The body is a single
+  statement, typically a block.
+- `break` and `continue` take no operands and target the innermost enclosing
+  loop. `break` exits it; `continue` proceeds to its step and then retests its
+  condition. Both are errors outside a loop. As zero-operand operations they
+  may also use the parenthesized spellings `(break);` and `(continue);`.
+  All exits must restore the expected temporary stack depth (§9).
+- Reaching the end of a `void` function performs an implicit `return;`.
+  A reachable end of a non-void function is a compile error. A non-void
+  function may have paths that never return if they cannot reach the end.
 
 ## 8. Storage and lifetime
 
-- **Static storage**: `static` and `const` declarations live in their
-  namespace's contiguous static buffer for the entire program lifetime. They
-  are zero-initialized if no initializer is given. `const` symbols used as
-  sizes or in `array N` type-exprs must fold to an integer at compile time.
-- **Local storage**: locals are stack-allocated on function entry (the
-  Fridge stack ascends, see `FRIDGE_ASCENDING_STACK`). An optional
-  initializer lowers to a store after allocation. Locals are deallocated
-  on function exit; there is no block scope inside a function — all locals
-  declared anywhere in a function body share one frame and live for the whole
-  call. (Simpler codegen; revisit if shadowing becomes a pain.)
-- **Temporary storage**: expression evaluation uses the stack above the
-  frame. The codegen must balance allocations across branches.
+- **Static storage**: namespace-level `static` and `const` objects have program
+  lifetime. Namespace initializers must be computable at compile time; absent
+  initializers give zero-initialized storage. Const values used in array sizes
+  must fold to integers. The precise permitted constant-expression set and
+  dependency ordering remain pending (§14, D7).
+- **Function-local statics**: storage persists across calls, while the name is
+  visible only in its declaring block after the declaration. Each execution of
+  an initializer performs an ordinary assignment, which may use function
+  arguments. There is no once-only initialization guard. Skipping the declaration
+  skips its initialization; recursion still refers to the same static object.
+- **Addressable constants**: a folded constant whose address is taken must have
+  backing storage for that address. Direct assignment to a constant is an error;
+  modifying it through a pointer is undefined behavior, with no required runtime
+  protection. Constant string text may be pooled; writable local literal buffers
+  remain distinct.
+- **Local storage**: reserve local storage on function entry, while visibility
+  is lexical: a local name becomes available at its declaration and remains
+  visible within its block. Every use before declaration is an error, including
+  a use of a variable declared without an initializer. Initializers execute in
+  program order whenever control reaches the declaration. After an uninitialized
+  declaration, its bytes are unspecified; reads may produce a warning.
+  Reserving a function-wide frame does not expose a name before its declaration
+  or outside its block. Local string literal initializers additionally require
+  distinct character buffers as described in §3.
+- **Temporary storage**: the descending stack places expression temporaries
+  below the reserved local frame. Branch joins and loop backedges must agree
+  on temporary depth; return, break, and continue paths balance their allocations.
+- **Local literal buffers**: the planner reserves each local string literal's
+  character storage separately from its string slot. String copies alias the
+  referenced characters. The buffer lifetime/escape policy remains pending
+  (§14, D4), so frame reservation alone does not establish valid pointer lifetime.
 
-## 9. Calling convention
+## 9. Calling convention and startup
 
-- Arguments are pushed right-to-left onto the stack (current intermediate
-  convention).
-- A function allocates its frame by advancing SP past the sum of its local
-  sizes, then writes argument slots into named locals.
-- Return value ABI depends on the return type's static size:
-  - `sizeof(T) <= 2` (primitives, pointers, small structs): returned in the
-    HL register pair, as today.
-  - `sizeof(T) > 2` (larger structs): the caller allocates space for the
-    result in its own frame, pushes the result's address as a **hidden
-    leading argument** (before any user arguments), and the callee writes
-    the result through that pointer using ordinary stores — the same store-
-    through-pointer path used for `(at …)` writes. The callee leaves HL
-    unused (or zeroed) on return; the caller reads the result from the
-    reserved frame slot.
-  - This uniform rule keeps the return mechanism straightforward: small
-    returns travel in HL, large returns travel through an implicit `<T ptr>`
-    out-argument. No stack juggling above the return address, no special
-    callee-frame convention for the result.
-- Caller pops the arguments off the stack on return. The hidden out-arg
-  pointer is popped together with the user arguments.
-- The entry point is `void main()` in the `global` namespace; it takes no
-  arguments.
+[calling-convention.md](calling-convention.md) is the stack ABI reference for
+this target. It replaces the earlier HL/special hidden-output-pointer scheme.
+
+- The stack descends. The target's default header leaves
+  `FRIDGE_ASCENDING_STACK` undefined. Slots use exact type sizes with no padding;
+  multibyte values are big-endian.
+- Every CPM argument and non-void result travels through stack storage, including
+  one-byte values, two-byte values, and aggregates. A void result has no slot.
+- The caller reserves `sizeof(return type)` bytes and places argument values in
+  the layout corresponding to left-to-right pushes. Evaluation is left-to-right
+  with each value snapshotted at its evaluation point; nested calls must not
+  interleave live temporaries into the final contiguous argument slots.
+- `CALL` pushes a two-byte return PC. The callee reserves its local frame and
+  writes its result into the caller's return slot before freeing local storage
+  and executing `RET`. The caller removes argument bytes; the result slot then
+  remains as an expression value until consumed.
+- All frame accesses are SP-relative with compile-time corrections for the
+  current temporary depth. Registers/flags preserved across calls, external
+  intrinsic effects, and escaped-storage lifetimes still need a complete
+  contract (§14, D4/D8).
+- The entry point is `void main()` in the `global` namespace, with no parameters.
+  Under the existing loader contract, the image starts at `0x0200` with SP
+  initialized to `0xFFFF`. Since the loader jumps into the image, the compiler
+  emits an entry stub equivalent to `CALL main; JMP 0x0000`. Returning from
+  `main` transfers control back to the loader; no program-result byte is assigned
+  by this specification. Function/static data placement must prevent accidental
+  fallthrough into data or unrelated functions.
 
 ## 10. Scoping and name resolution
 
-- Names are looked up in, in order:
-  1. The current function's locals (and arguments).
-  2. The current namespace's functions, structs, and statics.
-  3. Every namespace named in a `using` directive, top-to-bottom.
-  4. The `global` namespace.
-- Two visible names may not collide; ambiguity is a compile error, not a
-  silent override.
-- Struct field names live only inside their struct's field list and via
-  member access; they do not pollute any scope.
+- For names other than function overloads, search visible locals and
+  parameters, then the current namespace, used namespaces, and `global`.
+  Ambiguous name references are compile errors.
+- A local may not reuse the name of a static in its own namespace. Function
+  parameters also obey their uniqueness rule (§4.4). The remaining collision
+  cases, including enclosing-block shadowing, are listed in §14, D7.
+- For an unqualified function call, merge overload candidates from the
+  current namespace, all namespaces named in visible `using` directives, and
+  `global`. Count each declaration once if it is reachable by several paths.
+  When separate functions have the same matching parameter signature, the call
+  is ambiguous. Qualification limits the candidate set to the named namespace.
+- Struct/union field names live inside their aggregate and through member access;
+  they do not pollute surrounding scopes. Union field names are unique across
+  all of its views.
 
 ## 11. Reserved keywords
 
 ```
 namespace using imports struct union static const
 ptr array
-if else for return
-at addr cast
+if else for return break continue
+at addr cast convert
 void bool char uint8 int8 uint16 int16 string
 null
 ```
@@ -663,15 +847,35 @@ should be a language feature, not a textual one.
 - Compile-time: type errors, undeclared names, ambiguous overloads, array
   sizes not const-foldable, `addr` of a non-lvalue, etc. The compiler logs to
   its `Logger` and emits no binary on error.
-- Runtime: the Fridge CPU has a Panic flag (§3 of `AGENTS.md`) used to halt
-  on stack corruption. Frion does not yet define any construct that *raises*
-  panic; a future `panic` operator may be added. Dereferencing a null pointer
-  is undefined behavior (no implicit check).
+- Runtime: integer division or remainder by zero sets the Fridge CPU Panic flag
+  and halts execution. The helper/trap mechanism is an implementation contract
+  still to be completed (§14, D8); `HLT` alone does not set Panic.
+- Dereferencing a null pointer and modifying constant storage through a pointer
+  are undefined behavior, without implicit runtime checks. General array/pointer
+  bounds policy remains pending (§14, D6).
 
-## 14. Open questions
+## 14. Remaining design decisions
 
-1. **`for` step side effects.** Allow `(= i, (+ i, 2))` as a step, or only
-   `++`/`--`/assignment-operators? Current intermediate only shows `++ i`.
+The [D1–D8 worksheet](cpm-design-decisions-d1-d8.md) records examples,
+proposals, and confirmed answers. The table tracks decision status for
+semantic analysis and IR work. Q numbers refer to the discussion file.
 
-2. **Break/continue.** Confirm v1 ships without them, or add them now while
-   the loop codegen is still small.
+| ID | Status or remaining question | Proposal for an open question |
+|---|---|---|
+| D1 — casts and index operands | Resolved. Equal-size values support bit casts. The scalar conversion table is in §5.6.3 and `at` index types are in §5.2. | — |
+| D2 — operator edges | Operator operand domains (including equality on strings/aggregates), signed overflow, minimum signed value divided by `-1`, shifts, arithmetic/unary result types, `++`/`--` results, and remaining variadic minimum arities (Q07/Q10). | Preserve operand type for arithmetic, wrap signed arithmetic at its width, reject invalid constant shifts, define runtime shift behavior, and make `++`/`--` return the updated value. All require confirmation. |
+| D3 — aggregate initialization/copy | Omitted/duplicate bindings, selecting a union view, reading another view, and overlapping copies (Q13/Q15/Q16). | Require every field exactly once for an initialized struct or one complete union view; allow raw cross-view reinterpretation; make overlapping assignment preserve the complete source value. Exact-type array assignment itself is already settled. |
+| D4 — character-buffer lifetime | Placement and escape of writable buffers created by declarations, plus storage for `const string` initializers (Q21). Literal type, terminator, and declaration-only copying are resolved in §3. | Tie frame-backed buffers to their declaring scope and specify dangling uses as UB. |
+| D5 — computed members | Exact spelling for `at`-receiver members, plus readable/assignable/addressable fields of other temporary receivers (Q12). | Support `(at values, i).field` and named chains; reject other computed receivers in v1. |
+| D6 — bounds | Compile-time and runtime out-of-range access policy, including negative array indices (Q03). | Diagnose statically known invalid array indices; otherwise perform unchecked access. Ordinary pointers/strings carry no length. Null dereference is already UB. |
+| D7 — names and constants | Overload merging is resolved in §10. Other name collisions and constant-expression ordering are covered by the D7 worksheet. | Reject collisions with visible names and allow reuse in disjoint scopes. Evaluate a pure typed constant-expression subset with dependency-cycle errors. |
+| D8 — linking and completion | Raw binary placement, unresolved prototypes, intrinsic effects, register clobbers, and the runtime Panic mechanism (Q22–Q24). Function fallthrough is resolved in §7. | Use an explicit import map and intrinsic table with caller-clobbered general registers and flags. |
+
+Already settled and not awaiting clarification: exact numeric matching and
+explicit conversions; bool-only conditions/logical operators; before-declaration
+errors; separate character buffers for local literal initialization; address-only
+string copies; exact-type array assignment; equal-size union views; left-to-right
+evaluation; block visibility; per-execution local-static initialization; unique
+parameter names and matching prototypes. The settled rules also include merged
+function overload sets, loop control, void-only fallthrough, and stack
+arguments and results of every size.

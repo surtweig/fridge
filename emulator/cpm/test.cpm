@@ -18,6 +18,8 @@ namespace X2AL // zuzu123
     void __mvi_a(uint8 v);
     void __mvi_b(uint8 v);
     void __mvi_c(uint8 v);
+    void __lxi_hl(uint16 v);
+    void __callsub(uint16 address);
 );
 
 namespace VTEXT imports "vtext.bin"
@@ -59,6 +61,8 @@ struct uint8pair
 union uint16Union
 (
     uint16 word;
+)
+(
     uint8pair bytes;
 );
 
@@ -76,7 +80,7 @@ static <char array 5> textTest ('1'; '2'; '3'; '4'; '5');
 
 const uint8 intArraySize (+ 2, 3);
 
-const uint16 constAnswer 42;
+const uint16 constAnswer 42d;
 
 const string helloConst "Hello, const!";
 
@@ -101,7 +105,7 @@ struct complexStruct
 (
     string name;
     intArray arr;
-    <char array 256> text;
+    <char array 256d> text;
     string text2;
     //complexStruct zuzu;
     //cs2 _cs2;
@@ -123,7 +127,7 @@ uint8 func(<uint8 ptr> a; <uint8 ptr> b)
     return (+ (at a), (at b));
 );
 
-uint8 func(<uint8 ptr> b; uint8 x) ( ; );
+uint8 func(<uint8 ptr> b; uint8 x) (return (+ (at b), x););
 
 void main()
 (
@@ -135,27 +139,31 @@ void main()
     uint8 z (+ 54, 12);
     //= (at myArray, 0), 1;
     //= (at myArray, 1), (at myArray, (- (at myArray, 0), 1));
+    string greeting "Hello, World!";
+    string refusal "No way!";
+    string fallback "Hello, Darkness!";
     if (== (at myArray, 0), 1)
-        (putstr 0, 0, "Hello, World!")
-    else if (0)
-        (putstr 0, 0, "No way!")
+        (putstr 0, 0, greeting)
+    else if (false)
+        (putstr 0, 0, refusal)
     else
-        (putstr 0, 0, "Hello, Darkness!");
+        (putstr 0, 0, fallback);
     
     for (uint8 i 0; < i, intArraySize; ++ i)
     (
         if (== i, 2)
         (
-            putstr 0, 0, "i == 2";
+            string message "i == 2";
+            putstr 0, 0, message;
             //= (at myArray, i), i;
         );
         //= (at myArray, i), i;
     );
 
     //= (at myArray, i), i;
-    = x, 15;
-    = z, x;
-    = x, z;
+    = x, 15d;
+    = z, (convert uint8, x);
+    = x, (convert uint16, z);
     //= x, (+ 5, z);
     //= (at (addr x)), 10;
 );
