@@ -439,13 +439,20 @@ namespace CPM
                     if (!value.expressions.empty())
                     {
                         const auto& declaration = *value.declaration;
+                        const auto& initializer = value.expressions.front();
                         if (declaration.isConst)
                             program.initializeData(localData.at(&declaration.symbol), 0,
-                                                   value.expressions.front(), localData);
+                                                   initializer, localData);
                         else
                         {
-                            const size_t initializer = expression(value.expressions.front());
-                            emit(CPMIROp::Copy, syntax, objects.at(&declaration.symbol), {initializer});
+                            const size_t destination = objects.at(&declaration.symbol);
+                            if (initializer.constant && !initializer.bytes.empty())
+                                constant(destination, initializer.bytes, initializer.syntax);
+                            else
+                            {
+                                const size_t source = expression(initializer);
+                                emit(CPMIROp::Copy, syntax, destination, {source});
+                            }
                         }
                     }
                     break;

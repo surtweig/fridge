@@ -17,6 +17,36 @@ static const CPMIRFunction& findFunction(const CPMIRProgram& program, const stri
     return *function;
 }
 
+static void inspectConstantInitializers(Fixture& fixture)
+{
+    fixture.check(R"(
+        void main()
+        (
+            uint8 byte_value (+ 3, 4);
+            uint16 word_value 0xABCD;
+            <uint8 array 3> array_value (1; 2; 3);
+        );
+    )", true, [](CPMCompiler& compiler)
+    {
+        const auto program = CPMBuildIR(compiler);
+        require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+        const auto& main = findFunction(program, "main");
+        const vector<vector<FRIDGE_WORD>> expected{{7}, {0xAB, 0xCD}, {1, 2, 3}};
+        require(main.localBytes == 6 && main.frameBytes == main.localBytes &&
+                main.slots.size() == expected.size(),
+                "Constant local initializers should not allocate temporary slots");
+        require(main.blocks.size() == 1 && main.blocks[0].size() == expected.size() + 1,
+                "Constant local initializers should need only one write per variable");
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+            const auto& instruction = main.blocks[0][i];
+            require(instruction.op == CPMIROp::Constant && instruction.output == i &&
+                    instruction.bytes == expected[i],
+                    "Constant initializer did not write its bytes directly to the local slot");
+        }
+    });
+}
+
 static void inspectIR(Fixture& fixture, const string& source)
 {
     fixture.check(source, true, [](CPMCompiler& compiler)
@@ -97,6 +127,7 @@ int main()
     try
     {
         Fixture fixture;
+        inspectConstantInitializers(fixture);
         const string source = R"(
             static <uint8 array 24> output imports 0x0100;
             const string greeting "Hello";
