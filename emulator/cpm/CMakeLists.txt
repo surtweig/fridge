@@ -9,22 +9,22 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
 endif()
 
-# CPM source files (Frion compiler)
-set(CPM_SOURCES
+add_library(cpm_core STATIC
     CPMParser.cpp
     CPMCompiler.cpp
     CPMSemantic.cpp
+    CPMIR.cpp
+    CPMAssembly.cpp
     CPMIntermediate.cpp
     Logger.cpp
 )
-
-add_executable(cpm cpm.cpp ${CPM_SOURCES})
-
-# Include paths: repo root include/ for fridge.h, local dir for peer headers
-target_include_directories(cpm PRIVATE
+target_include_directories(cpm_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
+
+add_executable(cpm cpm.cpp)
+target_link_libraries(cpm PRIVATE cpm_core)
 
 # Not a Windows build — don't pull in tchar.h / SDKDDKVer.h
 target_compile_definitions(cpm PRIVATE
@@ -34,29 +34,29 @@ target_compile_definitions(cpm PRIVATE
 
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(cpm_separator_tests
-        tests/separators.cpp
-        ${CPM_SOURCES}
-    )
-    target_include_directories(cpm_separator_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    )
+    add_executable(cpm_separator_tests tests/separators.cpp)
+    target_link_libraries(cpm_separator_tests PRIVATE cpm_core)
     add_test(NAME cpm_separators COMMAND cpm_separator_tests)
-    add_executable(cpm_type_tests
-        tests/type_expressions.cpp
-        ${CPM_SOURCES}
-    )
-    target_include_directories(cpm_type_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    )
+
+    add_executable(cpm_type_tests tests/type_expressions.cpp)
+    target_link_libraries(cpm_type_tests PRIVATE cpm_core)
     target_compile_definitions(cpm_type_tests PRIVATE
         CPM_EXAMPLE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/test.cpm"
     )
     add_test(NAME cpm_types COMMAND cpm_type_tests)
-    add_executable(cpm_semantic_tests tests/semantics.cpp ${CPM_SOURCES})
-    target_include_directories(cpm_semantic_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    )
+
+    add_executable(cpm_semantic_tests tests/semantics.cpp)
+    target_link_libraries(cpm_semantic_tests PRIVATE cpm_core)
     add_test(NAME cpm_semantics COMMAND cpm_semantic_tests)
+
+    enable_language(C)
+    add_executable(cpm_ir_tests
+        tests/ir.cpp
+        ../../falc/FridgeAssemblyLanguageCompiler.cpp
+        ../../fridgemulib/fridgemulib.c
+        ../../fridgemulib/posit.c
+    )
+    target_include_directories(cpm_ir_tests PRIVATE ../../falc ../../fridgemulib)
+    target_link_libraries(cpm_ir_tests PRIVATE cpm_core)
+    add_test(NAME cpm_ir COMMAND cpm_ir_tests)
 endif()

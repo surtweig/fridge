@@ -121,7 +121,7 @@ namespace CPM
     struct CPMCheckedFunction;
     class CPMSemanticAnalyzer;
 
-    enum class CPMCompileMode { Emit, Check };
+    enum class CPMCompileMode { Emit, Check, Assembly };
 
     struct CPMDataSymbol
     {
@@ -377,6 +377,7 @@ namespace CPM
         bool noErrors;
         Logger compilerLog;
         Logger asmDebugOutput;
+        string assemblyOutput;
         CPMDataType dataTypeCounter;
         FRIDGE_RAM_ADDR globalOffset;
 
@@ -415,6 +416,7 @@ namespace CPM
         inline void Error() { noErrors = false; }
         inline bool NoErrors() { return noErrors; }
         inline Logger* AsmDebugOutput() { return &asmDebugOutput; }
+        const string& AssemblyOutput() const { return assemblyOutput; }
         void PrintStaticData();
         ~CPMCompiler();
 

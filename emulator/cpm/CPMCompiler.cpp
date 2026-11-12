@@ -3,6 +3,7 @@
 #include "CPMCompiler.h"
 #include "CPMIntermediate.h"
 #include "CPMSemantic.h"
+#include "CPMAssembly.h"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -257,6 +258,11 @@ namespace CPM
         if (noErrors && mode == CPMCompileMode::Emit)
         {
             CPMIntermediate im(this);
+        }
+        else if (noErrors && mode == CPMCompileMode::Assembly)
+        {
+            const auto ir = CPMBuildIR(*this);
+            if (noErrors) assemblyOutput = CPMEmitAssembly(*this, ir);
         }
 
         if (!noErrors)
