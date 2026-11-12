@@ -11,6 +11,10 @@ find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)
 
+if(NOT TARGET falc_core)
+    add_subdirectory(../falc falc EXCLUDE_FROM_ALL)
+endif()
+
 set(IMGUI_SOURCES
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
@@ -38,9 +42,6 @@ add_executable(fridge_emulator
     # fridgemulib as sources (matches fridge_opengl_emulator.pro pattern).
     # posit.c intentionally excluded — PAM16 disabled.
     ../fridgemulib/fridgemulib.c
-
-    # falc compiler as source (no main.cpp — only the compiler class).
-    ../falc/FridgeAssemblyLanguageCompiler.cpp
 )
 
 # fridgemulib.c is plain C89 but its header uses no extern "C" guards, so compile
@@ -56,7 +57,6 @@ target_include_directories(fridge_emulator PRIVATE
     src
     ../include
     ../fridgemulib
-    ../falc
     deps/imgui
     deps/imgui/backends
     deps/vma/include
@@ -73,6 +73,7 @@ else()
 endif()
 
 target_link_libraries(fridge_emulator PRIVATE
+    falc_core
     Vulkan::Vulkan
     Threads::Threads
 )

@@ -14,7 +14,7 @@ Docker on CachyOS, plus host-side programming via Digilent **Adept** (`djtgcfg`)
 
 This board target belongs to the Fridge repository at
 `fpga/fridge_spartan6/` on branch `spartan6-atlys`. The assembler and standard
-library are shared with the rest of Fridge: `falc/` and `x2al_std/` at the
+library are shared with the rest of Fridge: `falc/` and `sdk/x2al_std/` at the
 repository root. There is no nested Fridge checkout in this target.
 
 Run the commands below from this directory:

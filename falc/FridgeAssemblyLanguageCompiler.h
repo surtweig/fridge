@@ -14,7 +14,6 @@
 #include <sstream>
 using namespace std;
 
-#define STD_PATH "../x2al_std/"
 #define R_INCLUDE "include"
 #define R_ALIAS "alias"
 #define R_SUBROUTINE "subroutine"
@@ -31,6 +30,9 @@ using namespace std;
 #define HeapOriginAlias "HEAP_ORIGIN"
 #define StackOriginAlias "STACK_ORIGIN"
 #define R_UNSAFE_FLOW "unsafe_flow"
+#define R_INCBIN "incbin"
+
+enum class FalcRelocation { None, Base, Heap };
 
 struct ParsedLine
 {
@@ -38,7 +40,9 @@ struct ParsedLine
     FRIDGE_RAM_ADDR address;
     int lineNumber;
     string sourceFile;
+    string sourceFolder;
     string rawText;
+    FalcRelocation relocation = FalcRelocation::None;
 };
 
 typedef enum OperandType
@@ -66,13 +70,28 @@ struct StaticResourceInfo
 class FridgeAssemblyLanguageCompiler
 {
 private:
+    struct CpmExport
+    {
+        string decorator;
+        ParsedLine declaration;
+    };
+
     vector<ParsedLine> lines;
+    vector<CpmExport> cpmExports;
+    map<size_t, vector<FRIDGE_WORD>> binarySections;
+    map<string, pair<size_t, size_t>> binarySymbols;
+    map<size_t, FalcRelocation> relocations;
+    vector<size_t> linkedHeapReferences;
 
     ostream* errstr;
     vector<string> includeFolders;
     int currentLineNumber;
     string currentSourceFile;
     bool unsafeFlowAllowed;
+    bool successful = false;
+    bool jumpPreamble = false;
+    bool stackPreamble = false;
+    bool relocatable = false;
     map<string, string> aliases;
     map<string, FRIDGE_RAM_ADDR> entries;
     map<string, FRIDGE_RAM_ADDR> subroutines;
@@ -95,7 +114,11 @@ private:
     static map<FRIDGE_WORD, InstructionSignature> IRSigs;
     static map<FRIDGE_WORD, string> IRNames;
 
+    FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile,
+                                   vector<string> includeFolders, ostream* errstr, bool saveVHDL,
+                                   bool saveVHDLAggregate, bool saveCpmHeader, istream* source);
     bool preprocessFile(string sourceRootFolder, string sourceFileName);
+    bool preprocessSource(istream& source, const string& sourceRootFolder, const string& sourceFileName);
     void parseLine(string* line, vector<string> &words);
     void logout(string message);
     void logerrout(string message);
@@ -103,8 +126,12 @@ private:
     void initDefaultAliases();
     bool readResources();
     bool dealias();
-    bool addressMarkup();
+    bool addressMarkup(bool exportCpm);
+    bool placeBinarySections(size_t& imageSize);
+    bool relocateBinary(const string& path, size_t address, vector<FRIDGE_WORD>& bytes);
     bool generateObjectCode();
+    bool generateCpmHeader(const string& binaryFile, string& header);
+    bool saveRelocations(const string& path);
     bool saveObjectCode(string outputFile);
     bool saveObjectCodeVHDL(string outputFile);
     bool saveObjectCodeVHDLAggregate(string outputFile);
@@ -122,7 +149,11 @@ public:
     FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName,
                                    string outputFile,
                                    vector<string> includeFolders, ostream* errstr,
-                                   bool saveVHDL = false, bool saveVHDLAggregate = false);
+                                   bool saveVHDL = false, bool saveVHDLAggregate = false,
+                                   bool saveCpmHeader = false);
+    FridgeAssemblyLanguageCompiler(istream& source, string sourceRootFolder, string sourceFileName,
+                                   string outputFile, ostream* errstr);
+    bool succeeded() const { return successful; }
     FRIDGE_WORD* getObjectCode() { return objectCode; }
     FRIDGE_RAM_ADDR getOffset() { return offset; }
     FRIDGE_RAM_ADDR getProgramSize() { return programSize; }

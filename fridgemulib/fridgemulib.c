@@ -146,7 +146,7 @@ void ir_XCNG(FRIDGE_CPU* cpu)
 
 void ir_ADD(FRIDGE_CPU* cpu, FRIDGE_WORD add)
 {
-    setCarry(cpu, ~cpu->rA < add);
+    setCarry(cpu, cpu->rA + add >= (1u << FRIDGE_WORD_BITS));
     cpu->rA += add;
     defaultSetFlags(cpu, cpu->rA);
 }
@@ -155,7 +155,7 @@ void ir_ADC(FRIDGE_CPU* cpu, FRIDGE_WORD add)
 {
     FRIDGE_WORD c = FRIDGE_cpu_flag_CARRY(cpu);
     FRIDGE_SIZE_T t = add + c; // intentionally using superset type
-    setCarry(cpu, ~cpu->rA < t);
+    setCarry(cpu, cpu->rA + t >= (1u << FRIDGE_WORD_BITS));
     cpu->rA += t;
     defaultSetFlags(cpu, cpu->rA);
 }

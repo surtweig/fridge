@@ -4,7 +4,7 @@ BOARD = Atlys
 BUILD = .local/build/$(PROGRAM)
 RTL = $(wildcard rtl/*.vhd rtl/core/*.vhd rtl/video/*.vhd rtl/devices/*.vhd)
 HOST = $(wildcard ../../falc/*.cpp ../../falc/*.h ../../falc/CMakeLists.txt ../../include/*.h)
-STDLIB = $(wildcard ../../x2al_std/*.inc)
+STDLIB = $(wildcard ../../sdk/x2al_std/*.inc)
 INPUTS = programs/$(PROGRAM)/boot.falc $(wildcard programs/$(PROGRAM)/rom/*.hex)
 TOOLS = $(abspath bin)
 

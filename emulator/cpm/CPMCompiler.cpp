@@ -205,7 +205,9 @@ namespace CPM
         return IsIntDataType(dtype) || dtype == CPM_DATATYPE_BOOL || dtype == CPM_DATATYPE_CHAR;
     }
 
-    CPMCompiler::CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, CPMCompileMode mode) : compilerLog(), asmDebugOutput()
+    CPMCompiler::CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile,
+                             vector<string> includeFolders, CPMCompileMode mode, CPMCompileOptions options)
+        : compilerLog(), asmDebugOutput(), options(options)
     {
         noErrors = true;
         outputFileName = outputFile;
@@ -217,7 +219,6 @@ namespace CPM
             return;
         }
         dataTypeCounter = CPM_DATATYPE_USER;
-        globalOffset = FRIDGE_EXECUTABLE_OFFSET;
 
         namespaces[GlobalNamespace] = new CPMNamespace(GlobalNamespace);
         CPMNamespace* global = namespaces[GlobalNamespace];
@@ -281,6 +282,7 @@ namespace CPM
             sources[filename].name = filename;
             isrc = sources.find(filename);
             isrc->second.name = filename;
+            isrc->second.rootFolder = rootFolder;
             isrc->second.parser = new CPMParser(rootFolder, filename, CompilerLog());
             if (isrc->second.parser->NoErrors())
             {
@@ -830,6 +832,12 @@ namespace CPM
             if (!names.insert(argument.name).second) { fail("Duplicate function parameter '" + argument.name + "'."); return; }
             signature.arguments.push_back(std::move(argument));
         }
+        if (intrinsic && (!result.isVoid() || signature.arguments.size() != 1 ||
+                          CPMFindIntrinsic(signature.name, signature.arguments.front().typeExpr) == CPMIntrinsic::None))
+        {
+            fail("Unknown intrinsic or invalid intrinsic signature for '" + signature.name + "'.");
+            return;
+        }
         auto found = owner->functions.find(signature);
         auto body = node->children.size() == 4 ? node->children[3] : nullptr;
         if (found != owner->functions.end())
@@ -882,9 +890,11 @@ namespace CPM
                 continue;
             }
             const auto& parts = node->children;
-            if ((parts.size() != 3 && parts.size() != 5) || !CPMIsUserIdentifier(parts[1]) ||
+            const bool fixedImport = parts.size() == 7;
+            if ((parts.size() != 3 && parts.size() != 5 && !fixedImport) || !CPMIsUserIdentifier(parts[1]) ||
                 parts.back()->type != CPM_BLOCK ||
-                (parts.size() == 5 && (parts[2]->text != R_IMPORT || parts[3]->type != CPM_STR)))
+                (parts.size() > 3 && (parts[2]->text != R_IMPORT || parts[3]->type != CPM_STR)) ||
+                (fixedImport && (parts[4]->text != R_AT || parts[5]->type != CPM_NUM)))
             {
                 compilerLog.Add(LOG_ERROR, "Invalid namespace declaration syntax.", node->sourceFileName, node->lineNumber);
                 Error();
@@ -897,9 +907,29 @@ namespace CPM
                 Error();
                 continue;
             }
+            int address = -1;
+            if (fixedImport)
+            {
+                const auto origin = CPMSemanticAnalyzer(*this, namespaces.at(GlobalNamespace)).expression(parts[5]);
+                if (!origin) continue;
+                if (origin.type.base != CPM_DATATYPE_UINT8 && origin.type.base != CPM_DATATYPE_UINT16)
+                {
+                    compilerLog.Add(LOG_ERROR, "A binary origin must be an unsigned integer literal.",
+                                    node->sourceFileName, node->lineNumber);
+                    Error();
+                    continue;
+                }
+                address = 0;
+                for (auto byte : origin.bytes) address = (address << 8) | byte;
+            }
             auto ns = new CPMNamespace(name);
             namespaces.emplace(name, ns);
-            if (parts.size() == 5) ns->importSource = CPMSTRContent(parts[3]);
+            if (parts.size() > 3)
+            {
+                ns->importSource = CPMSTRContent(parts[3]);
+                ns->importAddress = address;
+                ns->importNode = parts[3];
+            }
             for (auto child : parts.back()->children) add(ns, child);
             compilerLog.Add(LOG_MESSAGE, "Namespace " + name, node->sourceFileName, node->lineNumber);
         }

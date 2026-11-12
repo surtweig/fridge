@@ -21,7 +21,7 @@ namespace CPM
     enum class CPMIROp
     {
         Constant, Copy, Address, Load, Store, Index, Convert, Arithmetic,
-        Call, Jump, Branch, Return
+        Call, Intrinsic, Jump, Branch, Return
     };
 
     struct CPMIRInstruction
@@ -37,6 +37,7 @@ namespace CPM
         const CPMFunctionSymbol* callee = nullptr;
         size_t target = CPMIRNone;
         size_t alternative = CPMIRNone;
+        CPMIntrinsic intrinsic = CPMIntrinsic::None;
     };
 
     struct CPMIRFunction
@@ -62,8 +63,9 @@ namespace CPM
     {
         string name;
         vector<FRIDGE_WORD> bytes;
-        int fixedAddress = -1;
+        int importAddress = -1;
         vector<CPMIRRelocation> relocations;
+        const CPMNamespace* relocatableImport = nullptr;
     };
 
     struct CPMIRProgram

@@ -51,6 +51,8 @@ namespace CPM
                 const size_t size = compiler.sizeOfTypeExpr(field.typeExpr);
                 const size_t id = data(field.owner->name + "." + field.name, size, symbol.importSource);
                 statics.emplace(&symbol, id);
+                if (symbol.importSource >= 0 && field.owner->hasRelocatableImport())
+                    program.data[id].relocatableImport = field.owner;
                 if (symbol.importSource < 0)
                 {
                     if (symbol.initializer)
@@ -369,6 +371,25 @@ namespace CPM
                 }
                 case CPMExprKind::Call:
                 {
+                    if (value.intrinsic != CPMIntrinsic::None)
+                    {
+                        const auto& argument = value.operands.front();
+                        size_t input = CPMIRNone;
+                        if (argument.bytes.empty() || !argument.constant)
+                        {
+                            // A bit cast can read the same slot directly. Generated
+                            // wrappers load named arguments without using scratch registers.
+                            const auto* source = &argument;
+                            while (source->kind == CPMExprKind::Operator && source->syntax->text == R_CAST)
+                                source = &source->operands.front();
+                            input = source->kind == CPMExprKind::Name ? object(*source) : expression(argument);
+                        }
+                        auto& instruction = emit(CPMIROp::Intrinsic, syntax, CPMIRNone,
+                                                 input == CPMIRNone ? vector<size_t>{} : vector<size_t>{input});
+                        instruction.intrinsic = value.intrinsic;
+                        if (input == CPMIRNone) instruction.bytes = argument.bytes;
+                        return CPMIRNone;
+                    }
                     vector<size_t> arguments;
                     for (const auto& argument : value.operands) arguments.push_back(expression(argument));
                     const size_t result = temporary(value.type);

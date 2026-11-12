@@ -51,6 +51,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\..\falc;..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
@@ -63,6 +64,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\..\falc;..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -81,6 +83,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\fridge.h" />
+    <ClInclude Include="..\..\falc\FridgeAssemblyLanguageCompiler.h" />
     <ClInclude Include="CPMCompiler.h" />
     <ClInclude Include="CPMIntermediate.h" />
     <ClInclude Include="CPMParser.h" />
@@ -93,6 +96,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\emulator\XCM2.cpp" />
+    <ClCompile Include="..\..\falc\FridgeAssemblyLanguageCompiler.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="cpm.cpp" />
     <ClCompile Include="CPMCompiler.cpp" />
     <ClCompile Include="CPMIntermediate.cpp" />

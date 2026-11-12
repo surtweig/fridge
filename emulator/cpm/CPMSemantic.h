@@ -5,6 +5,7 @@
 namespace CPM
 {
     bool CPMIsUserIdentifier(const CPMSyntaxTreeNode* node);
+    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType& parameter);
 
     enum class CPMValueCategory { Value, ReadOnly, Writable };
     enum class CPMExprKind
@@ -21,6 +22,7 @@ namespace CPM
         const CPMDataSymbol* object = nullptr;
         const CPMStaticSymbol* staticObject = nullptr;
         const CPMFunctionSymbol* function = nullptr;
+        CPMIntrinsic intrinsic = CPMIntrinsic::None;
         const CPMDataSymbol* field = nullptr;
         bool contextualNull = false;
         bool constant = false;

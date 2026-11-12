@@ -120,9 +120,6 @@ Test ROMs are written in Fridge Assembly (`tests/*.x2al`) and assembled with
   `std::string` and `find_last_of("/\\")` path splitting; the source-root
   folder is kept with a trailing path separator so falc's
   `sourceRootFolder + sourceFileName` concat works.
-- `falc/FridgeAssemblyLanguageCompiler.h`: `STD_PATH` changed from
-  `"..\\x2al_std\\"` to `"../x2al_std/"` (forward slashes work on both
-  Linux and Win32).
 - `falc/FridgeAssemblyLanguageCompiler.cpp`: added `#include <cstring>` for
   `memcpy`; wrapped the three `PAM16C` references in
   `#ifdef FRIDGE_POSIT16_SUPPORT` so the assembler builds whether or not
@@ -133,8 +130,8 @@ Build falc from the repo root:
 cmake -S falc -B build-falc && cmake --build build-falc -j
 ```
 
-Then assemble a test ROM from the `fridge_emulator/` directory (so
-`STD_PATH "../x2al_std/"` resolves to `<repo>/x2al_std/`):
+Then assemble a test ROM from the `fridge_emulator/` directory. The CMake-built
+assembler resolves the standard library in `sdk/x2al_std/`.
 ```bash
 cd fridge_emulator
 ../build-falc/falc tests/test_phase_b.x2al tests/test_phase_b.bin
@@ -160,6 +157,11 @@ sudo apt install vulkan-validationlayers      # enables per-frame Vulkan debug r
 If absent, Debug builds emit a one-line notice and continue without validation.
 
 ## Build
+
+From the repository root, `./sdk/build.sh` builds the emulator and installs it
+at `sdk/bin/fridge_emulator` alongside the compilers.
+
+For a standalone build, run the following from the repository root.
 
 ```bash
 cmake -S fridge_emulator -B fridge_emulator/build

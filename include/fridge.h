@@ -9,10 +9,11 @@ typedef unsigned int FRIDGE_SIZE_T;
 
 //#define FRIDGE_ASCENDING_STACK
 //#define FRIDGE_POSIT16_SUPPORT
-// Base mode: 240x160. Currently select 210x160 for the P4 landscape display.
-// Use the same video-mode selection in all components.
-//#define FRIDGE_VIDEO_240X180
+// Default to 210x160 for the P4 landscape display. Define FRIDGE_VIDEO_240X160
+// or FRIDGE_VIDEO_240X180 to select another mode in all components.
+#if !defined(FRIDGE_VIDEO_240X160) && !defined(FRIDGE_VIDEO_240X180) && !defined(FRIDGE_VIDEO_210X160)
 #define FRIDGE_VIDEO_210X160
+#endif
 
 #define FRIDGE_RAM_SIZE 0x10000 // bytes
 #define FRIDGE_MAX_DWORD 0xffff

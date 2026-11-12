@@ -1,9 +1,29 @@
 #include "FridgeAssemblyLanguageCompiler.h"
 #include <cstring>
+#include <iterator>
+#include <regex>
+
+#ifndef FALC_STD_PATH
+#define FALC_STD_PATH "../sdk/x2al_std/"
+#endif
 
 #define FALC_ERR_LOC "[" << currentSourceFile << " : " << currentLineNumber << "] "
 
-FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL, bool saveVHDLAggregate)
+FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName,
+    string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL, bool saveVHDLAggregate, bool saveCpmHeader)
+    : FridgeAssemblyLanguageCompiler(std::move(sourceRootFolder), std::move(sourceFileName), std::move(outputFile),
+                                     std::move(includeFolders), errstr, saveVHDL, saveVHDLAggregate, saveCpmHeader, nullptr)
+{
+}
+
+FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(istream& source, string sourceRootFolder,
+    string sourceFileName, string outputFile, ostream* errstr)
+    : FridgeAssemblyLanguageCompiler(std::move(sourceRootFolder), std::move(sourceFileName), std::move(outputFile),
+                                     {}, errstr, false, false, false, &source)
+{
+}
+
+FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders, ostream* errstr, bool saveVHDL, bool saveVHDLAggregate, bool saveCpmHeader, istream* source)
 {
     this->errstr = errstr;
     this->includeFolders = includeFolders;
@@ -27,39 +47,48 @@ FridgeAssemblyLanguageCompiler::FridgeAssemblyLanguageCompiler(string sourceRoot
     KeywordIDs.emplace(R_OFFSET);
     KeywordIDs.emplace(R_STATICRESOURCE);
     KeywordIDs.emplace(R_UNSAFE_FLOW);
+    KeywordIDs.emplace(R_INCBIN);
 
-    bool noerrors = false;
-    if (preprocessFile(sourceRootFolder, sourceFileName))
+    if (source ? preprocessSource(*source, sourceRootFolder, sourceFileName)
+               : preprocessFile(sourceRootFolder, sourceFileName))
     {
         initDefaultAliases();
-        if (readResources())
-            if (dealias())
-                if (addressMarkup())
-                    if (generateObjectCode())
-                    {
-                        if (outputFile.length() > 0)
-                        {
-                            saveObjectCode(outputFile);
-                            if (saveVHDLAggregate)
-                                saveObjectCodeVHDLAggregate(outputFile + ".vhd");
-                            else if (saveVHDL)
-                                saveObjectCodeVHDL(outputFile + ".vhd");
-                        }
-                        noerrors = true;
-                        logout("Compilation successful.");
-                    }
+        string header;
+        successful = readResources() && dealias() && addressMarkup(saveCpmHeader) && generateObjectCode() &&
+                     (!saveCpmHeader || generateCpmHeader(outputFile, header));
+        if (successful && !outputFile.empty())
+        {
+            successful = saveObjectCode(outputFile);
+            if (successful && saveVHDLAggregate)
+                successful = saveObjectCodeVHDLAggregate(outputFile + ".vhd");
+            else if (successful && saveVHDL)
+                successful = saveObjectCodeVHDL(outputFile + ".vhd");
+            if (successful && relocatable)
+                successful = saveRelocations(outputFile + ".rel");
+            if (successful && saveCpmHeader)
+            {
+                const string path = outputFile.substr(0, outputFile.size() - 4) + ".cpm";
+                ofstream file(path);
+                file << header;
+                file.close();
+                successful = static_cast<bool>(file);
+                if (!successful) logerrout("Cannot write CPM header '" + path + "'.");
+            }
+        }
     }
-    if (!noerrors)
+    if (successful)
+        logout("Compilation successful.");
+    else
     {
-        logerrout("Compilation failed due to errors. No code generated.");
+        free(objectCode);
+        objectCode = nullptr;
+        logerrout("Compilation failed due to errors.");
     }
 }
 
 bool FridgeAssemblyLanguageCompiler::preprocessFile(string sourceRootFolder, string sourceFileName)
 {
-    string line;
     ifstream f(sourceRootFolder + sourceFileName);
-    int lineNumberBackup;
     string actualSourceRootFolder = sourceRootFolder;
 
     // try to open from include folders
@@ -76,57 +105,86 @@ bool FridgeAssemblyLanguageCompiler::preprocessFile(string sourceRootFolder, str
     // last try
     if (!f.is_open())
     {
-        actualSourceRootFolder = STD_PATH;
+        actualSourceRootFolder = FALC_STD_PATH;
         f.clear();
         f.open(actualSourceRootFolder + sourceFileName);
     }
 
-    if (f.is_open())
-    {
-        currentLineNumber = 1;
-        currentSourceFile = sourceFileName;
-        *errstr << FALC_ERR_LOC << " Source: " << actualSourceRootFolder << sourceFileName << "\n";
-        while (getline(f, line))
-        {
-            ParsedLine parsed;
-            parseLine(&line, parsed.words);
-            bool wasInclude = false;
-            if (parsed.words.size() == 2)
-                if (parsed.words[0] == R_INCLUDE)
-                {
-                    string incfile = parsed.words[1].substr(1, parsed.words[1].size() - 2);
-                    unordered_set<string>::iterator iinc = includes.find(incfile);
-                    if (iinc == includes.end())
-                    {
-                        lineNumberBackup = currentLineNumber;
-                        preprocessFile(actualSourceRootFolder, incfile);
-                        currentSourceFile = sourceFileName;
-                        currentLineNumber = lineNumberBackup;
-                        wasInclude = true;
-                        includes.emplace(incfile);
-                    }
-                    else
-                        logwarnout("File " + incfile + " has already been included.");
-                }
+    if (f.is_open()) return preprocessSource(f, actualSourceRootFolder, sourceFileName);
+    *errstr << FALC_ERR_LOC << "[ERROR]   Cannot open file '" << sourceFileName << "'. \n";
+    return false;
+}
 
-            if (!wasInclude && parsed.words.size() > 0)
-            {
-                parsed.address = 0;
-                parsed.lineNumber = currentLineNumber;
-                parsed.sourceFile = currentSourceFile;
-                parsed.rawText = line;
-                lines.push_back(parsed);
-            }
-            currentLineNumber++;
-        }
-        f.close();
-        return true;
-    }
-    else
+bool FridgeAssemblyLanguageCompiler::preprocessSource(istream& source, const string& sourceRootFolder, const string& sourceFileName)
+{
+    currentLineNumber = 1;
+    currentSourceFile = sourceFileName;
+    *errstr << FALC_ERR_LOC << " Source: " << sourceRootFolder << sourceFileName << "\n";
+    string line;
+    string decorator;
+    int decoratorLine = 0;
+    while (getline(source, line))
     {
-        *errstr << FALC_ERR_LOC << "[ERROR]   Cannot open file '" << sourceFileName << "'. \n";
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const auto start = line.find_first_not_of(" \t");
+        if (start != string::npos && line[start] == '@')
+        {
+            if (!decorator.empty())
+            {
+                logerrout("A CPM decorator must be followed by its declaration.");
+                return false;
+            }
+            decorator = line.substr(start, line.find("//", start) - start);
+            decoratorLine = currentLineNumber++;
+            continue;
+        }
+        ParsedLine parsed;
+        parseLine(&line, parsed.words);
+        if (parsed.words.empty())
+        {
+            currentLineNumber++;
+            continue;
+        }
+        parsed.address = 0;
+        parsed.lineNumber = currentLineNumber;
+        parsed.sourceFile = currentSourceFile;
+        parsed.sourceFolder = sourceRootFolder;
+        parsed.rawText = line;
+        if (!decorator.empty())
+        {
+            const auto& keyword = parsed.words[0];
+            if (keyword != R_STATICRESOURCE && keyword != R_ALIAS && keyword != R_SUBROUTINE)
+            {
+                logerrout("A CPM decorator requires a static, alias, or subroutine declaration.");
+                return false;
+            }
+            cpmExports.push_back({std::move(decorator), parsed});
+            decorator.clear();
+        }
+        if (parsed.words.size() == 2 && parsed.words[0] == R_INCLUDE)
+        {
+            const string incfile = parsed.words[1].substr(1, parsed.words[1].size() - 2);
+            if (includes.emplace(incfile).second)
+            {
+                const int lineNumber = currentLineNumber;
+                if (!preprocessFile(sourceRootFolder, incfile)) return false;
+                currentSourceFile = sourceFileName;
+                currentLineNumber = lineNumber;
+            }
+            else
+                logwarnout("File " + incfile + " has already been included.");
+        }
+        else
+            lines.push_back(std::move(parsed));
+        currentLineNumber++;
+    }
+    if (!decorator.empty())
+    {
+        currentLineNumber = decoratorLine;
+        logerrout("A CPM decorator must be followed by its declaration.");
         return false;
     }
+    return true;
 }
 
 bool FridgeAssemblyLanguageCompiler::saveObjectCode(string outputFile)
@@ -134,6 +192,11 @@ bool FridgeAssemblyLanguageCompiler::saveObjectCode(string outputFile)
     ofstream myfile(outputFile, ios::out | ios::binary);
     myfile.write((char*)objectCode, programSize * sizeof(FRIDGE_WORD));
     myfile.close();
+    if (!myfile)
+    {
+        logerrout("Cannot write binary '" + outputFile + "'.");
+        return false;
+    }
     logout("Compiled program is saved to " + outputFile);
     return true;
 }
@@ -149,7 +212,7 @@ bool FridgeAssemblyLanguageCompiler::saveObjectCodeVHDL(string outputFile)
     }
     myfile << "\nothers => X\"00\"";
     myfile.close();
-    return true;
+    return static_cast<bool>(myfile);
 }
 
 // ----------------------------------------------------------------------------
@@ -226,7 +289,7 @@ bool FridgeAssemblyLanguageCompiler::saveObjectCodeVHDLAggregate(string outputFi
     // trail the code by its 3 bytes and have to be shifted (the emulator's
     // falc frontend corrects the same way). A prologue is emitted exactly
     // when main does not sit at the offset.
-    int preambleShift = (mainEntry == offset) ? 0 : 3;
+    const int preambleShift = (jumpPreamble ? 3 : 0) + (stackPreamble ? 3 : 0);
     map<FRIDGE_RAM_ADDR, string> addrText;
     map<FRIDGE_RAM_ADDR, int> addrLine;
     for (vector<ParsedLine>::iterator iline = lines.begin(); iline != lines.end(); ++iline)
@@ -384,6 +447,7 @@ bool FridgeAssemblyLanguageCompiler::saveObjectCodeVHDLAggregate(string outputFi
            << ");\n"
            << "end FridgeRAMBootImage;\n";
     myfile.close();
+    if (!myfile) return false;
     logout("VHDL aggregate is saved to " + outputFile);
     return true;
 }
@@ -483,6 +547,8 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     aliases["FRIDGE_GPU_BUS_SIZE"]               = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_BUS_SIZE);
     aliases["FRIDGE_GPU_FRAME_EGA_WIDTH"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_FRAME_EGA_WIDTH);
     aliases["FRIDGE_GPU_FRAME_EGA_HEIGHT"]       = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_FRAME_EGA_HEIGHT);
+    aliases["FRIDGE_GPU_TEXT_FRAME_WIDTH"]       = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_TEXT_FRAME_WIDTH);
+    aliases["FRIDGE_GPU_TEXT_FRAME_HEIGHT"]      = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_TEXT_FRAME_HEIGHT);
     aliases["FRIDGE_GPU_MAX_SPRITES"]            = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_MAX_SPRITES);
     aliases["FRIDGE_GPU_MAX_SPRITES_PER_PIXEL"]  = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_MAX_SPRITES_PER_PIXEL);
     aliases["FRIDGE_GPU_FRAME_BUFFER_SIZE"]      = int_to_hex((FRIDGE_DWORD)FRIDGE_GPU_FRAME_BUFFER_SIZE);
@@ -554,9 +620,10 @@ bool FridgeAssemblyLanguageCompiler::readResources()
                 if (parseHexDouble(&(iline->words[2]), dwr))
                 {
                     resSize = 2;
-                    FRIDGE_DWORD* pres = (FRIDGE_DWORD*)malloc(resSize);
-                    pres[0] = dwr;
-                    resources[iline->words[1]].pdata = (FRIDGE_WORD*)pres;
+                    FRIDGE_WORD* pres = (FRIDGE_WORD*)malloc(resSize);
+                    pres[0] = FRIDGE_HIGH_WORD(dwr);
+                    pres[1] = FRIDGE_LOW_WORD(dwr);
+                    resources[iline->words[1]].pdata = pres;
                     resources[iline->words[1]].size = resSize;
                 }
                 if (parseChar(&(iline->words[2]), wr) || parseHex(&(iline->words[2]), wr) || parseDec(&(iline->words[2]), wr))
@@ -568,6 +635,11 @@ bool FridgeAssemblyLanguageCompiler::readResources()
                     resources[iline->words[1]].size = resSize;
                 }
 
+                if (resSize == 0)
+                {
+                    logerrout("Invalid resource value '" + iline->words[2] + "'.");
+                    return false;
+                }
                 aliases[iline->words[1] + ResourceSizePostfix] = int_to_hex(resSize);
             }
             else
@@ -593,7 +665,8 @@ bool FridgeAssemblyLanguageCompiler::dealias()
                 map<string, string>::iterator alias = aliases.find(iline->words[1]);
                 if (alias != aliases.end())
                     logwarnout("Alias '" + iline->words[1] + "' has already been declared.");
-                aliases[iline->words[1]] = iline->words[2];
+                const auto value = aliases.find(iline->words[2]);
+                aliases[iline->words[1]] = value == aliases.end() ? iline->words[2] : value->second;
             }
             else
             {
@@ -700,9 +773,8 @@ bool FridgeAssemblyLanguageCompiler::parseDec(string* word, FRIDGE_WORD& value)
 
 bool FridgeAssemblyLanguageCompiler::parseHex(string* word, FRIDGE_WORD& value)
 {
-    if (word->size() != 4)
-        return false;
-    if ((*word)[0] != '0' && (*word)[1] != 'x')
+    if (word->size() != 4 || word->compare(0, 2, "0x") != 0 ||
+        word->find_first_not_of("0123456789abcdefABCDEF", 2) != string::npos)
         return false;
     value = strtol(word->c_str(), nullptr, 16);
     return true;
@@ -710,9 +782,8 @@ bool FridgeAssemblyLanguageCompiler::parseHex(string* word, FRIDGE_WORD& value)
 
 bool FridgeAssemblyLanguageCompiler::parseHexDouble(string* word, FRIDGE_DWORD& value)
 {
-    if (word->size() != 6)
-        return false;
-    if ((*word)[0] != '0' && (*word)[1] != 'x')
+    if (word->size() != 6 || word->compare(0, 2, "0x") != 0 ||
+        word->find_first_not_of("0123456789abcdefABCDEF", 2) != string::npos)
         return false;
     value = strtol(word->c_str(), nullptr, 16);
     return true;
@@ -746,9 +817,151 @@ string FridgeAssemblyLanguageCompiler::int_to_hex_vhd(FRIDGE_WORD i)
     return stream.str();
 }
 
-bool FridgeAssemblyLanguageCompiler::addressMarkup()
+static bool cpmIdentifier(const string& name)
+{
+    static const regex identifier("[a-zA-Z_][a-zA-Z_0-9]*");
+    static const unordered_set<string> reserved{
+        "namespace", "using", "imports", "include", "struct", "union", "static", "const",
+        "ptr", "array", "if", "else", "for", "return", "break", "continue", "at", "addr",
+        "cast", "convert", "void", "bool", "char", "uint8", "int8", "uint16", "int16",
+        "string", "null", "true", "false"
+    };
+    return regex_match(name, identifier) && name.compare(0, 2, "__") != 0 && !reserved.count(name);
+}
+
+bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile, string& header)
+{
+    const auto slash = binaryFile.find_last_of("/\\");
+    const string file = slash == string::npos ? binaryFile : binaryFile.substr(slash + 1);
+    if (file.size() <= 4 || file.compare(file.size() - 4, 4, ".bin") != 0)
+    {
+        logerrout("CPM header generation requires a .bin output filename.");
+        return false;
+    }
+    const string name = file.substr(0, file.size() - 4);
+    if (!cpmIdentifier(name) || name == "global" || cpmExports.empty())
+    {
+        logerrout("CPM header generation requires a valid namespace filename and at least one export.");
+        return false;
+    }
+
+    static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
+    static const regex subExport(R"(@void\s*\((.*)\)\s*)");
+    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|HL)\s*\)\s*)");
+    ostringstream result;
+    result << "namespace " << name << " imports \"" << file << '"';
+    if (!relocatable) result << " at " << int_to_hex(offset);
+    result << "\n(\n";
+    unordered_set<string> exported;
+    for (const auto& item : cpmExports)
+    {
+        const auto& words = item.declaration.words;
+        currentSourceFile = item.declaration.sourceFile;
+        currentLineNumber = item.declaration.lineNumber;
+        if (words.size() < 2 || !cpmIdentifier(words[1]) || !exported.insert(words[1]).second)
+        {
+            logerrout("Invalid or duplicate CPM export name.");
+            return false;
+        }
+        const string& symbol = words[1];
+        smatch match;
+        if (regex_match(item.decorator, match, dataExport))
+        {
+            const string type = match[2];
+            const bool wide = type == "uint16";
+            if (match[1] == "static" && words[0] == R_STATICRESOURCE)
+            {
+                const auto& resource = resources.at(symbol);
+                if (words[2].front() == '"' || resource.size != (wide ? 2 : 1))
+                {
+                    logerrout("CPM static export type does not match resource '" + symbol + "'.");
+                    return false;
+                }
+                result << "    static " << type << ' ' << symbol << " imports " << int_to_hex(resource.address) << ";\n";
+                continue;
+            }
+            if (match[1] == "const" && words[0] == R_ALIAS)
+            {
+                string value = aliases.at(symbol);
+                FRIDGE_WORD byte;
+                FRIDGE_DWORD word;
+                const bool decimal = !value.empty() && value.size() <= 5 &&
+                    value.find_first_not_of("0123456789") == string::npos;
+                if (parseHex(&value, byte) || parseChar(&value, byte)) word = byte;
+                else if (!parseHexDouble(&value, word))
+                {
+                    const auto number = decimal ? stoul(value) : 0;
+                    if (!decimal || number > FRIDGE_MAX_DWORD)
+                    {
+                        logerrout("CPM const export requires an unsigned integer alias.");
+                        return false;
+                    }
+                    word = static_cast<FRIDGE_DWORD>(number);
+                }
+                if (!wide && word > 255)
+                {
+                    logerrout("CPM const export exceeds uint8 range.");
+                    return false;
+                }
+                result << "    const " << type << ' ' << symbol << ' '
+                       << (wide ? int_to_hex(word) : to_string(word)) << ";\n";
+                continue;
+            }
+        }
+        if (words[0] != R_SUBROUTINE || !regex_match(item.decorator, match, subExport))
+        {
+            logerrout("Invalid CPM decorator for '" + symbol + "'.");
+            return false;
+        }
+        const auto subroutine = subroutines.find(symbol);
+        if (subroutine == subroutines.end())
+        {
+            logerrout("Cannot resolve exported subroutine '" + symbol + "'.");
+            return false;
+        }
+        const string parameters = match[1];
+        istringstream input(parameters);
+        string argument;
+        unordered_set<string> names, registers;
+        ostringstream body;
+        result << "    void " << symbol << " (";
+        if (parameters.find_first_not_of(" \t") != string::npos)
+        {
+            while (getline(input, argument, ','))
+            {
+                if (!regex_match(argument, match, parameter) || !cpmIdentifier(match[2]) ||
+                    !names.insert(match[2]).second || !registers.insert(match[3]).second ||
+                    (match[3] == "HL" ? match[1] == "uint8" : match[1] != "uint8"))
+                {
+                    logerrout("Invalid CPM parameter or register binding for '" + symbol + "'.");
+                    return false;
+                }
+                const string type = match[1], argumentName = match[2], reg = match[3];
+                if (names.size() > 1) result << "; ";
+                result << type << ' ' << argumentName;
+                if (reg == "HL")
+                    body << "        __lxi_hl " << (type == "string" ? "(cast uint16, " + argumentName + ")" : argumentName) << ";\n";
+                else
+                    body << "        __mvi_" << static_cast<char>(tolower(reg.front())) << ' ' << argumentName << ";\n";
+            }
+            if (parameters.back() == ',')
+            {
+                logerrout("Trailing comma in CPM decorator for '" + symbol + "'.");
+                return false;
+            }
+        }
+        result << ")\n    (\n" << body.str()
+               << "        __callsub " << int_to_hex(subroutine->second) << ";\n    );\n";
+    }
+    result << ");\n";
+    header = result.str();
+    return true;
+}
+
+bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
 {
     bool noerrors = true;
+    bool offsetDeclared = false;
     offset = 0;
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
@@ -756,7 +969,8 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
         currentSourceFile = iline->sourceFile;
         if (iline->words[0] == R_OFFSET)
         {
-            if (!parseHexDouble(&iline->words[1], offset))
+            offsetDeclared = true;
+            if (iline->words.size() != 2 || !parseHexDouble(&iline->words[1], offset))
             {
                 logerrout("Offset must be in double hex format.");
                 noerrors = false;
@@ -770,7 +984,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
         }
     }
 
-    FRIDGE_RAM_ADDR pc = 0;
+    size_t pc = 0;
     bool mainEntryDeclared = false;
 
     bool subClosed = true;
@@ -904,33 +1118,26 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
         noerrors = false;
     }
 
-    programSize = pc;
-
-    if (!mainEntryDeclared)
-        logwarnout("Main entry is not declared.");
-
+    relocatable = exportCpm && !offsetDeclared && !mainEntryDeclared;
 #ifdef FRIDGE_ASCENDING_STACK
-    int preambleShift = 3; // LXI SP, STACK_ORIGIN
-#else
-    int preambleShift = 0;
+    stackPreamble = mainEntryDeclared;
 #endif
+    jumpPreamble = mainEntryDeclared && mainEntry != offset;
+    const int preambleShift = (jumpPreamble ? 3 : 0) + (stackPreamble ? 3 : 0);
 
-    if (mainEntry != offset)
-        preambleShift += 3; // JMP mainEntry
-
-    programSize += preambleShift;
+    size_t imageSize = pc + preambleShift;
+    if (imageSize > FRIDGE_MAX_DWORD - offset)
+    {
+        logerrout("Code exceeds Fridge address space.");
+        return false;
+    }
 
     for (map<string, FRIDGE_RAM_ADDR>::iterator ientry = entries.begin(); ientry != entries.end(); ++ientry)
         ientry->second = (FRIDGE_RAM_ADDR)(ientry->second + preambleShift);
     for (map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.begin(); isub != subroutines.end(); ++isub)
         isub->second = (FRIDGE_RAM_ADDR)(isub->second + preambleShift);
 
-    if (mainEntry != offset)
-        mainEntry += preambleShift;
-#ifdef FRIDGE_ASCENDING_STACK
-    else
-        mainEntry = offset + 3; // code starts right after LXI SP
-#endif
+    mainEntry = (mainEntryDeclared ? mainEntry : offset) + preambleShift;
 
     // dealias entries and subroutines addresses
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
@@ -968,6 +1175,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
                 else
                 {
                     (*iword) = int_to_hex(ientry->second);
+                    iline->relocation = FalcRelocation::Base;
                     if (isCall)
                         logwarnout("Use of CALL instruction with an entry address.");
                 }
@@ -986,6 +1194,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
                     else
                     {
                         (*iword) = int_to_hex(isub->second);
+                        iline->relocation = FalcRelocation::Base;
                         if (isJump)
                             logwarnout("Use of JMP instruction with a subroutine address.");
                     }
@@ -996,10 +1205,15 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
 
     if (resources.size() > 0)
     {
-        programSize += 3; // JMP to BootLoader to prevent from executing resources data
-        resOrigin = programSize;
+        imageSize += 3; // JMP to BootLoader to prevent from executing resources data
+        resOrigin = static_cast<FRIDGE_RAM_ADDR>(imageSize);
         for (map<string, StaticResourceInfo>::iterator ires = resources.begin(); ires != resources.end(); ++ires)
         {
+            if (imageSize + ires->second.size > FRIDGE_MAX_DWORD - offset)
+            {
+                logerrout("Static resources exceed Fridge address space.");
+                return false;
+            }
             // dealias resource address
             for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
             {
@@ -1008,27 +1222,213 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup()
                 for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
                 {
                     if ((*iword) == ires->first)
-                        (*iword) = int_to_hex((FRIDGE_RAM_ADDR)(programSize + offset));
+                    {
+                        (*iword) = int_to_hex((FRIDGE_RAM_ADDR)(imageSize + offset));
+                        iline->relocation = FalcRelocation::Base;
+                    }
                 }
 
             }
 
-            ires->second.address = programSize + offset;
-            programSize += ires->second.size;
+            ires->second.address = imageSize + offset;
+            imageSize += ires->second.size;
         }
     }
 
-    // dealias HEAP_ORIGIN
-    for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
+    const size_t unlinkedSize = imageSize;
+    if (!noerrors || !placeBinarySections(imageSize)) return false;
+    if (resources.empty() && !binarySections.empty()) resOrigin = static_cast<FRIDGE_RAM_ADDR>(unlinkedSize);
+    programSize = static_cast<FRIDGE_RAM_ADDR>(imageSize);
+
+    for (auto& line : lines)
     {
-        for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
+        if (KeywordIDs.count(line.words[0])) continue;
+        currentSourceFile = line.sourceFile;
+        currentLineNumber = line.lineNumber;
+        for (auto operand = line.words.begin() + 1; operand != line.words.end(); ++operand)
         {
-            if ((*iword) == HeapOriginAlias)
-                (*iword) = int_to_hex((FRIDGE_RAM_ADDR)(programSize + offset));
+            if (*operand == HeapOriginAlias)
+            {
+                *operand = int_to_hex(static_cast<FRIDGE_RAM_ADDR>(programSize + offset));
+                line.relocation = FalcRelocation::Heap;
+                continue;
+            }
+            const auto plus = operand->find('+');
+            if (plus == string::npos) continue;
+            const auto symbol = binarySymbols.find(operand->substr(0, plus));
+            if (symbol == binarySymbols.end()) continue;
+            string displacement = operand->substr(plus + 1);
+            FRIDGE_DWORD relative;
+            if (!parseHexDouble(&displacement, relative) || relative >= symbol->second.second)
+            {
+                logerrout("Invalid offset in linked binary address '" + *operand + "'.");
+                return false;
+            }
+            *operand = int_to_hex(static_cast<FRIDGE_RAM_ADDR>(symbol->second.first + relative));
+            line.relocation = FalcRelocation::Base;
         }
     }
 
     return noerrors;
+}
+
+bool FridgeAssemblyLanguageCompiler::placeBinarySections(size_t& imageSize)
+{
+    struct PendingBinary
+    {
+        const ParsedLine* line;
+        string path;
+        vector<FRIDGE_WORD> bytes;
+    };
+    vector<PendingBinary> pending;
+    const size_t programEnd = offset + imageSize;
+    static const regex sectionName(R"([a-zA-Z_][a-zA-Z_0-9.]*)");
+    for (const auto& line : lines)
+    {
+        const auto& words = line.words;
+        if (words[0] != R_INCBIN) continue;
+        currentSourceFile = line.sourceFile;
+        currentLineNumber = line.lineNumber;
+        const bool automatic = words.size() == 4 && words[2] == "as";
+        FRIDGE_DWORD address = 0;
+        string addressText = words.size() == 4 ? words[3] : "";
+        if (words.size() != 4 || words[1].size() < 3 || words[1].front() != '"' ||
+            words[1].back() != '"' || (automatic ? !regex_match(addressText, sectionName) :
+                (words[2] != "at" || !parseHexDouble(&addressText, address))))
+        {
+            logerrout("Expected 'incbin \"file.bin\" at 0xADDR' or 'incbin \"file.bin\" as name'.");
+            return false;
+        }
+        if (!automatic && relocatable)
+        {
+            logerrout("A relocatable library cannot include a fixed-address binary.");
+            return false;
+        }
+        if (!automatic && address < programEnd)
+        {
+            logerrout("Binary at " + addressText + " overlaps the assembled program or precedes its origin.");
+            return false;
+        }
+        const string name = words[1].substr(1, words[1].size() - 2);
+        const bool absolute = name[0] == '/' || name[0] == '\\' || (name.size() > 1 && name[1] == ':');
+        const string path = absolute ? name : line.sourceFolder + name;
+        ifstream file(path, ios::binary | ios::ate);
+        const auto size = file.tellg();
+        if (size <= 0 || size > FRIDGE_MAX_DWORD - address)
+        {
+            logerrout("Cannot place binary '" + path + "' at " + addressText + " (missing, empty, or too large).");
+            return false;
+        }
+        vector<FRIDGE_WORD> bytes(static_cast<size_t>(size));
+        file.seekg(0);
+        if (!file.read(reinterpret_cast<char*>(bytes.data()), bytes.size()))
+        {
+            logerrout("Cannot read binary '" + path + "'.");
+            return false;
+        }
+        if (automatic)
+        {
+            pending.push_back({&line, path, std::move(bytes)});
+            continue;
+        }
+        const auto next = binarySections.lower_bound(address);
+        if ((next != binarySections.end() && address + bytes.size() > next->first) ||
+            (next != binarySections.begin() && std::prev(next)->first + std::prev(next)->second.size() > address))
+        {
+            logerrout("Binary '" + path + "' overlaps another binary section.");
+            return false;
+        }
+        binarySections.emplace_hint(next, address, std::move(bytes));
+    }
+    for (auto& binary : pending)
+    {
+        currentSourceFile = binary.line->sourceFile;
+        currentLineNumber = binary.line->lineNumber;
+        const auto& name = binary.line->words[3];
+        size_t address = programEnd;
+        for (const auto& section : binarySections)
+        {
+            if (address + binary.bytes.size() <= section.first) break;
+            if (address < section.first + section.second.size())
+                address = section.first + section.second.size();
+        }
+        if (address + binary.bytes.size() > FRIDGE_MAX_DWORD)
+        {
+            logerrout("No space to place relocatable binary '" + binary.path + "'.");
+            return false;
+        }
+        if (!binarySymbols.emplace(name, make_pair(address, binary.bytes.size())).second)
+        {
+            logerrout("Duplicate linked binary name '" + name + "'.");
+            return false;
+        }
+        if (!relocateBinary(binary.path, address, binary.bytes)) return false;
+        logout("Placed relocatable binary '" + name + "' at " + int_to_hex(static_cast<FRIDGE_RAM_ADDR>(address)) + ".");
+        binarySections.emplace(address, std::move(binary.bytes));
+    }
+    if (!binarySections.empty())
+    {
+        const auto& last = *binarySections.rbegin();
+        imageSize = last.first - offset + last.second.size();
+    }
+    return true;
+}
+
+bool FridgeAssemblyLanguageCompiler::relocateBinary(const string& path, size_t address, vector<FRIDGE_WORD>& bytes)
+{
+    const string metadata = path + ".rel";
+    ifstream file(metadata);
+    string version, number, kind;
+    FRIDGE_DWORD size;
+    if (!(file >> version >> number) || version != "FALC-REL1" ||
+        !parseHexDouble(&number, size) || size != bytes.size())
+    {
+        logerrout("Missing or invalid relocation metadata '" + metadata + "'.");
+        return false;
+    }
+    size_t previousEnd = 0;
+    while (file >> kind)
+    {
+        FRIDGE_DWORD site;
+        if (!(file >> number) || !parseHexDouble(&number, site) || site < previousEnd ||
+            static_cast<size_t>(site) + 2 > bytes.size() || (kind != "base" && kind != "heap"))
+        {
+            logerrout("Invalid relocation record in '" + metadata + "'.");
+            return false;
+        }
+        previousEnd = site + 2;
+        const size_t imageSite = address - offset + site;
+        const auto type = kind == "base" ? FalcRelocation::Base : FalcRelocation::Heap;
+        if (relocatable) relocations.emplace(imageSite, type);
+        if (type == FalcRelocation::Heap)
+        {
+            linkedHeapReferences.push_back(imageSite);
+            continue;
+        }
+        const auto relative = FRIDGE_DWORD_HL(bytes[site], bytes[site + 1]);
+        if (relative > bytes.size())
+        {
+            logerrout("Relocation target is outside binary '" + path + "'.");
+            return false;
+        }
+        const auto value = static_cast<FRIDGE_DWORD>(address + relative);
+        bytes[site] = FRIDGE_HIGH_WORD(value);
+        bytes[site + 1] = FRIDGE_LOW_WORD(value);
+    }
+    return file.eof() && !file.bad();
+}
+
+bool FridgeAssemblyLanguageCompiler::saveRelocations(const string& path)
+{
+    ofstream file(path);
+    file << "FALC-REL1 " << int_to_hex(programSize) << '\n';
+    for (const auto& relocation : relocations)
+        file << (relocation.second == FalcRelocation::Base ? "base " : "heap ")
+             << int_to_hex(static_cast<FRIDGE_DWORD>(relocation.first)) << '\n';
+    file.close();
+    if (file) return true;
+    logerrout("Cannot write relocation metadata '" + path + "'.");
+    return false;
 }
 
 bool FridgeAssemblyLanguageCompiler::generateObjectCode()
@@ -1036,12 +1436,17 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
     bool noerrors = true;
     FRIDGE_RAM_ADDR pos = 0;
 
-    objectCode = (FRIDGE_WORD*)malloc(programSize * sizeof(FRIDGE_WORD));
+    objectCode = (FRIDGE_WORD*)calloc(programSize == 0 ? 1 : programSize, sizeof(FRIDGE_WORD));
+    if (!objectCode)
+    {
+        logerrout("Cannot allocate object code.");
+        return false;
+    }
 
     logout("Program size is " + to_string(programSize) + " bytes.");
 
     // Emit LXI SP, STACK_ORIGIN preamble (ascending stack only)
-#ifdef FRIDGE_ASCENDING_STACK
+    if (stackPreamble)
     {
         FRIDGE_DWORD sp_target = (FRIDGE_DWORD)(programSize + offset);
         objectCode[pos] = LXI_SP;
@@ -1049,9 +1454,8 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
         objectCode[pos + 2] = FRIDGE_LOW_WORD(sp_target);
         pos += 3;
     }
-#endif
 
-    if (mainEntry != offset)
+    if (jumpPreamble)
     {
         objectCode[pos] = JMP;
         objectCode[pos + 1] = FRIDGE_HIGH_WORD(mainEntry);
@@ -1155,6 +1559,8 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
             // writing instruction call
             if (opmatch)
             {
+                if (relocatable && iline->relocation != FalcRelocation::None && sig->extraSize == 2)
+                    relocations.emplace(pos + 1, iline->relocation);
                 int arglistIndex = iop - sig->operands.begin();
                 objectCode[pos] = ircode + arglistIndex;
                 pos++;
@@ -1199,6 +1605,14 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
         }
     }
 
+    for (const auto& section : binarySections)
+        memcpy(objectCode + section.first - offset, section.second.data(), section.second.size());
+    const auto heapOrigin = static_cast<FRIDGE_RAM_ADDR>(programSize + offset);
+    for (auto site : linkedHeapReferences)
+    {
+        objectCode[site] = FRIDGE_HIGH_WORD(heapOrigin);
+        objectCode[site + 1] = FRIDGE_LOW_WORD(heapOrigin);
+    }
     return noerrors;
 }
 

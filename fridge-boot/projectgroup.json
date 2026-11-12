@@ -3,7 +3,7 @@
     "exportDirectory": "T:/svn/work/cpp/xcm2/emulator/x64/Release",
     "includeFolders": {
         "x2al_std": {
-            "relPath": "../x2al_std",
+            "relPath": "../sdk/x2al_std",
             "sources": [
                 "arithm.inc",
                 "stdapp.inc",

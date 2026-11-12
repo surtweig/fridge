@@ -47,10 +47,9 @@ rebuild + `make load`, and it is gone at the next power cycle.
 
 Built from `falc/` at the enclosing Fridge repository root on
 `spartan6-atlys`; see `build-falc.sh`. The executable and CMake cache live in
-this board target's `.local/falc-build/`. The wrapper makes input and output
-paths absolute and runs from the shared `falc/` source directory, because
-falc resolves its standard include path (`../x2al_std/`) relative to the
-current directory.
+this board target's `.local/falc-build/`. The CMake build sets the standard
+include path to `sdk/x2al_std/` in the checkout. Input and output paths are
+relative to the caller's working directory.
 
 | Option | Output |
 |---|---|

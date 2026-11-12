@@ -2,6 +2,7 @@ PART = xc6slx45-3-csg324
 TOP = palette
 TOOLS = ../../bin
 HOSTTOOLS = ../../tools
+STDLIB = ../../../../sdk/x2al_std
 BOARD = Atlys
 SOURCES = FridgeGlobals.vhd FridgeIRCodes.vhd FridgeRasterFont.vhd FridgeRAMBootImage.vhd FridgeRAM.vhd \
 	FridgeCPU.vhd video_timing.vhd fridge_gpu.vhd tmds_encoder.vhd tmds_serializer.vhd palette.vhd
@@ -11,7 +12,8 @@ all: $(TOP).bit
 
 # The boot image is generated from src/ by the host tools; the VHDL file is
 # checked in so a plain build needs no extra step.
-FridgeRAMBootImage.vhd: src/palette_demo.falc $(HOSTTOOLS)/falc $(HOSTTOOLS)/build-falc.sh ../../../../x2al_std/vtext.inc ../../../../x2al_std/arithm.inc
+FridgeRAMBootImage.vhd: src/palette_demo.falc $(HOSTTOOLS)/falc $(HOSTTOOLS)/build-falc.sh \
+	$(STDLIB)/vtext.inc $(STDLIB)/arithm.inc $(STDLIB)/vtext_putstr.inc
 	$(HOSTTOOLS)/falc src/palette_demo.falc palette_demo.bin -vhdl-aggregate
 	mv palette_demo.bin.vhd $@
 

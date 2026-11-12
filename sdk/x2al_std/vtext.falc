@@ -1,0 +1,32 @@
+@static uint8
+static VTEXT_FORE_COLOR 15
+
+@static uint8
+static VTEXT_BACK_COLOR 0
+
+@const uint8
+alias VTEXT_COLUMNS FRIDGE_GPU_TEXT_FRAME_WIDTH
+
+@const uint8
+alias VTEXT_ROWS FRIDGE_GPU_TEXT_FRAME_HEIGHT
+
+include "arithm.inc"
+
+@void()
+subroutine vtext_begin
+    MVI A, FRIDGE_GPU_VIDEO_MODE_TEXT
+    VMODE
+endsub
+
+// Writes a null-terminated string at the given text coordinates.
+@void( (uint8 column : B), (uint8 row : C), (string str : HL) )
+subroutine vtext_putstr
+    include "vtext_putstr.inc"
+endsub
+
+@void()
+subroutine vtext_present
+    LXI HL, 0x0000
+    MVI A, FRIDGE_GPU_VIDEO_SWAP_AUTO
+    VPRE
+endsub

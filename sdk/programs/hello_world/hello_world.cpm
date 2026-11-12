@@ -1,0 +1,14 @@
+include "vtext.cpm";
+
+using vtext;
+
+const string HelloWorld "Hello, World!";
+
+void main()
+(
+    vtext_begin;
+    = VTEXT_FORE_COLOR, 15;
+    = VTEXT_BACK_COLOR, 1;
+    vtext_putstr 0, 0, HelloWorld;
+    vtext_present;
+);

@@ -48,6 +48,9 @@
     <ClInclude Include="..\..\include\fridge.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\falc\FridgeAssemblyLanguageCompiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -63,6 +66,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CPMAssembly.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\falc\FridgeAssemblyLanguageCompiler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CPMSemantic.cpp">

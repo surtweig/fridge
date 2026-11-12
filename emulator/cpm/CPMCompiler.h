@@ -111,6 +111,7 @@ namespace CPM
     struct CPMSourceFile
     {
         string name;
+        string rootFolder;
 
         CPMParser* parser = nullptr;
         vector<string> usingNamespaces;
@@ -122,6 +123,14 @@ namespace CPM
     class CPMSemanticAnalyzer;
 
     enum class CPMCompileMode { Emit, Check, Assembly };
+    enum class CPMMainReturn { None, Bootloader, Halt };
+    enum class CPMIntrinsic { None, MviA, MviB, MviC, LxiHL, CallSub };
+
+    struct CPMCompileOptions
+    {
+        FRIDGE_RAM_ADDR offset = FRIDGE_EXECUTABLE_OFFSET;
+        CPMMainReturn mainReturn = CPMMainReturn::Bootloader;
+    };
 
     struct CPMDataSymbol
     {
@@ -227,6 +236,9 @@ namespace CPM
     {
         string name;
         string importSource;
+        int importAddress = -1;
+        const CPMSyntaxTreeNode* importNode = nullptr;
+        bool hasRelocatableImport() const { return importNode && importAddress < 0; }
         vector<CPMSyntaxTreeNode*> nodes;
         map<string, CPMStaticSymbol> statics;
         map<string, CPMStructSymbol> structs;
@@ -379,7 +391,7 @@ namespace CPM
         Logger asmDebugOutput;
         string assemblyOutput;
         CPMDataType dataTypeCounter;
-        FRIDGE_RAM_ADDR globalOffset;
+        CPMCompileOptions options;
 
         void preprocessSourceFile(string rootFolder, string filename);
         void readNamespaces();
@@ -411,7 +423,7 @@ namespace CPM
         string printStaticStruct(CPMStaticSymbol* symbol, CPMDataSymbol& field, int index = 0);
     public:
         CPMCompiler(string sourceRootFolder, string sourceFileName, string outputFile, vector<string> includeFolders,
-                    CPMCompileMode mode = CPMCompileMode::Emit);
+                    CPMCompileMode mode = CPMCompileMode::Emit, CPMCompileOptions options = {});
         inline Logger* CompilerLog() { return &compilerLog; }
         inline void Error() { noErrors = false; }
         inline bool NoErrors() { return noErrors; }
@@ -425,7 +437,8 @@ namespace CPM
 
         CPMSourceFile* getSourceFile(const string& sourceFileName) { return &sources[sourceFileName]; }
         void getNamespaces(vector<CPMNamespace*>& nslist);
-        FRIDGE_RAM_ADDR getGlobalOffset() { return globalOffset; }
+        FRIDGE_RAM_ADDR getGlobalOffset() const { return options.offset; }
+        CPMMainReturn getMainReturn() const { return options.mainReturn; }
         string getOutputFileName() { return outputFileName; }
         int parseArraySizeDecl(CPMSyntaxTreeNode* countNode, CPMNamespace* currentNS = NULL);
         bool isTypeDeclaration(CPMSyntaxTreeNode* node, CPMNamespace* owner);

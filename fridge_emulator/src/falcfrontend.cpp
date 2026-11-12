@@ -22,11 +22,8 @@ bool FalcCompile(const char* sourcePath, DebugInfo& out, std::string& errBuf)
         fname = path.substr(slash + 1);
     }
 
-    std::vector<std::string> includes;
-    includes.push_back("../x2al_std/");
-
     std::ostringstream logss;
-    FridgeAssemblyLanguageCompiler falc(dir, fname, "", includes, &logss, false);
+    FridgeAssemblyLanguageCompiler falc(dir, fname, "", {}, &logss, false);
 
     FRIDGE_WORD* obj = falc.getObjectCode();
     if (!obj)

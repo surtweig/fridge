@@ -80,8 +80,9 @@ Directives control the assembly process and are not emitted as instructions.
 ### `include "filename"`
 
 Includes another assembly file. The assembler searches the source file's
-directory first, then each include folder, and finally `../x2al_std/`.
-Duplicate includes of the same file are silently skipped.
+directory first, then each include folder, and finally the standard library
+in `sdk/x2al_std/`.
+Duplicate includes of the same file are skipped with a warning.
 
 ```asm
 include "stdapp.inc"
@@ -115,6 +116,47 @@ offset 0x0000   // boot loader starts at address 0
 offset 0x0200   // user executable starts at the standard offset
 ```
 
+### `incbin "filename" at addr`
+
+Places a raw binary at its assembly origin in the final image. The assembler
+resolves relative paths from the source file containing the directive, fills
+gaps with zeros, and rejects overlap with code, statics, or other binaries.
+
+### `incbin "filename" as name`
+
+Places a relocatable library in the first available range after the program's
+code and statics. The assembler reserves fixed-address binaries before placing
+relocatable libraries. `name+0xADDR` refers to a byte offset in the placed
+library. The assembler reads `filename.rel` to adjust the library's internal
+symbol references and resolve `HEAP_ORIGIN` to the end of the linked image.
+Numeric literals in the library keep their literal values.
+
+### CPM library exports
+
+`falc library.falc library.bin --cpm-header` writes `library.cpm` beside the
+binary. The header uses the binary basename as its namespace. A library with
+no `offset` or `main` also emits `library.bin.rel` for automatic placement.
+An explicit `offset` produces a fixed-address header. Place each decorator
+immediately above its declaration.
+
+```asm
+@static uint8
+static VTEXT_FORE_COLOR 15
+
+@const uint8
+alias VTEXT_COLUMNS 40
+
+@void( (uint8 column : B), (uint8 row : C), (string str : HL) )
+subroutine vtext_putstr
+    // ...
+endsub
+```
+
+`@static` and `@const` export `uint8` or `uint16` values. `@void()` exports a
+subroutine with no parameters. A void wrapper can bind `uint8` to A, B, or C
+and `uint16` or `string` to HL. FALC generates offsets for relocatable exports
+and absolute addresses for fixed-address exports.
+
 ### `entry name`
 
 Declares a named label at the current address. Entries can be referenced as
@@ -128,8 +170,9 @@ entry loop
 
 ### `main name`
 
-Declares a named entry that serves as the program entry point. Exactly one
-`main` should be declared. If `main` is not at `offset`, the assembler
+Declares a named entry that serves as the program entry point. Declare `main`
+for executables. A source without `main` begins with its first instruction
+and has no startup preamble. If `main` is beyond `offset`, the assembler
 automatically inserts a `JMP main` instruction at the program start (+3 bytes
 to all addresses).
 
@@ -663,7 +706,7 @@ endsub
 
 ---
 
-## 8. Standard Library (`x2al_std/`)
+## 8. Standard Library (`sdk/x2al_std/`)
 
 ### `stdapp.inc`
 

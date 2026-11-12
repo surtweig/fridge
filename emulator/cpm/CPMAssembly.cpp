@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "CPMAssembly.h"
 
+#include <filesystem>
 #include <iomanip>
 
 namespace CPM
@@ -30,9 +31,17 @@ namespace CPM
 
         class AssemblyEmitter
         {
+            struct Library
+            {
+                size_t begin;
+                size_t end;
+                string label;
+            };
+
             CPMCompiler& compiler;
             const CPMIRProgram& program;
             map<const CPMFunctionSymbol*, string> labels;
+            map<const CPMNamespace*, Library> libraries;
             const CPMIRFunction* function = nullptr;
             string functionLabel;
             ostringstream listing;
@@ -79,10 +88,18 @@ namespace CPM
 
             string epilogue() const { return functionLabel + "_return"; }
 
+            string libraryAddress(const CPMNamespace* owner, size_t address) const
+            {
+                const auto& label = libraries.at(owner).label;
+                return label.empty() ? hexOperand(address) : label + "+" + hexOperand(address);
+            }
+
             string dataAddress(size_t id, size_t offset = 0) const
             {
                 const auto& data = program.data[id];
-                return data.fixedAddress < 0 ? dataLabel(id, offset) : hexOperand(data.fixedAddress + offset);
+                if (data.importAddress < 0) return dataLabel(id, offset);
+                const size_t address = data.importAddress + offset;
+                return data.relocatableImport ? libraryAddress(data.relocatableImport, address) : hexOperand(address);
             }
 
             void spAddress(size_t offset)
@@ -472,6 +489,47 @@ namespace CPM
                 adjustSP(static_cast<int>(depth));
             }
 
+            void intrinsic(const CPMIRInstruction& instruction)
+            {
+                size_t value = 0;
+                for (auto byte : instruction.bytes) value = (value << 8) | byte;
+                if (instruction.intrinsic == CPMIntrinsic::CallSub)
+                {
+                    const auto* owner = function->symbol->owner;
+                    const auto library = libraries.find(owner);
+                    if (library != libraries.end() && (value < library->second.begin || value >= library->second.end))
+                    {
+                        error(instruction.syntax, "__callsub address is outside its imported binary.");
+                        return;
+                    }
+                    word("CALL ", library == libraries.end() ? hexOperand(value) : libraryAddress(owner, value));
+                    return;
+                }
+                const bool immediate = instruction.inputs.empty();
+                if (instruction.intrinsic == CPMIntrinsic::LxiHL)
+                {
+                    if (immediate) word("LXI HL, ", value);
+                    else
+                    {
+                        op("PUSH AF");
+                        address(instruction.inputs.front(), 0, 2);
+                        loadHL();
+                        op("POP AF");
+                    }
+                    return;
+                }
+                const string reg = instruction.intrinsic == CPMIntrinsic::MviA ? "A" :
+                                   instruction.intrinsic == CPMIntrinsic::MviB ? "B" : "C";
+                if (immediate) byte("MVI " + reg + ", ", static_cast<FRIDGE_WORD>(value));
+                else
+                {
+                    op("PUSH HL");
+                    address(instruction.inputs.front(), 0, 2);
+                    op("MOV " + reg + ", M");
+                    op("POP HL");
+                }
+            }
+
             void emit(const CPMIRInstruction& instruction)
             {
                 switch (instruction.op)
@@ -511,6 +569,9 @@ namespace CPM
                     break;
                 case CPMIROp::Call:
                     call(instruction);
+                    break;
+                case CPMIROp::Intrinsic:
+                    intrinsic(instruction);
                     break;
                 case CPMIROp::Jump:
                     word("JMP ", blockLabel(instruction.target));
@@ -568,6 +629,66 @@ namespace CPM
                 ++imageBytes;
             }
 
+            bool emitLibraries()
+            {
+                namespace fs = std::filesystem;
+                vector<CPMNamespace*> spaces;
+                compiler.getNamespaces(spaces);
+                map<pair<string, int>, string> sections;
+                for (const auto* space : spaces)
+                {
+                    const auto* node = space->importNode;
+                    if (!node) continue;
+                    const bool automatic = space->hasRelocatableImport();
+                    const size_t base = automatic ? 0 : space->importAddress;
+                    const auto* source = compiler.getSourceFile(node->sourceFileName);
+                    const auto directory = fs::path(source->rootFolder) / fs::path(source->name).parent_path();
+                    std::error_code ec;
+                    const auto path = fs::canonical(directory / space->importSource, ec);
+                    if (space->importSource.empty() || ec)
+                    {
+                        error(node, "Cannot find imported binary '" + space->importSource + "'.");
+                        return false;
+                    }
+                    const auto size = fs::file_size(path, ec);
+                    if (ec || size == 0 || (!automatic && base < compiler.getGlobalOffset()) ||
+                        size > FRIDGE_MAX_DWORD - base)
+                    {
+                        error(node, "Invalid size or placement for imported binary '" + space->importSource + "'.");
+                        return false;
+                    }
+                    const auto name = path.generic_string();
+                    if (name.find_first_of("\"\r\n") != string::npos)
+                    {
+                        error(node, "Imported binary path cannot be written as a FALC string literal.");
+                        return false;
+                    }
+                    if (automatic && !fs::is_regular_file(path.string() + ".rel", ec))
+                    {
+                        error(node, "Cannot find relocation metadata for '" + space->importSource + "'.");
+                        return false;
+                    }
+                    const size_t end = base + size;
+                    for (const auto& entry : space->statics)
+                    {
+                        const auto& symbol = entry.second;
+                        if (symbol.importSource < 0) continue;
+                        const size_t address = symbol.importSource;
+                        if (address < base || address + compiler.sizeOfTypeExpr(symbol.field.typeExpr) > end)
+                        {
+                            error(node, "Imported static '" + entry.first + "' is outside its imported binary.");
+                            return false;
+                        }
+                    }
+                    const string label = automatic ? "cpm_lib_" + to_string(sections.size()) : "";
+                    const auto section = sections.emplace(make_pair(name, space->importAddress), label);
+                    libraries.emplace(space, Library{base, end, section.first->second});
+                    if (section.second)
+                        listing << "incbin \"" << name << '"' << (automatic ? " as " + label : " at " + hexOperand(base)) << '\n';
+                }
+                return true;
+            }
+
         public:
             AssemblyEmitter(CPMCompiler& compiler, const CPMIRProgram& program)
                 : compiler(compiler), program(program)
@@ -577,7 +698,7 @@ namespace CPM
             string run()
             {
                 if (!compiler.NoErrors()) return {};
-                const CPMFunctionSymbol* main = nullptr;
+                const CPMIRFunction* main = nullptr;
                 for (const auto& body : program.functions)
                 {
                     const auto* symbol = body.symbol;
@@ -585,7 +706,7 @@ namespace CPM
                     labels.emplace(symbol, "cpm_" + id + "_" + symbol->owner->name + "_" + symbol->signature.name);
                     if (symbol->owner->name == GlobalNamespace && symbol->signature.name == "main" &&
                         symbol->arguments.empty() && symbol->returnType.isVoid())
-                        main = symbol;
+                        main = &body;
                 }
                 if (!main)
                 {
@@ -593,7 +714,9 @@ namespace CPM
                     return {};
                 }
 
-                listing << "offset " << hexOperand(FRIDGE_EXECUTABLE_OFFSET) << "\nmain cpm_start\n";
+                const auto origin = compiler.getGlobalOffset();
+                listing << "offset " << hexOperand(origin) << "\nmain cpm_start\n";
+                if (!emitLibraries()) return {};
                 for (size_t i = 0; i < program.data.size(); ++i)
                 {
                     for (const auto& relocation : program.data[i].relocations)
@@ -602,10 +725,22 @@ namespace CPM
                         word("SHLD ", dataAddress(i, relocation.offset));
                     }
                 }
-                word("CALL ", labels.at(main));
-                word("JMP ", 0);
+                const auto mainReturn = compiler.getMainReturn();
+                if (mainReturn == CPMMainReturn::None)
+                {
+                    // Enter main directly so its ordinary RET returns to the caller.
+                    emitFunction(*main);
+                    if (!compiler.NoErrors()) return {};
+                }
+                else
+                {
+                    word("CALL ", labels.at(main->symbol));
+                    if (mainReturn == CPMMainReturn::Bootloader) word("JMP ", 0);
+                    else op("HLT");
+                }
                 for (const auto& body : program.functions)
                 {
+                    if (mainReturn == CPMMainReturn::None && &body == main) continue;
                     emitFunction(body);
                     if (!compiler.NoErrors()) return {};
                 }
@@ -620,7 +755,7 @@ namespace CPM
                     dataBytes += data.bytes.size();
                 }
                 const size_t resourceGuard = dataBytes == 0 ? 0 : 3; // FALC appends a jump before resources.
-                if (imageBytes + resourceGuard + dataBytes > 0xFFFF - FRIDGE_EXECUTABLE_OFFSET)
+                if (imageBytes + resourceGuard + dataBytes > FRIDGE_MAX_DWORD - origin)
                 {
                     error(nullptr, "The assembled image exceeds Fridge address space.");
                     return {};

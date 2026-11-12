@@ -6,6 +6,7 @@
 
 int main(int argc, char* argv[])
 {
+    const char* usage = "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate] [--cpm-header]\n";
     std::cout << "Fridge Assembly Language Compiler " << XCME_VERSION_STR << "\n"
               << "Copyright (c) Plus&Minus Inc. 2020\n\n";
 
@@ -32,6 +33,7 @@ int main(int argc, char* argv[])
 
         bool writeVHDL = false;
         bool writeVHDLAggregate = false;
+        bool writeCpmHeader = false;
         for (int a = 3; a < argc; a++)
         {
             std::string arg(argv[a]);
@@ -39,10 +41,12 @@ int main(int argc, char* argv[])
                 writeVHDL = true;
             else if (arg == "-vhdl-aggregate")
                 writeVHDLAggregate = true;
+            else if (arg == "--cpm-header")
+                writeCpmHeader = true;
             else
             {
                 std::cout << "Unknown option '" << arg << "'.\n"
-                          << "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate]\n";
+                          << usage;
                 return 1;
             }
         }
@@ -52,12 +56,11 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        FridgeAssemblyLanguageCompiler falc(dir, fname, outfilename, std::vector<std::string>(), &std::cout, writeVHDL, writeVHDLAggregate);
-    }
-    else
-    {
-        std::cout << "Usage: falc <input file> <output file> [-vhdl | -vhdl-aggregate]\n";
+        FridgeAssemblyLanguageCompiler falc(dir, fname, outfilename, {}, &std::cout,
+                                           writeVHDL, writeVHDLAggregate, writeCpmHeader);
+        return falc.succeeded() ? 0 : 1;
     }
 
-    return 0;
+    std::cout << usage;
+    return 2;
 }

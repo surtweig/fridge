@@ -241,8 +241,8 @@ A declaration may be prefixed by exactly one storage class keyword:
 |           | possible. Required for sizes used in array type-exprs.          |
 | (none)    | local: stack-allocated on function entry, deallocated on exit.  |
 
-`imports` is a *namespace-level* external-symbol directive (§6), not a
-storage class.
+The `imports` clause gives a namespace a library file or a static a fixed
+address (§6).
 
 ### 4.3 Struct and union
 
@@ -291,9 +291,8 @@ body      ::= "(" statement … ")"
             | ";"                    // prototype / extern declaration
 ```
 
-- A declaration with a `;` for body is a **prototype**; the function is
-  expected to resolve at link time (binary `imports`, intrinsic, or defined
-  elsewhere in the same namespace).
+- A declaration with a `;` for body is a **prototype**. A call must resolve to
+  a definition in the same namespace or to a compiler intrinsic.
 - A declaration with a `(...)` body is a **definition**.
 - Returns may use any legal value type, including structs and arrays, or `void`.
   Parameters use legal non-void types and are passed by value (§5.7, §9).
@@ -307,13 +306,18 @@ body      ::= "(" statement … ")"
 
 ### 4.5 Intrinsics
 
-A function whose name begins with `__` and has only a prototype is an
-**intrinsic**: the body is not a Fridge-Assembly call but a single opcode or
-opcode sequence emitted inline. Intrinsics have no Fridge-Assembly binding;
-they are resolved by the compiler's intrinsic table. Examples in the test
-file: `__mvi_a`, `__mvi_b`, `__mvi_c`, `__lxi_hl`, `__callsub`.
+CPM emits intrinsics inline. The built-in names can be used directly or
+declared with a matching prototype. Each intrinsic returns `void`.
 
-Intrinsics are declared exactly like other prototypes; no extra syntax.
+| Intrinsic | Parameter | Effect |
+|-----------|-----------|--------|
+| `__mvi_a`, `__mvi_b`, `__mvi_c` | `uint8` | Load A, B, or C. |
+| `__lxi_hl` | `uint16` | Load HL. A `string` can be bit-cast to `uint16`. |
+| `__callsub` | Constant `uint16` | Call a routine using the register ABI and the address rules in §6. The callee can clobber general registers and flags. |
+
+Register loads from literals and named values preserve the other registers.
+Evaluate complex arguments into local variables before loading registers for
+a foreign call.
 
 ## 5. Expressions
 
@@ -673,25 +677,58 @@ storage follow §5.1 and §9.
 
 ```
 using NAME;                            // bring NAME's symbols into scope
-"namespace" name ["imports" string] "(" decl … ")" ";"
+"namespace" name ["imports" string ["at" address]] "(" decl … ")" ";"
 ```
 
 - A namespace owns a set of structs, statics, `const`s, and functions.
 - `using NS;` makes `NS`'s public names referenceable without qualification.
   It is **not** transitive; only direct members of `NS` are visible.
-- `imports "file.bin"` associates a namespace with a raw external library and
-  accompanying declarations. Constants describe its interface; `static … imports
-  0xADDR;` names fixed-address data. CPM wrapper function bodies in that namespace
-  are emitted normally: they receive CPM stack arguments and marshal values into
-  the external routine's register ABI using recognized intrinsics.
-- A bare prototype is not automatically bound to a function address merely
-  because a raw binary was named. Loading/placement, relocation or symbol maps,
-  unresolved-symbol policy, intrinsic effects, and external result marshaling
-  remain to be specified (§14, D8).
-- Individual `static T name imports 0xADDR;` declares a static whose address
-  is fixed to `0xADDR` (a symbol imported from a ROM image). This is the
-  linkage to the platform's pre-baked ROM tables and routines (`vtext`,
-  `arithm`, etc.).
+- `imports "file.bin"` lets the linker choose where to place the library.
+  Include each generated `.cpm` header and keep its `.bin` and `.bin.rel`
+  beside it. CPM emits symbolic library references. In the final FALC pass,
+  the linker places the libraries after the program's code and statics,
+  skips reserved fixed-address ranges, and updates the references.
+- `imports "file.bin" at 0xADDR` links a raw binary assembled for that origin.
+  CPM resolves the file relative to the declaring source and emits a FALC
+  `incbin` directive. The default executable load address is `0x0200`. FALC pads the
+  image to each library's address and rejects overlap with the program or
+  another binary.
+- In a relocatable namespace, `static T name imports 0xADDR;` and
+  `__callsub 0xADDR` use byte offsets within the library. In other namespaces
+  they use absolute addresses. Wrapper functions receive CPM stack arguments,
+  load the registers expected by the foreign routine, and call it with
+  `__callsub`. The statics and calls in linked namespaces must fall inside
+  their binary.
+- A caller can also declare fixed-address statics outside an imported
+  namespace to reference memory already provided by the platform.
+
+Build the SDK tools, the standard library, and Hello World from the
+repository root.
+
+```sh
+./sdk/build.sh
+./sdk/x2al_std/build.sh
+./sdk/programs/hello_world/hello_world_build.sh
+```
+
+`cpm --bin source.cpm --include directory` assembles and links the program
+into `source.bin` beside its source. `--include` (also `-I`) can be repeated
+and works with `--check` and `--asm` as well.
+
+`--offset address` sets the assembly origin. It accepts decimal or `0x`
+hexadecimal values and defaults to `0x0200`. Byte zero of the output image
+must be loaded at the chosen address.
+
+`--main-return` controls what happens when `main` finishes.
+
+- `bootloader` executes `JMP 0x0000`. This is the default.
+- `halt` executes `HLT`.
+- `none` enters `main` directly after startup initialization and uses its
+  ordinary `RET`. The caller must enter the image with `CALL` or supply a
+  return address on the stack.
+
+FALC takes the text dimensions from its build profile. For the Atlys 40×20
+text grid, configure FALC with `-DCMAKE_CXX_FLAGS=-DFRIDGE_VIDEO_240X160`.
 
 ## 7. Statements
 
@@ -792,12 +829,11 @@ this target. It replaces the earlier HL/special hidden-output-pointer scheme.
   intrinsic effects, and escaped-storage lifetimes still need a complete
   contract (§14, D4/D8).
 - The entry point is `void main()` in the `global` namespace, with no parameters.
-  Under the existing loader contract, the image starts at `0x0200` with SP
-  initialized to `0xFFFF`. Since the loader jumps into the image, the compiler
-  emits an entry stub equivalent to `CALL main; JMP 0x0000`. Returning from
-  `main` transfers control back to the loader; no program-result byte is assigned
-  by this specification. Function/static data placement must prevent accidental
-  fallthrough into data or unrelated functions.
+  The standard loader jumps to `0x0200` with SP initialized to `0xFFFF`.
+  By default the entry stub calls `main` and jumps to `0x0000` when it returns.
+  The compiler options in §6 select the origin and return behavior. Function
+  and static placement must prevent accidental fallthrough into data or
+  unrelated functions.
 
 ## 10. Scoping and name resolution
 
@@ -869,7 +905,7 @@ semantic analysis and IR work. Q numbers refer to the discussion file.
 | D5 — computed members | Exact spelling for `at`-receiver members, plus readable/assignable/addressable fields of other temporary receivers (Q12). | Support `(at values, i).field` and named chains; reject other computed receivers in v1. |
 | D6 — bounds | Compile-time and runtime out-of-range access policy, including negative array indices (Q03). | Diagnose statically known invalid array indices; otherwise perform unchecked access. Ordinary pointers/strings carry no length. Null dereference is already UB. |
 | D7 — names and constants | Overload merging is resolved in §10. Other name collisions and constant-expression ordering are covered by the D7 worksheet. | Reject collisions with visible names and allow reuse in disjoint scopes. Evaluate a pure typed constant-expression subset with dependency-cycle errors. |
-| D8 — linking and completion | Raw binary placement, unresolved prototypes, intrinsic effects, register clobbers, and the runtime Panic mechanism (Q22–Q24). Function fallthrough is resolved in §7. | Use an explicit import map and intrinsic table with caller-clobbered general registers and flags. |
+| D8 — linking and completion | Relocatable imports, fixed-address imports, and void register wrappers are described in §4.5 and §6. External return-value marshaling and the runtime Panic mechanism remain open (Q22–Q24). Function fallthrough is resolved in §7. | — |
 
 Already settled and not awaiting clarification: exact numeric matching and
 explicit conversions; bool-only conditions/logical operators; before-declaration

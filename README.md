@@ -13,6 +13,30 @@ Fridge is an 8-bit computer based on an extended Intel 8080 instruction set with
 | Frion compiler | In progress
 | Fridge IDE | On hold
 
+## Development SDK
+
+Build the SDK tools from the repository root on Linux.
+
+```sh
+./sdk/build.sh
+```
+
+The script builds `falc`, `cpm`, and `fridge_emulator` in `build-sdk/` and
+installs the executables in `sdk/bin/`. It needs CMake 3.16 or newer, a C/C++
+toolchain with C++17 support and static libraries for FALC, `flock` from
+util-linux, and the [SDL2 and Vulkan development packages](fridge_emulator/README.md#dependencies).
+
+Use the installed compilers to build the standard library and Hello World.
+
+```sh
+./sdk/x2al_std/build.sh
+./sdk/programs/hello_world/hello_world_build.sh
+```
+
+The library script writes `vtext.bin`, `vtext.bin.rel`, and `vtext.cpm` beside
+`vtext.falc`. The Hello World script looks up the header in `sdk/x2al_std/` and
+writes `hello_world.bin` beside `hello_world.cpm`.
+
 ## Spartan-6 Atlys target
 
 The board build is part of this repository at
@@ -20,7 +44,7 @@ The board build is part of this repository at
 `spartan6-atlys`. It uses ISE 14.7 in Docker and Digilent Adept for programming.
 The CPU runs at 10 MHz, with 64 KB BRAM RAM, 240x160 graphics and 40x20 TEXT
 mode scaled to 720p60 HDMI. ROM, keyboard and programmable palette demos are
-included. The shared `falc/` assembler and `x2al_std/` library generate the
+included. The shared `falc/` assembler and `sdk/x2al_std/` library generate the
 program images; no separate Fridge checkout is needed. The combined system
 and interactive demo are documented in
 [`INTEGRATION.md`](fpga/fridge_spartan6/INTEGRATION.md); the user verified the

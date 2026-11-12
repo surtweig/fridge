@@ -144,6 +144,22 @@ namespace CPM
         return identifier(node) && !reserved(node->text);
     }
 
+    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType& parameter)
+    {
+        if (parameter == baseType(CPM_DATATYPE_UINT8))
+        {
+            if (name == "__mvi_a") return CPMIntrinsic::MviA;
+            if (name == "__mvi_b") return CPMIntrinsic::MviB;
+            if (name == "__mvi_c") return CPMIntrinsic::MviC;
+        }
+        if (parameter == baseType(CPM_DATATYPE_UINT16))
+        {
+            if (name == "__lxi_hl") return CPMIntrinsic::LxiHL;
+            if (name == "__callsub") return CPMIntrinsic::CallSub;
+        }
+        return CPMIntrinsic::None;
+    }
+
     CPMSemanticAnalyzer::CPMSemanticAnalyzer(CPMCompiler& compiler, CPMNamespace* owner,
                                               const CPMSyntaxTreeNode* before)
         : compiler(compiler), owner(owner ? owner : compiler.namespaces.at(GlobalNamespace)), before(before)
@@ -386,6 +402,20 @@ namespace CPM
                 }
                 match = &entry.second;
             }
+        }
+        const auto intrinsic = (head->type == CPM_ID || match) && operands.size() == 1 ?
+            CPMFindIntrinsic(name, operands[0].type) : CPMIntrinsic::None;
+        if (intrinsic != CPMIntrinsic::None)
+        {
+            if (intrinsic == CPMIntrinsic::CallSub && (!operands[0].constant || operands[0].bytes.empty()))
+            {
+                error(head, "__callsub requires a compile-time uint16 address.");
+                return {};
+            }
+            auto result = checked(CPMExprKind::Call, head, baseType(CPM_DATATYPE_VOID));
+            result.intrinsic = intrinsic;
+            result.operands = std::move(operands);
+            return result;
         }
         if (!match)
         {
