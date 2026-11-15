@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -23,6 +24,7 @@ struct App {
     // Owned Fridge state. Worker is bound to fridge.system during App_Init.
     FridgeCtx fridge;
     EmuWorker* worker = nullptr;
+    std::array<FRIDGE_WORD, SDL_NUM_SCANCODES> pressed_keys{};
 
     // Vulkan framebuffer texture mirroring FRIDGE_gpu_render_*_rgb8 output.
     VkTexture fb_texture;
@@ -61,10 +63,9 @@ struct App {
 void App_Init(App& app);
 void App_Shutdown(App& app);
 
-// Called once per frame, *outside* the worker lock. Forward host key events
-// (already filtered by ImGui's WantCaptureKeyboard) to the Fridge keyboard
-// controller. Safe to call from the main thread.
-void App_HandleSdlEvent(App& app, const SDL_Event& event);
+// Called on the main thread outside the worker lock. ImGui capture suppresses
+// keydowns. Keys already forwarded to Fridge still receive their releases.
+void App_HandleSdlEvent(App& app, const SDL_Event& event, bool capture_keyboard);
 
 // Pump pending UI actions that must run on the main thread before drawing
 // a frame (e.g. open ROM dialog, reset). Returns true if the worker needs

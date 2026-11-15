@@ -1,0 +1,67 @@
+// Addresses of no-argument callbacks that return with RET. Zero skips the callback.
+@static uint16
+static KBRD0_PRESS_HANDLER 0x0000
+
+@static uint16
+static KBRD0_RELEASE_HANDLER 0x0000
+
+@static uint8
+static KBRD0_KEY_CODE 0
+
+// 1 for press, 0 for release.
+@static uint8
+static KBRD0_KEY_STATE 0
+
+
+subroutine kbrd0.interrupt
+    PUSH AF
+    PUSH BC
+    PUSH DE
+    PUSH HL
+
+    IN FRIDGE_DEV_KEYBOARD_ID
+    MOV B, A
+    ANI FRIDGE_KEYBOARD_KEY_CODE_MASK
+    STA KBRD0_KEY_CODE
+
+    MOV A, B
+    ANI FRIDGE_KEYBOARD_KEY_STATE_MASK
+    RLC
+    STA KBRD0_KEY_STATE
+    LHLD KBRD0_RELEASE_HANDLER
+    JZ kbrd0.dispatch
+    LHLD KBRD0_PRESS_HANDLER
+
+    entry kbrd0.dispatch
+        MOV A, H
+        ORA L
+        CNZ kbrd0.call_hl
+
+    POP HL
+    POP DE
+    POP BC
+    POP AF
+    EI
+endsub
+
+// CNZ pushes the return address for the callback before PCHL transfers to it.
+subroutine kbrd0.call_hl
+    PCHL
+endsub
+
+
+@void()
+subroutine kbrd_begin
+    // Install the shared vector's JMP before enabling interrupts.
+    DI
+    LXI HL, FRIDGE_IRQ_KEYBOARD
+    LXI DE, kbrd0.interrupt_$ADDR
+    INX HL
+    MOV M, D
+    INX HL
+    MOV M, E
+
+    MVI A, #JMP
+    STA FRIDGE_IRQ_KEYBOARD
+    EI
+endsub

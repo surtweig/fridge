@@ -21,3 +21,8 @@ alias VTEXT_ROWS 20
 subroutine vtext_putstr
     include "vtext_putstr.inc"
 endsub
+
+// Clears D text cells on the drawing buffer from column B and row C.
+subroutine vtext_clear
+    include "vtext_clear.inc"
+endsub

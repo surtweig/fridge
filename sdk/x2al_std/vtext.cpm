@@ -1,7 +1,7 @@
 namespace vtext imports "vtext.bin"
 (
-    static uint8 VTEXT_FORE_COLOR imports 0x0066;
-    static uint8 VTEXT_BACK_COLOR imports 0x0065;
+    static uint8 VTEXT_FORE_COLOR imports 0x0097;
+    static uint8 VTEXT_BACK_COLOR imports 0x0096;
     const uint8 VTEXT_COLUMNS 35;
     const uint8 VTEXT_ROWS 20;
     void vtext_begin ()
@@ -15,8 +15,15 @@ namespace vtext imports "vtext.bin"
         __lxi_hl (cast uint16, str);
         __callsub 0x002c;
     );
+    void vtext_clear (uint8 column; uint8 row; uint8 count)
+    (
+        __mvi_b column;
+        __mvi_c row;
+        __mvi_d count;
+        __callsub 0x005b;
+    );
     void vtext_present ()
     (
-        __callsub 0x005b;
+        __callsub 0x008c;
     );
 );

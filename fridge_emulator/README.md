@@ -16,9 +16,16 @@ See `PLAN.md` for the overall design. This file covers what's built today.
   main-thread reads.
 - `RomLoader_LoadRaw` reads a `.bin` and copies it into `cpu->ram` at
   `FRIDGE_EXECUTABLE_OFFSET` (`0x0200`), then sets `PC = 0x0200`.
-- SDL2 keyboard events are mapped to 7-bit ASCII codes and forwarded to
-  `FRIDGE_keyboard_press` / `_release` (suppressed while ImGui captures
-  keyboard).
+- SDL2 keyboard events are mapped to 7-bit Fridge codes and forwarded to
+  `FRIDGE_keyboard_press` and `FRIDGE_keyboard_release`. The arrow codes are
+  Up `0x1C`, Down `0x1D`, Left `0x1E`, and Right `0x1F`, available in FALC
+  and CPM as `FRIDGE_KEYBOARD_KEY_UP`, `FRIDGE_KEYBOARD_KEY_DOWN`,
+  `FRIDGE_KEYBOARD_KEY_LEFT`, and `FRIDGE_KEYBOARD_KEY_RIGHT`. Click the
+  Framebuffer panel to give the emulated program keyboard focus. ImGui
+  capture suppresses key presses. A release retains the code sent on its
+  press, and losing window focus releases all keys held by the program.
+- Programs loaded without a bootloader have default timer and keyboard IRQ
+  handlers. A program can install its own handler in either vector slot.
 - Main menu: `File > Open ROM...`, `Emulation > Run / Pause / Reset / Step`,
   `View > Demo Window / About`.
 - A "Registers" panel shows A, B, C, D, E, H, L (editable as hex),
@@ -98,7 +105,7 @@ fridge_emulator/
     fridge_ctx.{h,cpp}          FRIDGE_SYSTEM lifecycle (alloc/reset)
     rom_loader.{h,cpp}          raw .bin -> cpu->ram[0x0200]
     emu_worker.{h,cpp}          throttled worker thread driving FRIDGE_sys_tick
-    keymap.{h,cpp}              SDL2 key events -> 7-bit ASCII Fridge key codes
+    keymap.{h,cpp}              SDL2 key events -> 7-bit Fridge key codes
     file_dialog.{h,cpp}         native Open ROM picker (zenity -> kdialog on Linux)
     vulkan_globals.h            extern VkDevice/Queue/etc. for shared use by vk_texture
     vk_texture.{h,cpp}          240x180 RGBA8 device image + staging buffer + per-frame upload

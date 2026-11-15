@@ -24,7 +24,7 @@
 --     punctuation: Shift), Ctrl/Alt are ignored. This matches the emulator
 --     frontend, which folds at event time and never reports modifiers.
 --   * Extended (E0) keys are dropped, except E0 5A (keypad Enter) which
---     emits '\n', matching keymap.h (arrows etc. are unmapped there).
+--     emits '\n'. Arrow keys are only mapped by the desktop emulator.
 --   * Keypad digits 70/69/72/7A/6B/73/74/6C/75/7D emit '0'..'9'.
 --   * Make codes emit press events, F0 <code> emits release events;
 --     typematic repeat therefore emits repeated press events, like the

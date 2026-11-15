@@ -5,7 +5,7 @@
 namespace CPM
 {
     bool CPMIsUserIdentifier(const CPMSyntaxTreeNode* node);
-    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType& parameter);
+    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType* parameter);
 
     enum class CPMValueCategory { Value, ReadOnly, Writable };
     enum class CPMExprKind

@@ -555,10 +555,13 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     aliases["FRIDGE_BOOT_SECTION_INDEX_ADDRESS"] = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
     aliases["FRIDGE_EXECUTABLE_OFFSET"]          = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_EXECUTABLE_OFFSET);
     aliases["FRIDGE_IRQ_SYS_TIMER"]              = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_SYS_TIMER);
-    aliases["FRIDGE_IRQ_KEYBOARD_PRESS"]         = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_KEYBOARD_PRESS);
-    aliases["FRIDGE_IRQ_KEYBOARD_RELEASE"]       = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_KEYBOARD_RELEASE);
+    aliases["FRIDGE_IRQ_KEYBOARD"]               = int_to_hex((FRIDGE_RAM_ADDR)FRIDGE_IRQ_KEYBOARD);
     aliases["FRIDGE_KEYBOARD_KEY_STATE_MASK"]    = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_STATE_MASK);
     aliases["FRIDGE_KEYBOARD_KEY_CODE_MASK"]     = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_CODE_MASK);
+    aliases["FRIDGE_KEYBOARD_KEY_UP"]            = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_UP);
+    aliases["FRIDGE_KEYBOARD_KEY_DOWN"]          = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_DOWN);
+    aliases["FRIDGE_KEYBOARD_KEY_LEFT"]          = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_LEFT);
+    aliases["FRIDGE_KEYBOARD_KEY_RIGHT"]         = int_to_hex((FRIDGE_WORD)FRIDGE_KEYBOARD_KEY_RIGHT);
     aliases["FRIDGE_DEV_ROM_RESET_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_RESET_ID);
     aliases["FRIDGE_DEV_ROM_ID"]                 = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_ID);
     aliases["FRIDGE_DEV_KEYBOARD_ID"]            = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_KEYBOARD_ID);
@@ -847,16 +850,22 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
         logerrout("CPM header generation requires a .bin output filename.");
         return false;
     }
-    const string name = file.substr(0, file.size() - 4);
-    if (!cpmIdentifier(name) || name == "global" || cpmExports.empty())
+    string name = file.substr(0, file.size() - 4);
+    if (name == "global" || !cpmIdentifier(name)) name += "_lib";
+    if (!cpmIdentifier(name))
     {
-        logerrout("CPM header generation requires a valid namespace filename and at least one export.");
+        logerrout("Cannot derive a valid CPM namespace from binary filename '" + file + "'.");
+        return false;
+    }
+    if (cpmExports.empty())
+    {
+        logerrout("CPM header generation requires at least one decorated export.");
         return false;
     }
 
     static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
-    static const regex subExport(R"(@void\s*\((.*)\)\s*)");
-    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|HL)\s*\)\s*)");
+    static const regex subExport(R"(@(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
+    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|BC|HL)\s*\)\s*)");
     ostringstream result;
     result << "namespace " << name << " imports \"" << file << '"';
     if (!relocatable) result << " at " << int_to_hex(offset);
@@ -928,28 +937,37 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             logerrout("Cannot resolve exported subroutine '" + symbol + "'.");
             return false;
         }
-        const string parameters = match[1];
+        const bool returnsByte = match[1] != "void";
+        const string parameters = match[2];
         istringstream input(parameters);
         string argument;
         unordered_set<string> names, registers;
         ostringstream body;
-        result << "    void " << symbol << " (";
+        result << "    " << (returnsByte ? "uint8 " : "void ") << symbol << " (";
         if (parameters.find_first_not_of(" \t") != string::npos)
         {
             while (getline(input, argument, ','))
             {
                 if (!regex_match(argument, match, parameter) || !cpmIdentifier(match[2]) ||
-                    !names.insert(match[2]).second || !registers.insert(match[3]).second ||
-                    (match[3] == "HL" ? match[1] == "uint8" : match[1] != "uint8"))
+                    !names.insert(match[2]).second || !registers.insert(match[3]).second)
                 {
                     logerrout("Invalid CPM parameter or register binding for '" + symbol + "'.");
                     return false;
                 }
                 const string type = match[1], argumentName = match[2], reg = match[3];
+                const bool validBinding = reg == "HL" ? type != "uint8" :
+                    reg == "BC" ? type == "uint16" : type == "uint8";
+                if (!validBinding)
+                {
+                    logerrout("Invalid CPM parameter or register binding for '" + symbol + "'.");
+                    return false;
+                }
                 if (names.size() > 1) result << "; ";
                 result << type << ' ' << argumentName;
                 if (reg == "HL")
                     body << "        __lxi_hl " << (type == "string" ? "(cast uint16, " + argumentName + ")" : argumentName) << ";\n";
+                else if (reg == "BC")
+                    body << "        __lxi_bc " << argumentName << ";\n";
                 else
                     body << "        __mvi_" << static_cast<char>(tolower(reg.front())) << ' ' << argumentName << ";\n";
             }
@@ -959,8 +977,15 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
                 return false;
             }
         }
+        if (registers.count("BC") && (registers.count("B") || registers.count("C")))
+        {
+            logerrout("Overlapping CPM register bindings for '" + symbol + "'.");
+            return false;
+        }
         result << ")\n    (\n" << body.str()
-               << "        __callsub " << int_to_hex(subroutine->second) << ";\n    );\n";
+               << "        __callsub " << int_to_hex(subroutine->second) << ";\n";
+        if (returnsByte) result << "        return (__read_a);\n";
+        result << "    );\n";
     }
     result << ");\n";
     header = result.str();

@@ -37,7 +37,7 @@ event-time folding (`keymap.h`):
   toggles) fold case at event time (letters: Shift XOR CapsLock; digits and
   punctuation: Shift); Ctrl/Alt are ignored.
 - Extended keys are dropped except `E0 5A` (keypad Enter) -> `'\n'`; arrows
-  and other E0 keys are unmapped, as in `keymap.h`.
+  are mapped by the desktop emulator only.
 - Keypad digits (`70 69 72 7A 6B 73 74 6C 75 7D`) -> `'0'..'9'`.
 - Mapped codes: Esc/Enter/Backspace/Tab/Space, a-z/A-Z, 0-9 and the full US
   punctuation set. **Documented divergence:** Shift+digit folds to

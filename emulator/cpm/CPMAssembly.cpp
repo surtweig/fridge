@@ -492,6 +492,14 @@ namespace CPM
 
             void intrinsic(const CPMIRInstruction& instruction)
             {
+                if (instruction.intrinsic == CPMIntrinsic::ReadA)
+                {
+                    op("PUSH HL");
+                    address(instruction.output, 0, 2);
+                    op("MOV M, A");
+                    op("POP HL");
+                    return;
+                }
                 size_t value = 0;
                 for (auto byte : instruction.bytes) value = (value << 8) | byte;
                 if (instruction.intrinsic == CPMIntrinsic::CallSub)
@@ -507,6 +515,20 @@ namespace CPM
                     return;
                 }
                 const bool immediate = instruction.inputs.empty();
+                if (instruction.intrinsic == CPMIntrinsic::LxiBC)
+                {
+                    if (immediate) word("LXI BC, ", value);
+                    else
+                    {
+                        op("PUSH HL");
+                        address(instruction.inputs.front(), 0, 2);
+                        op("MOV B, M");
+                        op("INX HL");
+                        op("MOV C, M");
+                        op("POP HL");
+                    }
+                    return;
+                }
                 if (instruction.intrinsic == CPMIntrinsic::LxiHL)
                 {
                     if (immediate) word("LXI HL, ", value);
@@ -520,7 +542,8 @@ namespace CPM
                     return;
                 }
                 const string reg = instruction.intrinsic == CPMIntrinsic::MviA ? "A" :
-                                   instruction.intrinsic == CPMIntrinsic::MviB ? "B" : "C";
+                                   instruction.intrinsic == CPMIntrinsic::MviB ? "B" :
+                                   instruction.intrinsic == CPMIntrinsic::MviC ? "C" : "D";
                 if (immediate) byte("MVI " + reg + ", ", static_cast<FRIDGE_WORD>(value));
                 else
                 {

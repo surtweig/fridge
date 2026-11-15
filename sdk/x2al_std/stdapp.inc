@@ -14,6 +14,7 @@ alias IRQ_SYS_KEYBOARD           0x0007
 alias XCM2_ROM_DEVICE_ID         0x01
 alias XCM2_ROM_DEVICE_RESET_ID   0x02
 alias XCM2_ROM_DEVICE_MODE_LOAD  0x02
+alias XCM2_KEYBOARD_DEVICE_ID    0x03
 
 // Telling the compiler that the program starts at this address
 offset EXECUTABLE_OFFSET

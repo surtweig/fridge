@@ -24,6 +24,12 @@ subroutine vtext_putstr
     include "vtext_putstr.inc"
 endsub
 
+// Clears count text cells on the drawing buffer from (column, row).
+@void( (uint8 column : B), (uint8 row : C), (uint8 count : D) )
+subroutine vtext_clear
+    include "vtext_clear.inc"
+endsub
+
 @void()
 subroutine vtext_present
     LXI HL, 0x0000

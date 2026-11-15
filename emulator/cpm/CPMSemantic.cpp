@@ -144,16 +144,19 @@ namespace CPM
         return identifier(node) && !reserved(node->text);
     }
 
-    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType& parameter)
+    CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType* parameter)
     {
-        if (parameter == baseType(CPM_DATATYPE_UINT8))
+        if (!parameter) return name == "__read_a" ? CPMIntrinsic::ReadA : CPMIntrinsic::None;
+        if (*parameter == baseType(CPM_DATATYPE_UINT8))
         {
             if (name == "__mvi_a") return CPMIntrinsic::MviA;
             if (name == "__mvi_b") return CPMIntrinsic::MviB;
             if (name == "__mvi_c") return CPMIntrinsic::MviC;
+            if (name == "__mvi_d") return CPMIntrinsic::MviD;
         }
-        if (parameter == baseType(CPM_DATATYPE_UINT16))
+        if (*parameter == baseType(CPM_DATATYPE_UINT16))
         {
+            if (name == "__lxi_bc") return CPMIntrinsic::LxiBC;
             if (name == "__lxi_hl") return CPMIntrinsic::LxiHL;
             if (name == "__callsub") return CPMIntrinsic::CallSub;
         }
@@ -222,13 +225,14 @@ namespace CPM
         {
             const bool functionName = any_of(ns->functions.begin(), ns->functions.end(),
                 [&](const auto& entry) { return entry.first.name == node->text; });
-            if (ns->statics.count(node->text) || ns->datatypes.count(node->text) || functionName)
+            if (ns->name == node->text || ns->statics.count(node->text) ||
+                ns->datatypes.count(node->text) || functionName)
             {
                 error(node, "Name '" + node->text + "' conflicts with a visible declaration.");
                 return false;
             }
         }
-        if (lookupLocal(node->text) || compiler.namespaces.count(node->text))
+        if (lookupLocal(node->text))
         {
             error(node, "Name '" + node->text + "' conflicts with a visible declaration.");
             return false;
@@ -404,8 +408,8 @@ namespace CPM
                 match = &entry.second;
             }
         }
-        const auto intrinsic = (head->type == CPM_ID || match) && operands.size() == 1 ?
-            CPMFindIntrinsic(name, operands[0].type) : CPMIntrinsic::None;
+        const auto intrinsic = (head->type == CPM_ID || match) && operands.size() <= 1 ?
+            CPMFindIntrinsic(name, operands.empty() ? nullptr : &operands[0].type) : CPMIntrinsic::None;
         if (intrinsic != CPMIntrinsic::None)
         {
             if (intrinsic == CPMIntrinsic::CallSub && (!operands[0].constant || operands[0].bytes.empty()))
@@ -413,7 +417,8 @@ namespace CPM
                 error(head, "__callsub requires a compile-time uint16 address.");
                 return {};
             }
-            auto result = checked(CPMExprKind::Call, head, baseType(CPM_DATATYPE_VOID));
+            auto result = checked(CPMExprKind::Call, head,
+                                  baseType(intrinsic == CPMIntrinsic::ReadA ? CPM_DATATYPE_UINT8 : CPM_DATATYPE_VOID));
             result.intrinsic = intrinsic;
             result.operands = std::move(operands);
             return result;
@@ -782,9 +787,20 @@ namespace CPM
         }
         else
         {
+            if (!all_of(args.begin() + 1, args.end(), [&](const auto& arg) { return arg.type == type; }))
+            {
+                string reason = "Operator '" + op + "' cannot accept operands of type ";
+                for (size_t i = 0; i < args.size(); ++i)
+                {
+                    if (i != 0) reason += ", ";
+                    reason += "'" + compiler.GetTypeName(args[i].type, true) + "'";
+                }
+                return reject(reason + ". Implicit conversions are not allowed.");
+            }
+
             const bool validType = logic ? type == boolean :
                 equality ? (type.isPrimitive() || type.isPtr()) : integer(type);
-            if (!validType || !all_of(args.begin(), args.end(), [&](const auto& arg) { return arg.type == type; }))
+            if (!validType)
                 return reject("Operator '" + op + "' requires matching " +
                               (logic ? "bool" : equality ? "scalar" : "integer") + " operands.");
         }

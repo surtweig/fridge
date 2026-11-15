@@ -181,6 +181,8 @@ typedef struct FRIDGE_KEYBOARD_CONTROLLER
     FRIDGE_WORD key_buffer[FRIDGE_KEYBOARD_BUFFER_SIZE];
     FRIDGE_WORD input_index;
     FRIDGE_WORD output_index;
+    FRIDGE_WORD count;
+    FRIDGE_WORD pending_interrupts; // The newest events whose interrupts have yet to be delivered.
 } FRIDGE_KEYBOARD_CONTROLLER;
 
 #ifdef FRIDGE_POSIT16_SUPPORT

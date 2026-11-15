@@ -567,8 +567,14 @@ void dummyDevOutput(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
 FRIDGE_WORD keyboard_controller_dev_input(FRIDGE_SYSTEM* sys)
 {
     FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
+    if (!kbrd || kbrd->count == 0)
+        return 0;
     FRIDGE_WORD kdata = kbrd->key_buffer[kbrd->output_index];
-    kbrd->key_buffer[kbrd->output_index++] = 0;
+    kbrd->output_index = (kbrd->output_index + 1) % FRIDGE_KEYBOARD_BUFFER_SIZE;
+    // A polling read can consume an event before its interrupt is delivered.
+    if (kbrd->count == kbrd->pending_interrupts)
+        --kbrd->pending_interrupts;
+    --kbrd->count;
     return kdata;
 }
 
@@ -1005,9 +1011,21 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
     }
 }
 
+static void keyboard_interrupt_if_pending(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
+    if (kbrd && kbrd->pending_interrupts && sys->cpu->inte == FRIDGE_CPU_INTERRUPTS_ENABLED &&
+        !FRIDGE_cpu_flag_PANIC(sys->cpu))
+    {
+        --kbrd->pending_interrupts;
+        FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_DWORD_TO_WORDS(FRIDGE_IRQ_KEYBOARD));
+    }
+}
+
 void FRIDGE_sys_tick (FRIDGE_SYSTEM* sys)
 {
     FRIDGE_CPU* cpu = sys->cpu;
+    keyboard_interrupt_if_pending(sys);
     if (cpu->state == FRIDGE_CPU_ACTIVE)
     {
         FRIDGE_WORD ircode = pcRead(cpu);
@@ -1033,7 +1051,8 @@ void FRIDGE_cpu_interrupt (FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode, FRIDGE_WORD a
 
 void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_HIGH_WORD(FRIDGE_IRQ_SYS_TIMER), FRIDGE_LOW_WORD(FRIDGE_IRQ_SYS_TIMER));
+    if (sys->cpu->inte == FRIDGE_CPU_INTERRUPTS_ENABLED && !FRIDGE_cpu_flag_PANIC(sys->cpu))
+        FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_DWORD_TO_WORDS(FRIDGE_IRQ_SYS_TIMER));
 }
 
 void FRIDGE_cpu_ram_read (FRIDGE_CPU* cpu, FRIDGE_WORD* buffer, FRIDGE_RAM_ADDR position, FRIDGE_SIZE_T size)
@@ -1337,22 +1356,26 @@ void FRIDGE_gpu_render_txt_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels, const FR
     }
 }
 
-void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
+static void keyboard_enqueue(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
 {
     FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
-    FRIDGE_WORD keyData = FRIDGE_KEYBOARD_KEY_STATE_MASK | (FRIDGE_KEYBOARD_KEY_CODE_MASK & key);
-    kbrd->key_buffer[kbrd->input_index++] = keyData;
-    if (kbrd->input_index >= FRIDGE_KEYBOARD_BUFFER_SIZE)
-        kbrd->input_index = 0;
+    if (!kbrd || kbrd->count == FRIDGE_KEYBOARD_BUFFER_SIZE)
+        return;
+    kbrd->key_buffer[kbrd->input_index] = data;
+    kbrd->input_index = (kbrd->input_index + 1) % FRIDGE_KEYBOARD_BUFFER_SIZE;
+    ++kbrd->count;
+    ++kbrd->pending_interrupts;
+    keyboard_interrupt_if_pending(sys);
+}
+
+void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
+{
+    keyboard_enqueue(sys, FRIDGE_KEYBOARD_KEY_STATE_MASK | (FRIDGE_KEYBOARD_KEY_CODE_MASK & key));
 }
 
 void FRIDGE_keyboard_release(FRIDGE_SYSTEM* sys, FRIDGE_WORD key)
 {
-    FRIDGE_KEYBOARD_CONTROLLER* kbrd = sys->kbrd;
-    FRIDGE_WORD keyData = FRIDGE_KEYBOARD_KEY_CODE_MASK & key;
-    kbrd->key_buffer[kbrd->input_index++] = keyData;
-    if (kbrd->input_index >= FRIDGE_KEYBOARD_BUFFER_SIZE)
-        kbrd->input_index = 0;
+    keyboard_enqueue(sys, FRIDGE_KEYBOARD_KEY_CODE_MASK & key);
 }
 
 #ifdef FRIDGE_POSIT16_SUPPORT

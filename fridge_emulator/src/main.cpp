@@ -528,14 +528,7 @@ int main(int argc, char** argv)
                 && event.window.windowID == SDL_GetWindowID(window))
                 done = true;
 
-            // Forward keyboard events to the Fridge keyboard controller,
-            // but skip when ImGui wants the keyboard (e.g. user editing hex
-            // values in the register panel).
-            if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)
-            {
-                if (!ImGui::GetIO().WantCaptureKeyboard)
-                    App_HandleSdlEvent(app, event);
-            }
+            App_HandleSdlEvent(app, event, ImGui::GetIO().WantCaptureKeyboard);
         }
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {

@@ -122,17 +122,20 @@ int main()
 
         const vector<std::pair<string, string>> invalid{
             {"void f() (uint16 x 1;);", "Expected uint16, got uint8"},
-            {"void f(uint8 x) (= x, (+ x, 1d););", "matching integer"},
+            {"void f(uint8 x) (= x, (+ x, 1d););",
+             "Operator '+' cannot accept operands of type 'uint8', 'uint16'. Implicit conversions are not allowed."},
             {"void f() (if (1) (););", "Expected bool, got uint8"},
             {"void f() (for (; 1;) (););", "Expected bool, got uint8"},
             {"void f() (! 1;);", "matching bool"},
-            {"void f() (&& true, 1;);", "matching bool"},
+            {"void f() (&& true, 1;);",
+             "Operator '&&' cannot accept operands of type 'bool', 'uint8'. Implicit conversions are not allowed."},
             {"void f() (uint16 x (cast uint16, 1););", "equal-size"},
             {"void f() (uint8 x (convert uint8, 256););", "out-of-range integer"},
             {"void f() (int16 x -32769d;);", "out-of-range integer"},
             {"void f() (uint8 x 0x1;);", "out-of-range integer"},
             {"void f() (uint8 x y; uint8 y;);", "Unknown name"},
             {"void f(uint8 x) (if (true) (uint8 x;););", "conflicts with a visible declaration"},
+            {"namespace str (void format() ();); using str; void f(string str) ();", "conflicts with a visible declaration"},
             {"void f() (for (uint8 i 0; false; ++ i) (); uint8 x i;);", "Unknown name"},
             {"void f() (if (true) (uint8 x;); = x, 1;);", "Unknown name"},
             {"void f() (break;);", "requires an enclosing loop"},
@@ -187,6 +190,19 @@ int main()
         fixture.check("include \"constants.cpm\"; static <uint8 array count> data;", true);
         fixture.check("static <uint8 array count> data; include \"constants.cpm\";", false);
         fixture.check("namespace Z (const uint8 n 3;); using Z; namespace A (const uint8 m n;);", true);
+        std::ofstream(fixture.directory / "screen.cpm") << R"(
+            namespace Screen
+            (
+                char first(string str) (return (at str););
+                void set_value() (uint8 str 1; ++ str;);
+            );
+        )";
+        fixture.check(R"(
+            include "screen.cpm";
+            namespace str (void format() (););
+            using str;
+            void main() (format;);
+        )", true);
         fixture.compile("void f() (uint16 x 1;);", false);
         fixture.compile("void g(); void f() ((g););", false, [](CPMCompiler& compiler)
         {

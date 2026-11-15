@@ -1,6 +1,6 @@
 include "posit.inc"
 include "vtext.inc"
-include "string.inc"
+include "str.falc"
 
 static str "P = 0x.... clz = 0x...."
 alias pos 0x12AA

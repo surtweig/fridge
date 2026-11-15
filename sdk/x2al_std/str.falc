@@ -1,0 +1,136 @@
+// ---------------------------------------- //
+// string.falc                              //
+//                                          //
+// String operations                        //
+// Copyright (c) Plus&Minus Inc. 2008       //
+//                                          //
+// ---------------------------------------- //
+
+
+// Converts hexadecimal digit to the char code
+// A - digit value (0..15)
+// Sets A to uppercase char code of the digit (or whitespace if A is out of range)
+@uint8:A( (uint8 digit : A) )
+subroutine string_hex_digit
+    CPI 10
+    JM string_hex_digit.decimal
+    CPI 16
+    JM string_hex_digit.hexadecimal
+    MVI A, 32
+    JMP string_hex_digit.end
+
+    entry string_hex_digit.decimal
+        ADI '0'
+        JMP string_hex_digit.end
+
+    entry string_hex_digit.hexadecimal
+        ADI 55 // 55+10 = 65 = 'A'
+
+    entry string_hex_digit.end
+endsub
+
+// Writes two hexadecimal digits and advances HL by 2. No terminator.
+// HL - string address
+// B - number
+@void( (string buffer : HL), (uint8 num : B) )
+subroutine string_hex
+    // extracting high digit
+    MOV A, B
+    RTC
+    RAR
+    RTC
+    RAR
+    RTC
+    RAR
+    RTC
+    RAR
+    CALL string_hex_digit // retrieving high digit's char
+    STAX HL               // writing to string at HL
+    INX HL
+
+    // extracting low digit
+    MOV A, B
+    ANI 0x0F // mask 00001111b
+    CALL string_hex_digit // retrieving low digit's char
+    STAX HL               // writing to string at HL+1
+    INX HL
+endsub
+
+// Writes four hexadecimal digits and advances HL by 4. No terminator.
+// HL - string address
+// BC - number
+@void( (string buffer : HL), (uint16 num : BC) )
+subroutine string_dhex
+    CALL string_hex
+    MOV B, C
+    CALL string_hex
+endsub
+
+// Writes up to 3 decimal digits from B to HL. No terminator.
+// Returns HL pointing just past the digits.
+@void( (string buffer : HL), (uint8 num : B) )
+subroutine string_dec
+    MOV C, B
+    MVI B, 0
+    CALL string_ddec
+endsub
+
+// Writes up to 5 decimal digits from BC to HL. No terminator.
+// Returns HL pointing just past the digits.
+@void( (string buffer : HL), (uint16 num : BC) )
+subroutine string_ddec
+    XRA A // No digits emitted yet.
+    LXI DE, 0x2710 // 10000
+    CALL string_decimal_place
+    LXI DE, 0x03E8 // 1000
+    CALL string_decimal_place
+    LXI DE, 0x0064 // 100
+    CALL string_decimal_place
+    LXI DE, 0x000A // 10
+    CALL string_decimal_place
+
+    // Always emit the ones digit, even for zero.
+    MOV A, C
+    ADI '0'
+    MOV M, A
+    INX HL
+endsub
+
+// Subtract DE from BC once per increment of the digit in A.
+// A holds the already-emitted flag on entry and return.
+subroutine string_decimal_place
+    PUSH AF
+    MVI A, 0
+    entry string_decimal_place.loop
+        PUSH AF
+        MOV A, B
+        CMP D
+        JM string_decimal_place.done
+        JNZ string_decimal_place.subtract
+        MOV A, C
+        CMP E
+        JM string_decimal_place.done
+
+    entry string_decimal_place.subtract
+        MOV A, C
+        SUB E
+        MOV C, A
+        MOV A, B
+        SBB D
+        MOV B, A
+        POP AF
+        INR A
+        JMP string_decimal_place.loop
+
+    entry string_decimal_place.done
+        POP AF
+        MOV D, A // DE is no longer needed. Save the digit while restoring the flag.
+        POP AF
+        ORA D
+        RZ      // Skip a zero while no digits have been written.
+        MOV A, D
+        ADI '0'
+        MOV M, A
+        INX HL
+        MVI A, 1
+endsub

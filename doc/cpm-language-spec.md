@@ -307,13 +307,15 @@ body      ::= "(" statement … ")"
 ### 4.5 Intrinsics
 
 CPM emits intrinsics inline. The built-in names can be used directly or
-declared with a matching prototype. Each intrinsic returns `void`.
+declared with a matching prototype. Register loads and `__callsub` return `void`.
 
 | Intrinsic | Parameter | Effect |
 |-----------|-----------|--------|
-| `__mvi_a`, `__mvi_b`, `__mvi_c` | `uint8` | Load A, B, or C. |
+| `__mvi_a`, `__mvi_b`, `__mvi_c`, `__mvi_d` | `uint8` | Load A, B, C, or D. |
 | `__lxi_hl` | `uint16` | Load HL. A `string` can be bit-cast to `uint16`. |
+| `__lxi_bc` | `uint16` | Load BC. |
 | `__callsub` | Constant `uint16` | Call a routine using the register ABI and the address rules in §6. The callee can clobber general registers and flags. |
+| `__read_a` | None | Return the value of A as a `uint8`. |
 
 Register loads from literals and named values preserve the other registers.
 Evaluate complex arguments into local variables before loading registers for
@@ -851,6 +853,9 @@ this target. It replaces the earlier HL/special hidden-output-pointer scheme.
 - A local may not reuse the name of a static in its own namespace. Function
   parameters also obey their uniqueness rule (§4.4). The remaining collision
   cases, including enclosing-block shadowing, are listed in §14, D7.
+- Namespace names participate in local and parameter collision checks in the
+  current namespace, `global`, and the namespaces named by `using` in the
+  declaration's source file. Each included file has its own `using` directives.
 - For an unqualified function call, merge overload candidates from the
   current namespace, all namespaces named in visible `using` directives, and
   `global`. Count each declaration once if it is reachable by several paths.

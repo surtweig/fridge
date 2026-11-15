@@ -33,9 +33,9 @@ Use the installed compilers to build the standard library and Hello World.
 ./sdk/programs/hello_world/hello_world_build.sh
 ```
 
-The library script writes `vtext.bin`, `vtext.bin.rel`, and `vtext.cpm` beside
-`vtext.falc`. The Hello World script looks up the header in `sdk/x2al_std/` and
-writes `hello_world.bin` beside `hello_world.cpm`.
+The library script builds `vtext`, `kbrd`, and `str`, writing each `.bin`, `.bin.rel`,
+and `.cpm` header beside its source. The Hello World script looks up the
+`vtext` header in `sdk/x2al_std/` and writes `hello_world.bin` beside its source.
 
 ## Spartan-6 Atlys target
 

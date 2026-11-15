@@ -37,11 +37,17 @@ static void ApplyTargetFrequency(App& app)
                                    TickSeriesLengthFor(app.target_frequency));
 }
 
+static void ResetFridge(App& app)
+{
+    FridgeCtx_Reset(app.fridge);
+    app.pressed_keys.fill(0);
+}
+
 static bool LoadRomIntoApp(App& app, const char* path, bool was_active)
 {
     app.worker->Lock();
     app.worker->SetActive(false);
-    FridgeCtx_Reset(app.fridge);
+    ResetFridge(app);
     bool ok = RomLoader_LoadRaw(&app.fridge.cpu, path);
     if (ok)
     {
@@ -73,7 +79,7 @@ static void LoadSourceIntoApp(App& app, const char* path, bool was_active)
 
     if (ok && info.bytes.size() > 0)
     {
-        FridgeCtx_Reset(app.fridge);
+        ResetFridge(app);
 
         FRIDGE_RAM_ADDR load_offset = info.offset;
         FRIDGE_RAM_ADDR max_size = FRIDGE_RAM_SIZE - load_offset;
@@ -136,20 +142,50 @@ void App_Shutdown(App& app)
     FridgeCtx_Shutdown(app.fridge);
 }
 
-void App_HandleSdlEvent(App& app, const SDL_Event& event)
+void App_HandleSdlEvent(App& app, const SDL_Event& event, bool capture_keyboard)
 {
+    if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+    {
+        app.worker->Lock();
+        for (auto& key : app.pressed_keys)
+        {
+            if (key) FRIDGE_keyboard_release(&app.fridge.system, key);
+            key = 0;
+        }
+        app.worker->Unlock();
+        return;
+    }
     if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP)
         return;
 
-    int code = KeyMap_SdlToCode(event);
-    if (code < 0)
+    const int scancode = event.key.keysym.scancode;
+    if (scancode <= SDL_SCANCODE_UNKNOWN || scancode >= SDL_NUM_SCANCODES)
+        return;
+    auto& key = app.pressed_keys[scancode];
+
+    const bool pressed = event.type == SDL_KEYDOWN;
+    if (pressed)
+    {
+        if (capture_keyboard || (!key && event.key.repeat)) return;
+        if (!key)
+        {
+            const int code = KeyMap_SdlToCode(event);
+            if (code < 0) return;
+            key = static_cast<FRIDGE_WORD>(code);
+        }
+    }
+    else if (!key)
         return;
 
-    bool held = (event.type == SDL_KEYDOWN);
-    if (held)
-        FRIDGE_keyboard_press(&app.fridge.system, (FRIDGE_WORD)code);
+    app.worker->Lock();
+    if (pressed)
+        FRIDGE_keyboard_press(&app.fridge.system, key);
     else
-        FRIDGE_keyboard_release(&app.fridge.system, (FRIDGE_WORD)code);
+    {
+        FRIDGE_keyboard_release(&app.fridge.system, key);
+        key = 0;
+    }
+    app.worker->Unlock();
 }
 
 void App_PumpPending(App& app)
@@ -191,7 +227,7 @@ void App_PumpPending(App& app)
         app.worker->Lock();
         bool was_active = app.worker->IsActive();
         app.worker->SetActive(false);
-        FridgeCtx_Reset(app.fridge);
+        ResetFridge(app);
         if (app.rom_loaded && !app.rom_path.empty())
             RomLoader_LoadRaw(&app.fridge.cpu, app.rom_path.c_str());
         if (app.source_loaded)
@@ -320,8 +356,9 @@ static void DrawRegistersPanel(App& app)
 
 static void DrawFramebufferPanel(App& app)
 {
+    // With the display focused, arrow keys belong to the emulated program.
     if (!ImGui::Begin("Framebuffer", nullptr,
-                      ImGuiWindowFlags_AlwaysAutoResize))
+                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavInputs))
     {
         ImGui::End();
         return;

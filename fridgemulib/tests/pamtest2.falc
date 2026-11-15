@@ -1,6 +1,6 @@
 include "posit.inc"
 include "vtext.inc"
-include "string.inc"
+include "str.falc"
 
 //            0002    000A    0012    001A
 static str "P=.... BC=.... DE=.... HL=...."

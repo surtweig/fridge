@@ -16,15 +16,13 @@ main BootLoader
     // BOOT_SECTION_INDEX_ADDRESS points at this address and default value is 0 (hence NOP).
     // This zero can be modified by an executable to load another one.
     NOP // 0x0003
-    
+
     // System timer IRQ
     RET // 0x0004
     NOP
     NOP
-    // Keyboard IRQ
-    RET // 0x0007
-    NOP
-    NOP
+    // Shared keyboard IRQ. Programs can replace this jump with their handler.
+    JMP BootLoader.keyboard_irq // 0x0007
     
 entry BootLoader.start    
     // Enable interrupts
@@ -136,6 +134,10 @@ entry BootLoader.start
     // Start executable
     JMP EXECUTABLE_OFFSET
 
-
-
-
+subroutine BootLoader.keyboard_interrupt
+    entry BootLoader.keyboard_irq
+    PUSH AF
+    IN XCM2_KEYBOARD_DEVICE_ID
+    POP AF
+    EI
+endsub

@@ -383,6 +383,12 @@ namespace CPM
                 }
                 case CPMExprKind::Call:
                 {
+                    if (value.intrinsic == CPMIntrinsic::ReadA)
+                    {
+                        const size_t result = frame(value.type);
+                        emit(CPMIROp::Intrinsic, syntax, result).intrinsic = value.intrinsic;
+                        return result;
+                    }
                     if (value.intrinsic != CPMIntrinsic::None)
                     {
                         const auto& argument = value.operands.front();

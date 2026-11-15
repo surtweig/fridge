@@ -1,0 +1,45 @@
+include "vtext.cpm";
+include "kbrd.cpm";
+include "str.cpm";
+
+using vtext;
+using kbrd;
+using str;
+
+const uint8 print_pos_x 1;
+const uint8 print_pos_y 1;
+
+void kbrd0_press_handler()
+(
+    static string keycode_str "0x?? [ ]";
+
+    string_hex (cast string, (+ 2d, (cast uint16, keycode_str))),
+                KBRD0_KEY_CODE;
+    = (at keycode_str, 6d), (cast char, KBRD0_KEY_CODE);
+    vtext_putstr print_pos_x, print_pos_y, keycode_str;
+    vtext_present;
+);
+
+void kbrd0_release_handler()
+(
+    vtext_clear print_pos_x, print_pos_y, 8;
+    vtext_present;
+);
+
+void main()
+(
+    vtext_begin;
+    = VTEXT_FORE_COLOR, 15;
+    = VTEXT_BACK_COLOR, 1;
+    vtext_present;
+
+    init_keyboard;
+    for (; true;) ();
+);
+
+void init_keyboard()
+(
+    = KBRD0_PRESS_HANDLER, (addr kbrd0_press_handler);
+    = KBRD0_RELEASE_HANDLER, (addr kbrd0_release_handler);
+    kbrd_begin;
+);

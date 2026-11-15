@@ -122,6 +122,55 @@ static void runAssembly(Fixture& fixture, const string& source)
                 to_string(cpu->ram[0x0100 + i]) + ", expected " + to_string(expected[i]) + ")");
 }
 
+static void runVtextClear(Fixture& fixture)
+{
+    std::ofstream(fixture.directory / "clear.cpm") << R"(
+        include "library files/vtext.cpm";
+        using vtext;
+        void main()
+        (
+            vtext_begin;
+            vtext_clear 4, 3, 2;
+            vtext_clear (- VTEXT_COLUMNS, 1), 9, 2;
+            vtext_clear (- VTEXT_COLUMNS, 2), (- VTEXT_ROWS, 1), 255;
+            vtext_clear 0, 0, 0;
+            vtext_clear VTEXT_COLUMNS, 0, 1;
+            vtext_clear 0, VTEXT_ROWS, 1;
+            vtext_present;
+        );
+    )";
+    const auto root = fixture.directory.string() + "/";
+    CPMCompiler compiler(root, "clear.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    std::istringstream assembly(compiler.AssemblyOutput());
+    std::ostringstream log;
+    FridgeAssemblyLanguageCompiler program(assembly, root, "clear.falc", "", &log);
+    require(program.succeeded(), log.str());
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    auto gpu = std::make_unique<FRIDGE_GPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    FRIDGE_gpu_reset(gpu.get());
+    std::fill_n(FRIDGE_gpu_active_frame(gpu.get()), FRIDGE_GPU_FRAME_BUFFER_SIZE, 0xA5);
+    const auto sp = cpu->SP;
+    cpu->PC = program.getOffset();
+    std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu->ram + cpu->PC);
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    system.gpu = gpu.get();
+    for (int step = 0; step < 10000 && cpu->state == FRIDGE_CPU_ACTIVE; ++step) FRIDGE_sys_tick(&system);
+    require(cpu->state == FRIDGE_CPU_HALTED && !FRIDGE_cpu_flag_PANIC(cpu.get()) && cpu->SP == sp,
+            "vtext_clear did not complete with a balanced stack");
+
+    constexpr size_t columns = FRIDGE_GPU_TEXT_FRAME_WIDTH;
+    constexpr size_t rows = FRIDGE_GPU_TEXT_FRAME_HEIGHT;
+    vector<FRIDGE_WORD> expected(FRIDGE_GPU_FRAME_BUFFER_SIZE, 0xA5);
+    for (auto first : {3 * columns + 4, 10 * columns - 1, columns * rows - 2})
+        std::fill_n(expected.begin() + first * 2, 4, 0);
+    require(std::equal(expected.begin(), expected.end(), FRIDGE_gpu_visible_frame(gpu.get())),
+            "vtext_clear changed the wrong framebuffer bytes");
+}
+
 static void runLinkedHello(Fixture& fixture)
 {
     const auto librarySource = fs::path(CPM_VTEXT_LIBRARY);
@@ -235,6 +284,8 @@ static void runLinkedHello(Fixture& fixture)
     require(frame[first - 2] == 0 && frame[first + expected.size() * 2] == 0,
             "The string write affected a neighboring text cell");
 
+    runVtextClear(fixture);
+
     std::ofstream(fixture.directory / "overlap.falc") << compiler.AssemblyOutput()
         << "incbin \"library files/fixed.bin\" at 0x1001\n";
     std::ostringstream overlapLog;
@@ -267,8 +318,7 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
             LHLD release_address_$ADDR
             SHLD 0x000B
             MVI A, #JMP
-            STA FRIDGE_IRQ_KEYBOARD_PRESS
-            STA FRIDGE_IRQ_KEYBOARD_RELEASE
+            STA FRIDGE_IRQ_KEYBOARD
             LXI BC, release_address_$SIZE
         endsub
 
@@ -314,23 +364,181 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
             "Driver initialization did not use the relocated static and subroutine addresses");
 
     const auto resume = cpu->PC;
-    FRIDGE_WORD event = 1;
-    for (auto vector : {FRIDGE_IRQ_KEYBOARD_PRESS, FRIDGE_IRQ_KEYBOARD_RELEASE})
-    {
-        cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED;
-        FRIDGE_cpu_interrupt(&system, CALL, FRIDGE_HIGH_WORD(vector), FRIDGE_LOW_WORD(vector));
-        require(cpu->PC == vector && cpu->ram[vector] == JMP, "Interrupt did not call its vector slot");
-        for (int steps = 0; steps < 10 && cpu->PC != resume && cpu->state == FRIDGE_CPU_ACTIVE; ++steps)
-            FRIDGE_sys_tick(&system);
-        require(cpu->PC == resume && cpu->SP == initialSP && cpu->ram[0x0100] == event++,
-                "The vector did not jump to its relocated handler and return to the interrupted code");
-    }
+    const auto release = base + library.getEntries().at("on_release");
+    require(FRIDGE_DWORD_HL(cpu->ram[0x000B], cpu->ram[0x000C]) == release,
+            "The static entry initializer did not relocate");
+    cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED;
+    FRIDGE_cpu_interrupt(&system, CALL, FRIDGE_DWORD_TO_WORDS(FRIDGE_IRQ_KEYBOARD));
+    require(cpu->PC == FRIDGE_IRQ_KEYBOARD && cpu->ram[FRIDGE_IRQ_KEYBOARD] == JMP, "Interrupt did not call its vector slot");
+    for (int steps = 0; steps < 10 && cpu->PC != resume && cpu->state == FRIDGE_CPU_ACTIVE; ++steps)
+        FRIDGE_sys_tick(&system);
+    require(cpu->PC == resume && cpu->SP == initialSP && cpu->ram[0x0100] == 1,
+            "The vector did not jump to its relocated handler and return to the interrupted code");
 
     std::istringstream invalid("LXI HL, missing_$ADDR\n");
     std::ostringstream invalidLog;
     FridgeAssemblyLanguageCompiler rejected(invalid, root, "invalid.falc", "", &invalidLog);
     require(!rejected.succeeded() && invalidLog.str().find("Unknown address alias 'missing_$ADDR'") != string::npos,
             "An undefined address alias should fail assembly");
+}
+
+static void runKeyboardDriver(Fixture& fixture)
+{
+    const auto source = fs::path(CPM_KEYBOARD_LIBRARY);
+    const auto root = fixture.directory.string() + "/";
+    std::ostringstream libraryLog;
+    FridgeAssemblyLanguageCompiler library(source.parent_path().string() + "/", source.filename().string(),
+        root + "kbrd.bin", {}, &libraryLog, false, false, true);
+    require(library.succeeded(), libraryLog.str());
+
+    fixture.source(R"(
+        include "kbrd.cpm";
+        using kbrd;
+        static uint8 presses imports 0x0100;
+        static uint8 releases imports 0x0101;
+        static uint8 press_code imports 0x0102;
+        static uint8 release_code imports 0x0103;
+        static uint8 press_state imports 0x0104;
+        static uint8 release_state imports 0x0105;
+        void press()
+        (
+            ++ presses;
+            = press_code, KBRD0_KEY_CODE;
+            = press_state, KBRD0_KEY_STATE;
+        );
+        void release()
+        (
+            ++ releases;
+            = release_code, KBRD0_KEY_CODE;
+            = release_state, KBRD0_KEY_STATE;
+        );
+        void main()
+        (
+            = KBRD0_PRESS_HANDLER, (addr press);
+            = KBRD0_RELEASE_HANDLER, (addr release);
+            kbrd_begin;
+        );
+    )");
+    CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    std::istringstream assembly(compiler.AssemblyOutput());
+    std::ostringstream log;
+    FridgeAssemblyLanguageCompiler program(assembly, root, "keyboard.falc", "", &log);
+    require(program.succeeded(), log.str());
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    FRIDGE_KEYBOARD_CONTROLLER keyboard{};
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    system.kbrd = &keyboard;
+    const auto sp = cpu->SP;
+    cpu->PC = program.getOffset();
+    std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu->ram + cpu->PC);
+    for (int step = 0; step < 1000 && cpu->state == FRIDGE_CPU_ACTIVE; ++step) FRIDGE_sys_tick(&system);
+    require(cpu->state == FRIDGE_CPU_HALTED && cpu->ram[FRIDGE_IRQ_KEYBOARD] == JMP && cpu->SP == sp,
+            "Keyboard initialization failed to install its vector");
+
+    const auto resume = cpu->PC;
+    cpu->rA = 0x12; cpu->rF = 0xC5;
+    cpu->rB = 0x34; cpu->rC = 0x56;
+    cpu->rD = 0x78; cpu->rE = 0x9A;
+    cpu->rH = 0xBC; cpu->rL = 0xDE;
+    for (int pair = 1; pair <= FRIDGE_KEYBOARD_BUFFER_SIZE; ++pair)
+    {
+        FRIDGE_keyboard_press(&system, static_cast<FRIDGE_WORD>(0x80 | pair));
+        require(cpu->PC == FRIDGE_IRQ_KEYBOARD && cpu->inte == FRIDGE_CPU_INTERRUPTS_DISABLED,
+                "Press did not interrupt through the shared vector");
+        FRIDGE_keyboard_release(&system, static_cast<FRIDGE_WORD>(pair + 1));
+        require(cpu->PC == FRIDGE_IRQ_KEYBOARD && keyboard.count == 2 && keyboard.pending_interrupts == 1,
+                "Release was not queued while interrupts were masked");
+        for (int step = 0; step < 1000 && (cpu->PC != resume || cpu->SP != sp || keyboard.count != 0); ++step)
+            FRIDGE_sys_tick(&system);
+        require(cpu->PC == resume && cpu->SP == sp && !FRIDGE_cpu_flag_PANIC(cpu.get()) &&
+                keyboard.count == 0 && keyboard.pending_interrupts == 0,
+                "Keyboard events did not restore PC and SP on pair " + to_string(pair) +
+                " (PC " + to_string(cpu->PC) + ", expected " + to_string(resume) +
+                ", SP " + to_string(cpu->SP) + ", queued " + to_string(keyboard.count) + ")");
+        require(cpu->rA == 0x12 && cpu->rF == 0xC5 && cpu->rB == 0x34 && cpu->rC == 0x56 &&
+                cpu->rD == 0x78 && cpu->rE == 0x9A && cpu->rH == 0xBC && cpu->rL == 0xDE,
+                "A callback changed the interrupted registers");
+        require(cpu->ram[0x0100] == pair && cpu->ram[0x0101] == pair &&
+                cpu->ram[0x0102] == pair && cpu->ram[0x0103] == pair + 1 &&
+                cpu->ram[0x0104] == 1 && cpu->ram[0x0105] == 0,
+                "Callbacks observed the wrong key code or state");
+    }
+
+    cpu->inte = FRIDGE_CPU_INTERRUPTS_DISABLED;
+    for (int i = 0; i <= FRIDGE_KEYBOARD_BUFFER_SIZE; ++i) FRIDGE_keyboard_release(&system, i);
+    for (int i = 0; i < FRIDGE_KEYBOARD_BUFFER_SIZE; ++i)
+        require(cpu->input_dev[FRIDGE_DEV_KEYBOARD_ID](&system) == i, "Keyboard polling read events out of order");
+    require(keyboard.count == 0 && keyboard.pending_interrupts == 0 && cpu->PC == resume,
+            "Polling did not clear the interrupt requests for events it consumed");
+}
+
+static void runStringFormatting(Fixture& fixture)
+{
+    const auto source = fs::path(CPM_STRING_LIBRARY);
+    const auto root = fixture.directory.string() + "/";
+    std::ostringstream libraryLog;
+    FridgeAssemblyLanguageCompiler library(source.parent_path().string() + "/", source.filename().string(),
+        root + "string.bin", {}, &libraryLog, false, false, true);
+    require(library.succeeded(), libraryLog.str());
+
+    fixture.source(R"(
+        include "string.cpm";
+        using string_lib;
+        static <uint8 array 53> output imports 0x0100;
+        void main()
+        (
+            string_ddec (cast string, (addr (at output, 0))), 0x0000;
+            string_ddec (cast string, (addr (at output, 7))), 0x000A;
+            string_ddec (cast string, (addr (at output, 14))), 0x03E9;
+            string_ddec (cast string, (addr (at output, 21))), 0x8000;
+            string_ddec (cast string, (addr (at output, 28))), 0xFFFF;
+            string_dec (cast string, (addr (at output, 35))), 255;
+            string_dhex (cast string, (addr (at output, 40))), 0x09AF;
+            string_hex (cast string, (addr (at output, 45))), 0x0B;
+            = (at output, 48), (string_hex_digit 0);
+            = (at output, 49), (string_hex_digit 15);
+            = (at output, 50), (string_hex_digit 16);
+            = (at output, 51), (string_hex_digit 255);
+        );
+    )");
+    CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    std::istringstream assembly(compiler.AssemblyOutput());
+    std::ostringstream log;
+    FridgeAssemblyLanguageCompiler program(assembly, root, "format.falc", "", &log);
+    require(program.succeeded(), log.str());
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    const auto sp = cpu->SP;
+    cpu->PC = program.getOffset();
+    std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu->ram + cpu->PC);
+    std::fill_n(cpu->ram + 0x0100, 53, 0xCC);
+    const char placeholder[] = "RPM=____!";
+    std::copy_n(placeholder, sizeof(placeholder), cpu->ram + 0x010A);
+    for (int step = 0; step < 20000 && cpu->state == FRIDGE_CPU_ACTIVE; ++step) FRIDGE_sys_tick(&system);
+    require(cpu->state == FRIDGE_CPU_HALTED && !FRIDGE_cpu_flag_PANIC(cpu.get()) && cpu->SP == sp,
+            "String formatters did not finish with a balanced stack");
+
+    const vector<pair<size_t, string>> expected{
+        {0, "0"}, {7, "10"}, {21, "32768"}, {28, "65535"}, {35, "255"},
+        {40, "09AF"}, {45, "0B"}, {48, "0F  "}
+    };
+    for (const auto& item : expected)
+    {
+        const auto* buffer = cpu->ram + 0x0100 + item.first;
+        require(std::equal(item.second.begin(), item.second.end(), buffer) && buffer[item.second.size()] == 0xCC,
+                "Unexpected string or write past the buffer at offset " + to_string(item.first));
+    }
+    const char filled[] = "RPM=1001!";
+    require(std::equal(filled, filled + sizeof(filled), cpu->ram + 0x010A),
+            "Decimal formatting changed the text or the terminator outside the placeholder");
 }
 
 static void runFunctionAddresses(Fixture& fixture)
@@ -452,6 +660,8 @@ int main()
         inspectConstantInitializers(fixture);
         runLinkedHello(fixture);
         runKeyboardVectorRelocations(fixture);
+        runKeyboardDriver(fixture);
+        runStringFormatting(fixture);
         runFunctionAddresses(fixture);
         runMainReturnModes(fixture);
         const string source = R"(

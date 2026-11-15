@@ -1,10 +1,7 @@
 #include "keymap.h"
 
-#include <cctype>
-
 static int CodeForSDLKey(SDL_Keycode k, Uint16 mod)
 {
-    // ESC, Enter, Backspace, Tab are the most common control codes.
     switch (k)
     {
         case SDLK_ESCAPE:    return 0x1b;
@@ -13,6 +10,10 @@ static int CodeForSDLKey(SDL_Keycode k, Uint16 mod)
         case SDLK_BACKSPACE: return 0x08;
         case SDLK_TAB:       return '\t';
         case SDLK_SPACE:     return ' ';
+        case SDLK_UP:        return FRIDGE_KEYBOARD_KEY_UP;
+        case SDLK_DOWN:      return FRIDGE_KEYBOARD_KEY_DOWN;
+        case SDLK_LEFT:      return FRIDGE_KEYBOARD_KEY_LEFT;
+        case SDLK_RIGHT:     return FRIDGE_KEYBOARD_KEY_RIGHT;
         default:             break;
     }
 

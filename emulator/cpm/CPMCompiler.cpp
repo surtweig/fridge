@@ -244,10 +244,13 @@ namespace CPM
         addNumStatic("FRIDGE_BOOT_SECTION_INDEX_ADDRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_BOOT_SECTION_INDEX_ADDRESS);
         addNumStatic("FRIDGE_EXECUTABLE_OFFSET", global, true, CPM_DATATYPE_UINT16, FRIDGE_EXECUTABLE_OFFSET);
         addNumStatic("FRIDGE_IRQ_SYS_TIMER", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_SYS_TIMER);
-        addNumStatic("FRIDGE_IRQ_KEYBOARD_PRESS", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_PRESS);
-        addNumStatic("FRIDGE_IRQ_KEYBOARD_RELEASE", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD_RELEASE);
+        addNumStatic("FRIDGE_IRQ_KEYBOARD", global, true, CPM_DATATYPE_UINT16, FRIDGE_IRQ_KEYBOARD);
         addNumStatic("FRIDGE_KEYBOARD_KEY_STATE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_STATE_MASK);
         addNumStatic("FRIDGE_KEYBOARD_KEY_CODE_MASK", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_CODE_MASK);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_UP", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_UP);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_DOWN", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_DOWN);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_LEFT", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_LEFT);
+        addNumStatic("FRIDGE_KEYBOARD_KEY_RIGHT", global, true, CPM_DATATYPE_UINT8, FRIDGE_KEYBOARD_KEY_RIGHT);
         addNumStatic("FRIDGE_DEV_ROM_RESET_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_RESET_ID);
         addNumStatic("FRIDGE_DEV_ROM_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_ROM_ID);
         addNumStatic("FRIDGE_DEV_KEYBOARD_ID", global, true, CPM_DATATYPE_UINT8, FRIDGE_DEV_KEYBOARD_ID);
@@ -852,11 +855,18 @@ namespace CPM
             if (!names.insert(argument.name).second) { fail("Duplicate function parameter '" + argument.name + "'."); return; }
             signature.arguments.push_back(std::move(argument));
         }
-        if (intrinsic && (!result.isVoid() || signature.arguments.size() != 1 ||
-                          CPMFindIntrinsic(signature.name, signature.arguments.front().typeExpr) == CPMIntrinsic::None))
+        if (intrinsic)
         {
-            fail("Unknown intrinsic or invalid intrinsic signature for '" + signature.name + "'.");
-            return;
+            const auto& parameters = signature.arguments;
+            const auto operation = parameters.size() <= 1 ?
+                CPMFindIntrinsic(signature.name, parameters.empty() ? nullptr : &parameters.front().typeExpr) : CPMIntrinsic::None;
+            const bool validResult = operation == CPMIntrinsic::ReadA ?
+                result.isBase() && result.base == CPM_DATATYPE_UINT8 : result.isVoid();
+            if (operation == CPMIntrinsic::None || !validResult)
+            {
+                fail("Unknown intrinsic or invalid intrinsic signature for '" + signature.name + "'.");
+                return;
+            }
         }
         auto found = owner->functions.find(signature);
         auto body = node->children.size() == 4 ? node->children[3] : nullptr;

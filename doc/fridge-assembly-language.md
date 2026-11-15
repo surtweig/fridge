@@ -134,8 +134,9 @@ Numeric literals in the library keep their literal values.
 ### CPM library exports
 
 `falc library.falc library.bin --cpm-header` writes `library.cpm` beside the
-binary. The header uses the binary basename as its namespace. A library with
-no `offset` or `main` also emits `library.bin.rel` for automatic placement.
+binary. The header uses the binary basename as its namespace and appends
+`_lib` if the basename is a CPM keyword or `global`. A library with no
+`offset` or `main` also emits `library.bin.rel` for automatic placement.
 An explicit `offset` produces a fixed-address header. Place each decorator
 immediately above its declaration.
 
@@ -153,9 +154,10 @@ endsub
 ```
 
 `@static` and `@const` export `uint8` or `uint16` values. `@void()` exports a
-subroutine with no parameters. A void wrapper can bind `uint8` to A, B, or C
-and `uint16` or `string` to HL. FALC generates offsets for relocatable exports
-and absolute addresses for fixed-address exports.
+subroutine with no parameters. Use `@uint8:A(...)` for a subroutine that
+returns a byte in A. Wrappers can bind `uint8` to A, B, C, or D, `uint16` to BC
+or HL, and `string` to HL. FALC generates offsets for relocatable exports and
+absolute addresses for fixed-address exports.
 
 ### `entry name`
 
@@ -232,18 +234,18 @@ linker adjusts those addresses when it places a relocatable library. An
 explicit address operand has the same flow-control rules as a numeric address.
 
 For example, an initializer can install a jump in the three-byte keyboard
-press vector. The interrupt calls that slot, and the handler's `RET` resumes
+vector. The interrupt calls that slot, and the handler's `RET` resumes
 the interrupted code.
 
 ```asm
-    LXI HL, FRIDGE_IRQ_KEYBOARD_PRESS
+    LXI HL, FRIDGE_IRQ_KEYBOARD
     INX HL
-    LXI DE, on_press_$ADDR
+    LXI DE, keyboard_irq_$ADDR
     MOV M, D
     INX HL
     MOV M, E
     MVI A, #JMP
-    STA FRIDGE_IRQ_KEYBOARD_PRESS
+    STA FRIDGE_IRQ_KEYBOARD
 ```
 
 ### `unsafe_flow`
@@ -688,16 +690,15 @@ Static resources are placed at the end of the binary after a 3-byte
 
 ## 7. Interrupts
 
-Fridge has three interrupt vectors at fixed addresses in low memory:
+Fridge reserves two interrupt vectors at fixed addresses in low memory.
 
 | Vector | Address | Source              |
 |--------|---------|---------------------|
 | IRQ 0  | 0x0004  | System timer        |
-| IRQ 1  | 0x0007  | Keyboard press      |
-| IRQ 2  | 0x000A  | Keyboard release    |
+| IRQ 1  | 0x0007  | Keyboard events     |
 
-When an interrupt fires, the CPU reads a 2-byte vector from the interrupt source
-and executes it. In the boot loader, these slots typically contain:
+The timer and keyboard deliver a `CALL` to their vector address. A vector
+slot can hold a three-byte `JMP` to the handler or a short default handler.
 
 ```asm
 ; at offset 0x0000
@@ -706,15 +707,24 @@ main BootLoader
     NOP                    ; 0x0003: BOOT_SECTION_INDEX_ADDRESS
     
     ; System timer IRQ (0x0004)
-    CALL 0x0000            ; or RET for no handler
+    RET
+    NOP
+    NOP
     
     ; Keyboard IRQ (0x0007)
-    CALL 0x0000            ; 3 bytes per slot (call + 2-byte addr)
+    JMP BootLoader.keyboard_irq ; default handler reads and discards the event
 ```
 
 To handle interrupts, place your handler address at the corresponding vector
 and enable interrupts with `EI`. Interrupt handlers must save/restore registers
 and end with `RET`.
+
+`kbrd_begin` installs the shared keyboard handler. It reads one event from
+`FRIDGE_DEV_KEYBOARD_ID`, stores its seven-bit code in `KBRD0_KEY_CODE`, and
+sets `KBRD0_KEY_STATE` to `1` for a press or `0` for a release. The matching
+callback runs after both values are stored. A zero callback address skips the
+call. The emulator queues events while interrupts are disabled. A full queue
+keeps its unread events and drops new arrivals.
 
 ```asm
 subroutine MyTimerIRQ
@@ -744,6 +754,7 @@ alias IRQ_SYS_KEYBOARD           0x0007
 alias XCM2_ROM_DEVICE_ID         0x01
 alias XCM2_ROM_DEVICE_RESET_ID   0x02
 alias XCM2_ROM_DEVICE_MODE_LOAD  0x02
+alias XCM2_KEYBOARD_DEVICE_ID    0x03
 ```
 
 Note: newer builds use `FRIDGE_*` aliases automatically defined by falc from
@@ -755,6 +766,11 @@ Text mode helpers. Depends on `arithm.inc`.
 
 - `vtext_putstr`: writes a null-terminated string at position (B=column, C=row).
   HL = string address.
+- `vtext_clear` writes zero to the character and color bytes of D consecutive
+  cells on the drawing buffer, starting at zero-based column B and row C. It
+  wraps to the next row and clips at the end of the text grid. A zero count or
+  invalid starting position leaves the buffer untouched. In CPM, call
+  `vtext_clear column, row, count;` and use `vtext_present` to show the result.
 - `VTEXT_FORE_COLOR` and `VTEXT_BACK_COLOR`: static bytes controlling text palette.
 
 Text cells are 2 bytes each: ASCII code followed by a color byte
@@ -765,11 +781,20 @@ Text cells are 2 bytes each: ASCII code followed by a color byte
 - `mul_dc`: unsigned 8-bit multiplication. D = multiplicand, C = multiplier.
   Result in HL.
 
-### `string.inc`
+### `str.falc`
 
-- `string_hex`: writes 2 hex digits of B to string at HL, advances HL by 2.
-- `string_dhex`: writes 4 hex digits of BC to string at HL, advances HL by 4.
-- `string_hex_digit`: converts a digit value in A to ASCII char code.
+The SDK generates `str.cpm` with the namespace `str`. Assembly can include
+`str.falc`.
+
+- `string_hex_digit` converts A to its uppercase ASCII hex digit and returns
+  a space for values above 15.
+- `string_hex` and `string_dhex` write two digits from B or four from BC to
+  the buffer at HL. HL advances past the digits. These routines write digits only.
+- `string_dec` and `string_ddec` write unsigned decimal from B or BC to the
+  buffer at HL. Allow up to three bytes for a byte or five for a 16-bit value.
+  The routines write only the digits, omit leading zeros, and leave HL
+  pointing just past the digits. To build a standalone string in assembly,
+  write `MVI M, 0` after the call.
 
 ### `posit.inc`
 

@@ -63,6 +63,8 @@ if(BUILD_TESTING)
     target_compile_definitions(cpm_ir_tests PRIVATE
         CPM_HELLO_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/examples/hello.cpm"
         CPM_VTEXT_LIBRARY="${CMAKE_CURRENT_SOURCE_DIR}/../../sdk/x2al_std/vtext.falc"
+        CPM_KEYBOARD_LIBRARY="${CMAKE_CURRENT_SOURCE_DIR}/../../sdk/x2al_std/kbrd.falc"
+        CPM_STRING_LIBRARY="${CMAKE_CURRENT_SOURCE_DIR}/../../sdk/x2al_std/str.falc"
     )
     target_link_libraries(cpm_ir_tests PRIVATE cpm_core falc_core)
     add_test(NAME cpm_ir COMMAND cpm_ir_tests)
