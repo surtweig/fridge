@@ -20,7 +20,7 @@ namespace CPM
 
     enum class CPMIROp
     {
-        Constant, Copy, Address, Load, Store, Index, Convert, Arithmetic,
+        Constant, Copy, Address, FunctionAddress, Load, Store, Index, Convert, Arithmetic,
         Call, Intrinsic, Jump, Branch, Return
     };
 
@@ -34,7 +34,7 @@ namespace CPM
         size_t stride = 1;  // Element size for Index.
         string operation;
         vector<FRIDGE_WORD> bytes;
-        const CPMFunctionSymbol* callee = nullptr;
+        const CPMFunctionSymbol* functionTarget = nullptr;
         size_t target = CPMIRNone;
         size_t alternative = CPMIRNone;
         CPMIntrinsic intrinsic = CPMIntrinsic::None;
@@ -57,6 +57,7 @@ namespace CPM
         size_t offset;
         size_t target;
         size_t targetOffset;
+        const CPMFunctionSymbol* functionTarget = nullptr;
     };
 
     struct CPMIRData

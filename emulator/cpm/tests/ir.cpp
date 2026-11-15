@@ -333,6 +333,70 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
             "An undefined address alias should fail assembly");
 }
 
+static void runFunctionAddresses(Fixture& fixture)
+{
+    const auto root = fixture.directory.string() + "/";
+    std::ofstream(fixture.directory / "callbacks.falc") << R"(
+        @void( (uint16 callback : HL) )
+        subroutine invoke
+            CALL invoke_hl
+            LDA 0x0101
+            INR A
+            STA 0x0101
+        endsub
+
+        subroutine invoke_hl
+            PCHL
+        endsub
+    )";
+    std::ostringstream libraryLog;
+    FridgeAssemblyLanguageCompiler library(root, "callbacks.falc", root + "callbacks.bin",
+        {}, &libraryLog, false, false, true);
+    require(library.succeeded(), libraryLog.str());
+
+    fixture.source(R"(
+        include "callbacks.cpm";
+        using Handlers;
+        static uint8 hits imports 0x0100;
+        const uint16 saved (addr Handlers.add_two);
+        const uint16 copied saved;
+        namespace Handlers
+        (
+            void add_two();
+            void add_one(uint8 count) (+= hits, count;);
+            void add_one() (uint8 count 1; += hits, count;);
+            void add_two() (+= hits, 2;);
+        );
+        void main()
+        (
+            callbacks.invoke (addr add_one);
+            callbacks.invoke copied;
+        );
+    )");
+    CPMCompileOptions options;
+    options.offset = 0x0800;
+    CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, options);
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    std::istringstream assembly(compiler.AssemblyOutput());
+    std::ostringstream assemblyLog;
+    FridgeAssemblyLanguageCompiler program(assembly, root, "callbacks-program.falc", "", &assemblyLog);
+    require(program.succeeded(), assemblyLog.str());
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    const auto initialSP = cpu->SP;
+    cpu->PC = program.getOffset();
+    std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu->ram + cpu->PC);
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    for (int steps = 0; steps < 30000 && cpu->PC != 0 && cpu->state == FRIDGE_CPU_ACTIVE; ++steps)
+        FRIDGE_sys_tick(&system);
+    require(cpu->PC == 0 && cpu->state == FRIDGE_CPU_ACTIVE && !FRIDGE_cpu_flag_PANIC(cpu.get()) &&
+            cpu->SP == initialSP, "FALC callback calls did not return with the stack restored");
+    require(cpu->ram[0x0100] == 3 && cpu->ram[0x0101] == 2,
+            "FALC did not invoke both CPM entry addresses and resume after each callback");
+}
+
 static void runMainReturnModes(Fixture& fixture)
 {
     fixture.source(R"(
@@ -388,6 +452,7 @@ int main()
         inspectConstantInitializers(fixture);
         runLinkedHello(fixture);
         runKeyboardVectorRelocations(fixture);
+        runFunctionAddresses(fixture);
         runMainReturnModes(fixture);
         const string source = R"(
             static <uint8 array 24> output imports 0x0100;

@@ -10,7 +10,7 @@ namespace CPM
     enum class CPMValueCategory { Value, ReadOnly, Writable };
     enum class CPMExprKind
     {
-        Invalid, Literal, Name, Field, Operator, Call, Initializer, StringInitializer
+        Invalid, Literal, Name, Field, Operator, Call, FunctionAddress, Initializer, StringInitializer
     };
 
     struct CPMCheckedExpression
@@ -66,6 +66,8 @@ namespace CPM
 
     class CPMSemanticAnalyzer
     {
+        enum class NameUse { Value, Call, Address };
+
         struct Binding
         {
             const CPMDataSymbol* symbol;
@@ -84,13 +86,15 @@ namespace CPM
 
         void error(const CPMSyntaxTreeNode* node, const string& message);
         vector<CPMNamespace*> visibleNamespaces(const CPMSyntaxTreeNode* node) const;
+        vector<CPMNamespace*> functionNamespaces(const CPMSyntaxTreeNode* node, const string& use);
         const Binding* lookupLocal(const string& name) const;
         bool checkName(CPMSyntaxTreeNode* node);
         bool expect(CPMCheckedExpression& value, const CPMType& type, const CPMSyntaxTreeNode* node);
         bool validateCall(CPMSyntaxTreeNode* sequence, size_t begin, size_t end);
-        CPMCheckedExpression name(CPMSyntaxTreeNode* node, bool allowZeroArgCall);
+        CPMCheckedExpression name(CPMSyntaxTreeNode* node, NameUse use);
         CPMCheckedExpression member(CPMCheckedExpression base, CPMSyntaxTreeNode* field);
         CPMCheckedExpression call(CPMSyntaxTreeNode* head, vector<CPMCheckedExpression> operands);
+        CPMCheckedExpression functionAddress(CPMSyntaxTreeNode* node);
         CPMCheckedExpression operation(CPMSyntaxTreeNode* head, vector<CPMCheckedExpression> operands);
         CPMCheckedExpression sequence(CPMSyntaxTreeNode* node, size_t begin, size_t end, bool asStatement = false);
         CPMCheckedExpression initializerElement(CPMSyntaxTreeNode* node, const CPMType& type);

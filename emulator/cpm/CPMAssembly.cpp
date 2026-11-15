@@ -450,11 +450,12 @@ namespace CPM
 
             void call(const CPMIRInstruction& instruction)
             {
-                const auto found = labels.find(instruction.callee);
+                const auto found = labels.find(instruction.functionTarget);
                 if (found == labels.end())
                 {
                     error(instruction.syntax, "Assembly generation cannot link '" +
-                          instruction.callee->owner->name + "." + instruction.callee->signature.name + "'.");
+                          instruction.functionTarget->owner->name + "." +
+                          instruction.functionTarget->signature.name + "'.");
                     return;
                 }
                 size_t arguments = 0;
@@ -542,6 +543,10 @@ namespace CPM
                     break;
                 case CPMIROp::Address:
                     address(instruction.inputs[0], instruction.offset);
+                    storeHL(instruction.output);
+                    break;
+                case CPMIROp::FunctionAddress:
+                    word("LXI HL, ", labels.at(instruction.functionTarget));
                     storeHL(instruction.output);
                     break;
                 case CPMIROp::Load:
@@ -721,7 +726,10 @@ namespace CPM
                 {
                     for (const auto& relocation : program.data[i].relocations)
                     {
-                        word("LXI HL, ", dataAddress(relocation.target, relocation.targetOffset));
+                        const string target = relocation.functionTarget
+                            ? labels.at(relocation.functionTarget)
+                            : dataAddress(relocation.target, relocation.targetOffset);
+                        word("LXI HL, ", target);
                         word("SHLD ", dataAddress(i, relocation.offset));
                     }
                 }

@@ -586,6 +586,29 @@ namespace CPM
         // Symbolic addresses remain in the checked initializer for relocation.
     }
 
+    namespace
+    {
+        vector<CPMSyntaxTreeNode*> functionParameters(CPMSyntaxTreeNode* args)
+        {
+            vector<CPMSyntaxTreeNode*> parameters;
+            if (args->type == CPM_BLOCK)
+            {
+                for (size_t i = 1; i + 1 < args->children.size(); ++i)
+                    if (!args->children[i]->children.empty()) parameters.push_back(args->children[i]);
+            }
+            else if (!args->children.empty()) parameters.push_back(args);
+            return parameters;
+        }
+
+        bool isCallbackDeclaration(const CPMSyntaxTreeNode* node)
+        {
+            if (node->children.size() < 3 || node->children[0]->type != CPM_ID ||
+                node->children[0]->text != "void") return false;
+            auto args = node->children[2];
+            return (args->type == CPM_EXPR || args->type == CPM_BLOCK) && functionParameters(args).empty();
+        }
+    }
+
     void CPMCompiler::readDeclarations()
     {
         for (const auto& [ns, node] : declarations)
@@ -595,6 +618,13 @@ namespace CPM
                 (node->children[0]->text == R_CONST || node->children[0]->text == R_STATIC) &&
                 node->children[2]->type == CPM_ID)
                 staticDeclarations[ns].emplace(node->children[2]->text, node);
+        }
+        // These signatures need no type layout or constants, and static
+        // initializers can refer to their entry addresses before the bodies are checked.
+        for (const auto& [ns, node] : declarations)
+        {
+            if (!noErrors) return;
+            if (isCallbackDeclaration(node)) detectFunction(node, ns);
         }
         for (const auto& [ns, node] : declarations)
         {
@@ -767,12 +797,9 @@ namespace CPM
 
     void CPMCompiler::readFunctions()
     {
-        for (map<string, CPMNamespace*>::iterator ins = namespaces.begin(); ins != namespaces.end(); ++ins)
-        {
-            CPMNamespace* ns = ins->second;
-            for (int i = 0; i < ns->nodes.size(); i++)
-                detectFunction(ns->nodes[i], ns);
-        }
+        for (const auto& entry : namespaces)
+            for (auto node : entry.second->nodes)
+                if (!isCallbackDeclaration(node)) detectFunction(node, entry.second);
         if (!noErrors) return;
         for (auto& ns : namespaces)
             for (auto& entry : ns.second->functions)
@@ -811,15 +838,8 @@ namespace CPM
         if (!parseTypeExpr(head, result, getSourceFile(node->sourceFileName), owner, &analyzer)) return;
         CPMFunctionSignature signature;
         signature.name = name->text;
-        vector<CPMSyntaxTreeNode*> parameters;
-        if (args->type == CPM_BLOCK)
-        {
-            for (size_t i = 1; i + 1 < args->children.size(); ++i)
-                if (!args->children[i]->children.empty()) parameters.push_back(args->children[i]);
-        }
-        else if (!args->children.empty()) parameters.push_back(args);
         unordered_set<string> names;
-        for (auto parameter : parameters)
+        for (auto parameter : functionParameters(args))
         {
             CPMArgumentSignature argument;
             if (parameter->children.size() != 2 || !CPMIsUserIdentifier(parameter->children[1]) ||

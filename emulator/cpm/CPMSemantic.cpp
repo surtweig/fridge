@@ -190,6 +190,17 @@ namespace CPM
         return result;
     }
 
+    vector<CPMNamespace*> CPMSemanticAnalyzer::functionNamespaces(const CPMSyntaxTreeNode* node,
+                                                                  const string& use)
+    {
+        if (node->type != CPM_REF) return visibleNamespaces(node);
+        const auto ns = node->children.size() == 2 ? compiler.namespaces.find(node->children[0]->text) :
+                                                     compiler.namespaces.end();
+        if (ns != compiler.namespaces.end()) return {ns->second};
+        error(node, "Invalid namespace qualifier in " + use + " '" + node->text + "'.");
+        return {};
+    }
+
     const CPMSemanticAnalyzer::Binding* CPMSemanticAnalyzer::lookupLocal(const string& name) const
     {
         for (auto scope = scopes.rbegin(); scope != scopes.rend(); ++scope)
@@ -295,7 +306,7 @@ namespace CPM
         return result;
     }
 
-    CPMCheckedExpression CPMSemanticAnalyzer::name(CPMSyntaxTreeNode* node, bool allowZeroArgCall)
+    CPMCheckedExpression CPMSemanticAnalyzer::name(CPMSyntaxTreeNode* node, NameUse use)
     {
         vector<CPMSyntaxTreeNode*> parts = node->type == CPM_REF ? node->children :
                                                                vector<CPMSyntaxTreeNode*>{node};
@@ -338,7 +349,8 @@ namespace CPM
         }
         if (!local && !global)
         {
-            if (allowZeroArgCall) return call(node, {});
+            if (use == NameUse::Call) return call(node, {});
+            if (use == NameUse::Address) return functionAddress(node);
             error(node, "Unknown name '" + node->text + "'.");
             return {};
         }
@@ -369,20 +381,9 @@ namespace CPM
     CPMCheckedExpression CPMSemanticAnalyzer::call(CPMSyntaxTreeNode* head,
                                                    vector<CPMCheckedExpression> operands)
     {
-        auto candidates = visibleNamespaces(head);
-        string name = head->text;
-        if (head->type == CPM_REF)
-        {
-            auto ns = head->children.size() == 2 ? compiler.namespaces.find(head->children[0]->text) :
-                                                  compiler.namespaces.end();
-            if (ns == compiler.namespaces.end())
-            {
-                error(head, "Invalid namespace qualifier in call to '" + name + "'.");
-                return {};
-            }
-            candidates = {ns->second};
-            name = head->children[1]->text;
-        }
+        const auto candidates = functionNamespaces(head, "call to");
+        if (candidates.empty()) return {};
+        const string& name = head->type == CPM_REF ? head->children[1]->text : head->text;
         const CPMFunctionSymbol* match = nullptr;
         for (auto ns : candidates)
         {
@@ -437,6 +438,36 @@ namespace CPM
         return result;
     }
 
+    CPMCheckedExpression CPMSemanticAnalyzer::functionAddress(CPMSyntaxTreeNode* node)
+    {
+        const auto candidates = functionNamespaces(node, "address of");
+        if (candidates.empty()) return {};
+        const auto& name = node->type == CPM_REF ? node->children[1]->text : node->text;
+        const CPMFunctionSignature signature{name, {}};
+        const CPMFunctionSymbol* match = nullptr;
+        for (const auto* ns : candidates)
+        {
+            const auto found = ns->functions.find(signature);
+            if (found == ns->functions.end() || !found->second.returnType.isVoid()) continue;
+            if (match)
+            {
+                error(node, "Ambiguous function address for '" + node->text + "'. Qualify the function name.");
+                return {};
+            }
+            match = &found->second;
+        }
+        if (!match || !match->bodyNode)
+        {
+            error(node, "addr requires an addressable value or a defined void function with no parameters; '" +
+                        node->text + "' does not match.");
+            return {};
+        }
+        auto result = checked(CPMExprKind::FunctionAddress, node, baseType(CPM_DATATYPE_UINT16));
+        result.function = match;
+        result.constant = true;
+        return result;
+    }
+
     CPMCheckedExpression CPMSemanticAnalyzer::expression(CPMSyntaxTreeNode* node)
     {
         if (isGroup(node))
@@ -460,7 +491,7 @@ namespace CPM
                 result.contextualNull = result.constant = true;
                 return result;
             }
-            return name(node, false);
+            return name(node, NameUse::Value);
         }
         if (node->type == CPM_NUM)
         {
@@ -516,7 +547,7 @@ namespace CPM
         {
             if ((head->type == CPM_ID || head->type == CPM_REF) && head->text != R_NULL &&
                 (asStatement || node->type == CPM_EXPR))
-                return name(head, true);
+                return name(head, NameUse::Call);
             return expression(head);
         }
         if ((head->type != CPM_ID && head->type != CPM_REF) || !validateCall(node, begin, end))
@@ -526,6 +557,18 @@ namespace CPM
             return {};
         }
         const string& op = head->text;
+        if (op == R_ADDR && end - begin == 2)
+        {
+            auto operand = node->children[begin + 1];
+            if (operand->type == CPM_REF || (operand->type == CPM_ID && operand->text != R_NULL))
+            {
+                auto value = name(operand, NameUse::Address);
+                if (!value || value.kind == CPMExprKind::FunctionAddress) return value;
+                vector<CPMCheckedExpression> operands;
+                operands.push_back(std::move(value));
+                return operation(head, std::move(operands));
+            }
+        }
         if (op == R_CAST || op == R_CONVERT)
         {
             if (end - begin != 3)

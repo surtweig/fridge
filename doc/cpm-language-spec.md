@@ -489,6 +489,14 @@ Dereferencing null remains undefined behavior (§13).
 type. The lvalue may be a local, a static, a struct field access, or an
 `(at …)` expression. `addr` of a literal or temporary is an error.
 
+`(addr function_name)` yields the entry address of a defined `void` CPM
+function with no parameters as a `uint16` value. Function names can be
+namespace-qualified. Unqualified names follow §10 and must identify a unique
+overload with that signature. The address can be used in a static or constant
+initializer. To call it from FALC, the caller supplies a return address on the
+stack. For example, with the callback address in HL, `CALL` a trampoline
+whose only instruction is `PCHL`. The CPM function's `RET` resumes the caller.
+
 ### 5.4 Member access
 
 `a.b` accesses field `b` of struct `a`. It chains: `screen.buf.data`.

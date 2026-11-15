@@ -117,6 +117,11 @@ namespace CPM
                     program.data[id].relocations.push_back({offset, buffer, 0});
                     return;
                 }
+                if (value.kind == CPMExprKind::FunctionAddress)
+                {
+                    program.data[id].relocations.push_back({offset, CPMIRNone, 0, value.function});
+                    return;
+                }
                 if (value.kind == CPMExprKind::Operator && value.syntax->text == R_CAST)
                 {
                     initializeData(id, offset, value.operands.front(), localData);
@@ -151,8 +156,9 @@ namespace CPM
                                     error(compiler, value.syntax, "Cannot initialize data from part of a symbolic address.");
                                     return;
                                 }
-                                relocations.push_back({offset + relocation.offset - sourceOffset,
-                                                       relocation.target, relocation.targetOffset});
+                                auto copy = relocation;
+                                copy.offset = offset + relocation.offset - sourceOffset;
+                                relocations.push_back(copy);
                             }
                             copy_n(object.bytes.begin() + sourceOffset, size, program.data[id].bytes.begin() + offset);
                             auto& destination = program.data[id].relocations;
@@ -369,6 +375,12 @@ namespace CPM
                     emit(CPMIROp::Address, syntax, result, {buffer});
                     return result;
                 }
+                case CPMExprKind::FunctionAddress:
+                {
+                    const size_t result = frame(value.type);
+                    emit(CPMIROp::FunctionAddress, syntax, result).functionTarget = value.function;
+                    return result;
+                }
                 case CPMExprKind::Call:
                 {
                     if (value.intrinsic != CPMIntrinsic::None)
@@ -393,7 +405,7 @@ namespace CPM
                     vector<size_t> arguments;
                     for (const auto& argument : value.operands) arguments.push_back(expression(argument));
                     const size_t result = temporary(value.type);
-                    emit(CPMIROp::Call, syntax, result, std::move(arguments)).callee = value.function;
+                    emit(CPMIROp::Call, syntax, result, std::move(arguments)).functionTarget = value.function;
                     return result;
                 }
                 default:
