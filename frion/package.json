@@ -1,8 +1,8 @@
 {
     "name": "frion",
     "displayName": "Frion",
-    "description": "Fridge Frion Language",
-    "version": "0.0.1",
+    "description": "Syntax highlighting for Frion (CPM) and Fridge Assembly (FALC)",
+    "version": "0.1.0",
     "engines": {
         "vscode": "^1.42.0"
     },
@@ -10,16 +10,31 @@
         "Programming Languages"
     ],
     "contributes": {
-        "languages": [{
-            "id": "frion",
-            "aliases": ["Frion", "frion"],
-            "extensions": [".cpm",".cinc",".fri"],
-            "configuration": "./language-configuration.json"
-        }],
-        "grammars": [{
-            "language": "frion",
-            "scopeName": "source.cpm",
-            "path": "./syntaxes/frion.tmLanguage.json"
-        }]
+        "languages": [
+            {
+                "id": "frion",
+                "aliases": ["Frion", "frion", "CPM"],
+                "extensions": [".cpm", ".cinc", ".fri"],
+                "configuration": "./language-configuration.json"
+            },
+            {
+                "id": "falc",
+                "aliases": ["Fridge Assembly (FALC)", "FALC"],
+                "extensions": [".falc", ".x2al"],
+                "configuration": "./falc-language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "frion",
+                "scopeName": "source.cpm",
+                "path": "./syntaxes/frion.tmLanguage.json"
+            },
+            {
+                "language": "falc",
+                "scopeName": "source.falc",
+                "path": "./syntaxes/falc.tmLanguage.json"
+            }
+        ]
     }
 }

@@ -1,0 +1,149 @@
+{
+    "name": "Fridge Assembly (FALC)",
+    "scopeName": "source.falc",
+    "patterns": [
+        { "include": "#comments" },
+        { "include": "#literals" },
+        { "include": "#exports" },
+        { "include": "#directives" },
+        { "include": "#mnemonics" },
+        { "include": "#registers" },
+        { "include": "#constants" },
+        { "include": "#punctuation" },
+        {
+            "name": "variable.other.symbol.falc",
+            "match": "(?<![\\w.])[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "name": "comment.line.double-slash.falc",
+            "match": "//.*"
+        },
+        "literals": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.falc",
+                    "begin": "\"",
+                    "end": "\"|$"
+                },
+                {
+                    "name": "string.quoted.single.falc",
+                    "match": "'[^'\\r\\n]'"
+                },
+                {
+                    "name": "constant.numeric.hex.falc",
+                    "match": "(?<![\\w.])0x(?:[0-9A-Fa-f]{4}|[0-9A-Fa-f]{2})(?![\\w.])"
+                },
+                {
+                    "name": "constant.numeric.decimal.falc",
+                    "match": "(?<![\\w.])[0-9]{1,3}(?![\\w.])"
+                }
+            ]
+        },
+        "exports": {
+            "name": "meta.export.falc",
+            "begin": "^[ \\t]*(@)(static|const|void)\\b",
+            "beginCaptures": {
+                "1": { "name": "punctuation.definition.annotation.falc" },
+                "2": { "name": "storage.modifier.export.falc" }
+            },
+            "end": "$",
+            "patterns": [
+                { "include": "#comments" },
+                {
+                    "name": "storage.type.export.falc",
+                    "match": "\\b(?:uint8|uint16|string)\\b"
+                },
+                { "include": "#registers" },
+                { "include": "#punctuation" }
+            ]
+        },
+        "directives": {
+            "patterns": [
+                {
+                    "match": "^[ \\t]*(main|entry|subroutine)(?=$|[\\s,;]|//)(?:[\\t ,;]+([A-Za-z0-9_.]+))?",
+                    "captures": {
+                        "1": { "name": "keyword.control.directive.falc" },
+                        "2": { "name": "entity.name.function.falc" }
+                    }
+                },
+                {
+                    "match": "^[ \\t]*(alias|static)(?=$|[\\s,;]|//)(?:[\\t ,;]+([A-Za-z0-9_.#]+))?",
+                    "captures": {
+                        "1": { "name": "keyword.control.directive.falc" },
+                        "2": { "name": "entity.name.constant.falc" }
+                    }
+                },
+                {
+                    "name": "meta.directive.incbin.falc",
+                    "begin": "^[ \\t]*(incbin)(?=$|[\\s,;]|//)",
+                    "beginCaptures": {
+                        "1": { "name": "keyword.control.directive.falc" }
+                    },
+                    "end": "$",
+                    "patterns": [
+                        { "include": "#comments" },
+                        { "include": "#literals" },
+                        {
+                            "match": "(?<![\\w.])(as)\\b(?:[\\t ,;]+([A-Za-z_][A-Za-z_0-9.]*))?",
+                            "captures": {
+                                "1": { "name": "keyword.control.directive.falc" },
+                                "2": { "name": "entity.name.constant.falc" }
+                            }
+                        },
+                        {
+                            "name": "keyword.control.directive.falc",
+                            "match": "\\bat\\b"
+                        }
+                    ]
+                },
+                {
+                    "match": "^[ \\t]*(include|offset|endsub|unsafe_flow)(?=$|[\\s,;]|//)",
+                    "captures": {
+                        "1": { "name": "keyword.control.directive.falc" }
+                    }
+                }
+            ]
+        },
+        "mnemonics": {
+            "patterns": [
+                {
+                    "match": "(?:^[ \\t]*|(?<![\\w.#])(#))(NOP|MOV|MVI|LXI|LDA|STA|LHLD|SHLD|LDAX|STAX|XCNG|ADD|ADI|ADC|ACI|SUB|SUI|SBB|SBI|INR|DCR|INX|DCX|DAD|DAI|ANA|ANI|ORA|ORI|XRA|XRI|CMP|CPI|RLC|RRC|RAL|RAR|CMA|CMC|STC|RTC|JMP|JNZ|JZ|JNC|JC|JPO|JPE|JP|JM|CALL|CNZ|CZ|CNC|CC|CPO|CPE|CP|CM|RET|RNZ|RZ|RNC|RC|RPO|RPE|RP|RM|PCHL|PUSH|POP|XTHL|SPHL|HLSP|IN|OUT|HLT|EI|DI|VFSA|VFSI|VFSAC|VFLA|VFLAC|VSSA|VSSI|VSLA|VS2F|VPRE|VMODE|VPAL|VSS|VSD|PAM16C)(?=$|[\\s,;]|//)",
+                    "captures": {
+                        "1": { "name": "punctuation.definition.constant.falc" },
+                        "2": { "name": "keyword.other.mnemonic.falc" }
+                    }
+                },
+                {
+                    "comment": "Additional mnemonics used by the legacy X2AL assembler.",
+                    "match": "(?:^[ \\t]*|(?<![\\w.#])(#))(VFCLR|VSBA|VSBO|VSBX|VSDA|VSDQ|VSDT|VSLAC|VSSAC)(?=$|[\\s,;]|//)",
+                    "captures": {
+                        "1": { "name": "punctuation.definition.constant.falc" },
+                        "2": { "name": "keyword.other.mnemonic.falc" }
+                    }
+                }
+            ]
+        },
+        "registers": {
+            "name": "variable.language.register.falc",
+            "match": "(?<![\\w.#])(?:[ABCDEHLM]|AF|BC|DE|HL|SP)(?![\\w.])"
+        },
+        "constants": {
+            "name": "support.constant.falc",
+            "match": "(?<![\\w.])(?:FRIDGE_[A-Z0-9_]+|HEAP_ORIGIN|STACK_ORIGIN)(?![\\w.])"
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.address.falc",
+                    "match": "\\+"
+                },
+                {
+                    "name": "punctuation.separator.falc",
+                    "match": "[,;:]"
+                }
+            ]
+        }
+    }
+}
