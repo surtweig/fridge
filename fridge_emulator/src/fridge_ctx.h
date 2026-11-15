@@ -25,5 +25,5 @@ void FridgeCtx_Init(FridgeCtx& ctx);
 void FridgeCtx_Shutdown(FridgeCtx& ctx);
 
 // Reinitialises CPU, GPU and keyboard to a clean post-reset state.
-// Memory is zeroed by FRIDGE_cpu_reset.
+// RAM is cleared and the default bootloader is installed.
 void FridgeCtx_Reset(FridgeCtx& ctx);

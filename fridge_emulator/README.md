@@ -14,8 +14,9 @@ See `PLAN.md` for the overall design. This file covers what's built today.
 - `EmuWorker` runs `FRIDGE_sys_tick` on a throttled worker thread (default
   1 MHz) with proper system-timer interval, panic handling, and a mutex for
   main-thread reads.
-- `RomLoader_LoadRaw` reads a `.bin` and copies it into `cpu->ram` at
-  `FRIDGE_EXECUTABLE_OFFSET` (`0x0200`), then sets `PC = 0x0200`.
+- `File > Open ROM...` loads a program binary at `0x0200`.
+  `File > Flash RAM Image...` loads a complete image at `0x0000`.
+  Execution starts at the selected load address.
 - SDL2 keyboard events are mapped to 7-bit Fridge codes and forwarded to
   `FRIDGE_keyboard_press` and `FRIDGE_keyboard_release`. The arrow codes are
   Up `0x1C`, Down `0x1D`, Left `0x1E`, and Right `0x1F`, available in FALC
@@ -24,8 +25,9 @@ See `PLAN.md` for the overall design. This file covers what's built today.
   Framebuffer panel to give the emulated program keyboard focus. ImGui
   capture suppresses key presses. A release retains the code sent on its
   press, and losing window focus releases all keys held by the program.
-- Programs loaded without a bootloader have default timer and keyboard IRQ
-  handlers. A program can install its own handler in either vector slot.
+- The emulator assembles and embeds `DummyBootLoader.x2al`, which supplies
+  the default timer and keyboard IRQ handlers for program-only binaries.
+  A program can install its own handler in either vector slot.
 - Main menu: `File > Open ROM...`, `Emulation > Run / Pause / Reset / Step`,
   `View > Demo Window / About`.
 - A "Registers" panel shows A, B, C, D, E, H, L (editable as hex),
@@ -51,6 +53,23 @@ the chosen `.bin` is loaded at `FRIDGE_EXECUTABLE_OFFSET`, the CPU is reset,
 and the previously-running worker resumes. For headless automation the
 `FRIDGE_OPEN_ROM` env var still auto-loads and starts a ROM at startup
 without showing the dialog.
+
+### Flash a CPM RAM image
+
+Run this from the repository root after building the SDK and its standard library.
+
+```sh
+./sdk/bin/cpm --bin sdk/programs/hello_world/hello_world.cpm \
+    --include sdk/x2al_std --main-return halt \
+    --bootloader build-sdk/fridge_emulator/DummyBootLoader.bin
+```
+
+Open `hello_world.bin` with **File > Flash RAM Image...**, then select **Run**.
+The reset vector jumps from `0x0000` to the CPM program at `0x0200`. Emulation
+reset reloads the image at `0x0000`. The example uses `--main-return halt` so
+Hello World runs once. The default `--main-return bootloader` jumps back to
+the reset vector and starts it again. For a headless run, use
+`./sdk/bin/fridge_emulator --smoke-test-ram sdk/programs/hello_world/hello_world.bin`.
 
 ### Phase C validation
 
@@ -103,7 +122,7 @@ fridge_emulator/
     main.cpp                    SDL2 + Vulkan + ImGui bootstrap, --smoke-test mode
     app.{h,cpp}                 App struct, per-frame UI, menu, registers/status/framebuffer panels
     fridge_ctx.{h,cpp}          FRIDGE_SYSTEM lifecycle (alloc/reset)
-    rom_loader.{h,cpp}          raw .bin -> cpu->ram[0x0200]
+    rom_loader.{h,cpp}          raw .bin -> cpu->ram at the selected load address
     emu_worker.{h,cpp}          throttled worker thread driving FRIDGE_sys_tick
     keymap.{h,cpp}              SDL2 key events -> 7-bit Fridge key codes
     file_dialog.{h,cpp}         native Open ROM picker (zenity -> kdialog on Linux)

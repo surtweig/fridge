@@ -15,6 +15,19 @@ if(NOT TARGET falc_core)
     add_subdirectory(../falc falc EXCLUDE_FROM_ALL)
 endif()
 
+set(BOOTLOADER_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../fridge-boot/BootLoader/DummyBootLoader.x2al")
+set(BOOTLOADER_BINARY "${CMAKE_CURRENT_BINARY_DIR}/DummyBootLoader.bin")
+set(BOOTLOADER_HEADER "${CMAKE_CURRENT_BINARY_DIR}/dummy_bootloader.h")
+add_custom_command(
+    OUTPUT "${BOOTLOADER_HEADER}"
+    BYPRODUCTS "${BOOTLOADER_BINARY}"
+    COMMAND falc "${BOOTLOADER_SOURCE}" "${BOOTLOADER_BINARY}"
+    COMMAND "${CMAKE_COMMAND}" "-DINPUT=${BOOTLOADER_BINARY}" "-DOUTPUT=${BOOTLOADER_HEADER}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/embed_bootloader.cmake"
+    DEPENDS falc "${BOOTLOADER_SOURCE}" embed_bootloader.cmake
+    VERBATIM
+)
+
 set(IMGUI_SOURCES
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
@@ -26,6 +39,7 @@ set(IMGUI_SOURCES
 )
 
 add_executable(fridge_emulator
+    "${BOOTLOADER_HEADER}"
     src/main.cpp
     src/app.cpp
     src/fridge_ctx.cpp
@@ -54,6 +68,7 @@ set_source_files_properties(../fridgemulib/fridgemulib.c APPEND
     PROPERTIES COMPILE_OPTIONS "-fpermissive")
 
 target_include_directories(fridge_emulator PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}"
     src
     ../include
     ../fridgemulib

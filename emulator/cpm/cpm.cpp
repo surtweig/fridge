@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include <charconv>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string_view>
 #include "CPMCompiler.h"
@@ -11,7 +12,8 @@
 static int printUsage()
 {
     std::cerr << "Usage: cpm (--check | --asm | --bin) source.cpm [--include directory]...\n"
-                 "           [--offset address] [--main-return none|bootloader|halt]\n";
+                 "           [--offset address] [--main-return none|bootloader|halt]\n"
+                 "           [--bootloader file.bin (with --bin)]\n";
     return 2;
 }
 
@@ -31,6 +33,47 @@ static bool parseOffset(std::string_view text, FRIDGE_RAM_ADDR& offset)
     return true;
 }
 
+static bool writeRamImage(const std::filesystem::path& bootloader, const std::filesystem::path& output,
+                          FridgeAssemblyLanguageCompiler& assembler)
+{
+    std::error_code ec;
+    if (std::filesystem::equivalent(bootloader, output, ec))
+    {
+        std::cerr << "Binary output would overwrite the bootloader file.\n";
+        return false;
+    }
+
+    std::ifstream boot(bootloader, std::ios::binary | std::ios::ate);
+    const std::streamoff size = boot.tellg();
+    if (size <= 0)
+    {
+        std::cerr << "Bootloader is empty or unreadable: " << bootloader << '\n';
+        return false;
+    }
+    if (size > assembler.getOffset())
+    {
+        std::cerr << "Bootloader is " << size << " bytes and would overlap the program at 0x"
+                  << std::hex << assembler.getOffset() << std::dec << ".\n";
+        return false;
+    }
+
+    std::vector<char> prefix(assembler.getOffset(), 0);
+    boot.seekg(0);
+    if (!boot.read(prefix.data(), size))
+    {
+        std::cerr << "Cannot read bootloader " << bootloader << '\n';
+        return false;
+    }
+
+    std::ofstream image(output, std::ios::binary);
+    image.write(prefix.data(), prefix.size());
+    image.write(reinterpret_cast<const char*>(assembler.getObjectCode()), assembler.getProgramSize());
+    image.close();
+    if (image) return true;
+    std::cerr << "Cannot write RAM image " << output << '\n';
+    return false;
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
     using namespace CPM;
@@ -41,6 +84,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
     vector<string> includeFolders;
     CPMCompileOptions options;
+    fs::path bootloader;
     for (int i = 3; i < argc; i += 2)
     {
         if (i + 1 >= argc) return printUsage();
@@ -66,6 +110,15 @@ int _tmain(int argc, _TCHAR* argv[])
                 std::cerr << "--main-return requires none, bootloader, or halt.\n";
                 return 2;
             }
+        }
+        else if (flag == "--bootloader")
+        {
+            if (option != "--bin" || value.empty())
+            {
+                std::cerr << "--bootloader requires --bin and a bootloader binary path.\n";
+                return 2;
+            }
+            bootloader = value;
         }
         else return printUsage();
     }
@@ -107,12 +160,14 @@ int _tmain(int argc, _TCHAR* argv[])
     assemblyName.replace_extension(".falc");
     std::istringstream assembly(compiler.AssemblyOutput());
     std::ostringstream log;
-    FridgeAssemblyLanguageCompiler assembler(assembly, root, assemblyName.string(), output.string(), &log);
+    FridgeAssemblyLanguageCompiler assembler(assembly, root, assemblyName.string(),
+                                             bootloader.empty() ? output.string() : "", &log);
     if (!assembler.succeeded())
     {
         std::cerr << log.str();
         return 1;
     }
+    if (!bootloader.empty() && !writeRamImage(bootloader, output, assembler)) return 1;
     std::cout << "Compiled program is saved to " << output.string() << '\n';
     return 0;
 }

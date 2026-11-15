@@ -339,13 +339,14 @@ static void FramePresent(ImGui_ImplVulkanH_Window* wd)
     wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
 }
 
-static int SmokeTest(const char* rom_path)
+static int SmokeTest(const char* rom_path, FRIDGE_RAM_ADDR offset)
 {
+    const auto bytes = RomLoader_ReadRaw(rom_path, offset);
+    if (bytes.empty()) return 1;
+
     FridgeCtx ctx;
     FridgeCtx_Init(ctx);
-
-    if (!RomLoader_LoadRaw(&ctx.cpu, rom_path))
-        return 1;
+    RomLoader_Install(ctx.cpu, bytes, offset);
 
     std::printf("[smoke] loaded %s\n", rom_path);
     std::printf("[smoke] PC=%04X  A=%02X  state=%d  PANIC=%d\n",
@@ -434,7 +435,9 @@ static int SmokeTestSource(const char* source_path)
 int main(int argc, char** argv)
 {
     if (argc >= 3 && std::strcmp(argv[1], "--smoke-test") == 0)
-        return SmokeTest(argv[2]);
+        return SmokeTest(argv[2], FRIDGE_EXECUTABLE_OFFSET);
+    if (argc >= 3 && std::strcmp(argv[1], "--smoke-test-ram") == 0)
+        return SmokeTest(argv[2], 0);
     if (argc >= 3 && std::strcmp(argv[1], "--smoke-test-source") == 0)
         return SmokeTestSource(argv[2]);
 

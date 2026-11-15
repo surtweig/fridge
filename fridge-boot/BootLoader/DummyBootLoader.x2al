@@ -1,0 +1,21 @@
+// Reset enters the program already loaded in RAM. Keep the vectors at their
+// fixed addresses by omitting the FALC main directive and its stack preamble.
+offset 0x0000
+
+JMP FRIDGE_EXECUTABLE_OFFSET // 0x0000
+NOP                          // 0x0003 (boot section index)
+
+subroutine dummy_timer_irq   // 0x0004
+    EI
+endsub
+NOP
+
+JMP dummy_keyboard_irq       // 0x0007
+
+subroutine dummy_keyboard_handler
+    entry dummy_keyboard_irq
+    PUSH AF
+    IN FRIDGE_DEV_KEYBOARD_ID
+    POP AF
+    EI
+endsub

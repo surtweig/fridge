@@ -15,6 +15,8 @@
 #include "vk_texture.h"
 #include "falcfrontend.h"
 
+enum class OpenBinary { None, Rom, RamImage };
+
 struct App {
     // ImGui options.
     bool show_demo_window = false;
@@ -34,14 +36,14 @@ struct App {
 
     // Path of the currently-loaded ROM (shown in the title bar / status).
     std::string rom_path;
+    FRIDGE_RAM_ADDR rom_offset = FRIDGE_EXECUTABLE_OFFSET;
     bool rom_loaded = false;
 
     // Pending action requested from the UI thread; the main loop peeks
     // these and pumps them while the worker is paused or idle.
     std::atomic<bool> pending_reset {false};
 
-    // Pending open-ROM dialog trigger (set by menu item, consumed by main).
-    std::atomic<bool> pending_open_rom {false};
+    std::atomic<OpenBinary> pending_open_binary {OpenBinary::None};
 
     // Source-level debug state.
     DebugInfo debug;

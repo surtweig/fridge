@@ -1,14 +1,13 @@
 #pragma once
 
+#include <vector>
+
 #include "fridgemulib.h"
 
-// Phase B v1 ROM loading: read a raw .bin and copy its bytes into
-// cpu->ram starting at FRIDGE_EXECUTABLE_OFFSET (0x0200). After loading,
-// cpu->PC is set to FRIDGE_EXECUTABLE_OFFSET so execution begins there.
-//
-// Sizes > (FRIDGE_RAM_SIZE - FRIDGE_EXECUTABLE_OFFSET) are rejected.
-// No SD-card / FRIDGE_ROM streaming protocol is emulated at this stage.
+// Returns an empty vector and reports an error if the file is unreadable,
+// empty, or too large for RAM at the given offset.
+std::vector<FRIDGE_WORD> RomLoader_ReadRaw(const char* path, FRIDGE_RAM_ADDR offset);
 
-// Returns true on success. On failure, prints a message to stderr and
-// returns false (cpu untouched).
-bool RomLoader_LoadRaw(FRIDGE_CPU* cpu, const char* path);
+// Install the bytes returned by RomLoader_ReadRaw at the same offset and
+// start execution there. An image at offset zero replaces all of RAM.
+void RomLoader_Install(FRIDGE_CPU& cpu, const std::vector<FRIDGE_WORD>& bytes, FRIDGE_RAM_ADDR offset);

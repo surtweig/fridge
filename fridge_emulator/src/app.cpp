@@ -43,27 +43,23 @@ static void ResetFridge(App& app)
     app.pressed_keys.fill(0);
 }
 
-static bool LoadRomIntoApp(App& app, const char* path, bool was_active)
+static void LoadRomIntoApp(App& app, const char* path, FRIDGE_RAM_ADDR offset, bool was_active)
 {
+    const auto bytes = RomLoader_ReadRaw(path, offset);
+    if (bytes.empty()) return;
+
     app.worker->Lock();
     app.worker->SetActive(false);
     ResetFridge(app);
-    bool ok = RomLoader_LoadRaw(&app.fridge.cpu, path);
-    if (ok)
-    {
-        app.rom_path = path;
-        app.rom_loaded = true;
-        app.source_loaded = false;
-        if (was_active)
-            app.worker->SetActive(true);
-    }
-    else
-    {
-        app.rom_path.clear();
-        app.rom_loaded = false;
-    }
+    RomLoader_Install(app.fridge.cpu, bytes, offset);
+    app.rom_path = path;
+    app.rom_offset = offset;
+    app.rom_loaded = true;
+    app.source_loaded = false;
+    app.breakpoints.clear();
+    if (was_active)
+        app.worker->SetActive(true);
     app.worker->Unlock();
-    return ok;
 }
 
 static void LoadSourceIntoApp(App& app, const char* path, bool was_active)
@@ -127,7 +123,7 @@ void App_Init(App& app)
 
     const char* env_rom = std::getenv("FRIDGE_OPEN_ROM");
     if (env_rom && *env_rom)
-        LoadRomIntoApp(app, env_rom, true);
+        LoadRomIntoApp(app, env_rom, FRIDGE_EXECUTABLE_OFFSET, true);
 }
 
 void App_Shutdown(App& app)
@@ -190,18 +186,20 @@ void App_HandleSdlEvent(App& app, const SDL_Event& event, bool capture_keyboard)
 
 void App_PumpPending(App& app)
 {
-    if (app.pending_open_rom.exchange(false))
+    const auto open_binary = app.pending_open_binary.exchange(OpenBinary::None);
+    if (open_binary != OpenBinary::None)
     {
-        bool was_active = app.worker->IsActive();
-        std::string path = FileDialog::OpenFile("Open Fridge ROM");
+        const bool was_active = app.worker->IsActive();
+        const bool flash_ram = open_binary == OpenBinary::RamImage;
+        std::string path = FileDialog::OpenFile(flash_ram ? "Flash Fridge RAM Image" : "Open Fridge ROM");
         if (!path.empty())
         {
-            LoadRomIntoApp(app, path.c_str(), was_active);
+            LoadRomIntoApp(app, path.c_str(), flash_ram ? 0 : FRIDGE_EXECUTABLE_OFFSET, was_active);
         }
         else
         {
             std::fprintf(stderr,
-                "[app] Open ROM cancelled or no native dialog available "
+                "[app] File selection cancelled or no native dialog available "
                 "(install zenity or kdialog).\n");
         }
     }
@@ -224,22 +222,27 @@ void App_PumpPending(App& app)
 
     if (app.pending_reset.exchange(false))
     {
-        app.worker->Lock();
-        bool was_active = app.worker->IsActive();
-        app.worker->SetActive(false);
-        ResetFridge(app);
-        if (app.rom_loaded && !app.rom_path.empty())
-            RomLoader_LoadRaw(&app.fridge.cpu, app.rom_path.c_str());
-        if (app.source_loaded)
+        const auto bytes = app.rom_loaded ? RomLoader_ReadRaw(app.rom_path.c_str(), app.rom_offset)
+                                          : std::vector<FRIDGE_WORD>{};
+        if (!app.rom_loaded || !bytes.empty())
         {
-            std::memcpy(app.fridge.cpu.ram + app.debug.offset,
-                        app.debug.bytes.data(), app.debug.bytes.size());
-            app.fridge.cpu.PC = app.debug.offset;
-            app.fridge.cpu.state = FRIDGE_CPU_ACTIVE;
+            app.worker->Lock();
+            const bool was_active = app.worker->IsActive();
+            app.worker->SetActive(false);
+            ResetFridge(app);
+            if (app.rom_loaded)
+                RomLoader_Install(app.fridge.cpu, bytes, app.rom_offset);
+            if (app.source_loaded)
+            {
+                std::memcpy(app.fridge.cpu.ram + app.debug.offset,
+                            app.debug.bytes.data(), app.debug.bytes.size());
+                app.fridge.cpu.PC = app.debug.offset;
+                app.fridge.cpu.state = FRIDGE_CPU_ACTIVE;
+            }
+            if (was_active)
+                app.worker->SetActive(true);
+            app.worker->Unlock();
         }
-        if (was_active)
-            app.worker->SetActive(true);
-        app.worker->Unlock();
     }
 
     app.measured_freq = app.worker->MeasuredFrequency();
@@ -253,7 +256,9 @@ static void DrawMainMenuBar(App& app)
     if (ImGui::BeginMenu("File"))
     {
         if (ImGui::MenuItem("Open ROM...", nullptr))
-            app.pending_open_rom.store(true);
+            app.pending_open_binary.store(OpenBinary::Rom);
+        if (ImGui::MenuItem("Flash RAM Image...", nullptr))
+            app.pending_open_binary.store(OpenBinary::RamImage);
         if (ImGui::MenuItem("Open Source...", nullptr))
             app.pending_open_source.store(true);
         ImGui::Separator();
@@ -415,7 +420,7 @@ static void DrawStatus(App& app)
 
     ImGui::Text("CPU state: %s", state_text);
     ImGui::Text("Measured freq: %.1f Hz", app.measured_freq);
-    ImGui::Text("ROM: %s",
+    ImGui::Text("%s: %s", app.rom_loaded && app.rom_offset == 0 ? "RAM image" : "ROM",
         app.rom_loaded ? app.rom_path.c_str() :
         (app.source_loaded ? "(source loaded)" : "(none)"));
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
@@ -444,7 +449,7 @@ static void DrawStatus(App& app)
         app.pending_reset.store(true);
     ImGui::SameLine();
     if (ImGui::Button("Open ROM..."))
-        app.pending_open_rom.store(true);
+        app.pending_open_binary.store(OpenBinary::Rom);
 
     ImGui::Separator();
     ImGui::TextUnformatted("Speed:");

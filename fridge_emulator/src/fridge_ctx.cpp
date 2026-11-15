@@ -1,21 +1,13 @@
 #include "fridge_ctx.h"
+#include "dummy_bootloader.h"
 
-#include <new>
 #include <cstring>
 
 static void ResetCpu(FRIDGE_CPU& cpu)
 {
     FRIDGE_cpu_reset(&cpu);
-    // Supply default IRQ handlers for programs loaded without a bootloader.
-    const FRIDGE_WORD timer[] = {EI, RET, NOP};
-    std::memcpy(cpu.ram + FRIDGE_IRQ_SYS_TIMER, timer, sizeof(timer));
-
-    constexpr FRIDGE_RAM_ADDR keyboard_handler = FRIDGE_IRQ_KEYBOARD + 3;
-    const FRIDGE_WORD keyboard[] = {
-        JMP, FRIDGE_HIGH_WORD(keyboard_handler), FRIDGE_LOW_WORD(keyboard_handler),
-        PUSH_AF, IIN, FRIDGE_DEV_KEYBOARD_ID, POP_AF, EI, RET
-    };
-    std::memcpy(cpu.ram + FRIDGE_IRQ_KEYBOARD, keyboard, sizeof(keyboard));
+    static_assert(sizeof(dummy_bootloader) <= FRIDGE_EXECUTABLE_OFFSET);
+    std::memcpy(cpu.ram, dummy_bootloader, sizeof(dummy_bootloader));
 }
 
 void FridgeCtx_Init(FridgeCtx& ctx)

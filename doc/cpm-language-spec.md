@@ -726,8 +726,15 @@ into `source.bin` beside its source. `--include` (also `-I`) can be repeated
 and works with `--check` and `--asm` as well.
 
 `--offset address` sets the assembly origin. It accepts decimal or `0x`
-hexadecimal values and defaults to `0x0200`. Byte zero of the output image
-must be loaded at the chosen address.
+hexadecimal values and defaults to `0x0200`. A program-only binary is loaded
+at this address.
+
+`--bootloader file.bin` is available with `--bin`. It places the bootloader
+at `0x0000`, fills the gap up to `--offset` with zeros, and places the linked
+program at that offset. The bootloader must fit before the program and its
+reset code must transfer control to the chosen program address. The emulator's
+[Flash RAM Image](../fridge_emulator/README.md#flash-a-cpm-ram-image) action
+loads the result at `0x0000`.
 
 `--main-return` controls what happens when `main` finishes.
 
