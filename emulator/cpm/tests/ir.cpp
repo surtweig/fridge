@@ -254,6 +254,85 @@ static void runLinkedHello(Fixture& fixture)
             "A missing imported binary was accepted");
 }
 
+static void runKeyboardVectorRelocations(Fixture& fixture)
+{
+    const auto root = fixture.directory.string() + "/";
+    std::ofstream(fixture.directory / "vectors.falc") << R"(
+        @void()
+        subroutine init_vectors
+            LXI HL, init_vectors_$ADDR
+            SHLD init_address_$ADDR
+            LXI HL, on_press_$ADDR
+            SHLD 0x0008
+            LHLD release_address_$ADDR
+            SHLD 0x000B
+            MVI A, #JMP
+            STA FRIDGE_IRQ_KEYBOARD_PRESS
+            STA FRIDGE_IRQ_KEYBOARD_RELEASE
+            LXI BC, release_address_$SIZE
+        endsub
+
+        subroutine keyboard_handlers
+            entry on_press
+                MVI A, 1
+                STA 0x0100
+                RET
+            entry on_release
+                MVI A, 2
+                STA 0x0100
+        endsub
+
+        static init_address 0x0000
+        static release_address on_release_$ADDR
+    )";
+    std::ostringstream libraryLog;
+    FridgeAssemblyLanguageCompiler library(root, "vectors.falc", root + "vectors.bin", {}, &libraryLog, false, false, true);
+    require(library.succeeded(), libraryLog.str());
+    std::istringstream program(R"(
+        offset 0x0800
+        incbin "vectors.bin" as vectors
+        main start
+            CALL vectors+0x0000
+            HLT
+    )");
+    std::ostringstream log;
+    FridgeAssemblyLanguageCompiler linked(program, root, "program.falc", "", &log);
+    require(linked.succeeded(), log.str());
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    const auto initialSP = cpu->SP;
+    cpu->PC = linked.getOffset();
+    std::copy_n(linked.getObjectCode(), linked.getProgramSize(), cpu->ram + cpu->PC);
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    for (int steps = 0; steps < 100 && cpu->state == FRIDGE_CPU_ACTIVE; ++steps) FRIDGE_sys_tick(&system);
+    const auto base = linked.getOffset() + linked.getProgramSize() - library.getProgramSize();
+    const auto initAddress = base + library.getResources().at("init_address").address;
+    require(cpu->state == FRIDGE_CPU_HALTED && !FRIDGE_cpu_flag_PANIC(cpu.get()) && cpu->SP == initialSP &&
+            cpu->rB == 0 && cpu->rC == 2 && FRIDGE_DWORD_HL(cpu->ram[initAddress], cpu->ram[initAddress + 1]) == base,
+            "Driver initialization did not use the relocated static and subroutine addresses");
+
+    const auto resume = cpu->PC;
+    FRIDGE_WORD event = 1;
+    for (auto vector : {FRIDGE_IRQ_KEYBOARD_PRESS, FRIDGE_IRQ_KEYBOARD_RELEASE})
+    {
+        cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED;
+        FRIDGE_cpu_interrupt(&system, CALL, FRIDGE_HIGH_WORD(vector), FRIDGE_LOW_WORD(vector));
+        require(cpu->PC == vector && cpu->ram[vector] == JMP, "Interrupt did not call its vector slot");
+        for (int steps = 0; steps < 10 && cpu->PC != resume && cpu->state == FRIDGE_CPU_ACTIVE; ++steps)
+            FRIDGE_sys_tick(&system);
+        require(cpu->PC == resume && cpu->SP == initialSP && cpu->ram[0x0100] == event++,
+                "The vector did not jump to its relocated handler and return to the interrupted code");
+    }
+
+    std::istringstream invalid("LXI HL, missing_$ADDR\n");
+    std::ostringstream invalidLog;
+    FridgeAssemblyLanguageCompiler rejected(invalid, root, "invalid.falc", "", &invalidLog);
+    require(!rejected.succeeded() && invalidLog.str().find("Unknown address alias 'missing_$ADDR'") != string::npos,
+            "An undefined address alias should fail assembly");
+}
+
 static void runMainReturnModes(Fixture& fixture)
 {
     fixture.source(R"(
@@ -308,6 +387,7 @@ int main()
         Fixture fixture;
         inspectConstantInitializers(fixture);
         runLinkedHello(fixture);
+        runKeyboardVectorRelocations(fixture);
         runMainReturnModes(fixture);
         const string source = R"(
             static <uint8 array 24> output imports 0x0100;

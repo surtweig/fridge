@@ -588,6 +588,12 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
 #endif
 }
 
+static bool isAddressAlias(const string& operand)
+{
+    constexpr size_t length = sizeof(ResourceAddressPostfix) - 1;
+    return operand.size() > length && operand.compare(operand.size() - length, length, ResourceAddressPostfix) == 0;
+}
+
 bool FridgeAssemblyLanguageCompiler::readResources()
 {
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
@@ -602,45 +608,47 @@ bool FridgeAssemblyLanguageCompiler::readResources()
                 if (res != resources.end())
                     logwarnout("Resource '" + iline->words[1] + "' has already been declared.");
 
-                FRIDGE_DWORD resSize = 0;
-                if (iline->words[2][0] == '"')
+                StaticResourceInfo resource{};
+                if (isAddressAlias(iline->words[2]))
                 {
-                    resSize = iline->words[2].size() - 1;
-                    FRIDGE_WORD* pres = (FRIDGE_WORD*)malloc(resSize);
-                    memcpy(pres, iline->words[2].c_str() + 1, resSize - 1);
-                    pres[resSize - 1] = 0;
-                    //for (int i = 0; i < resSize-1; i++)
-                    //    pres[i] = iline->words[1][i+1];
-                    //pres[resSize-1] = 0; // null terminated string
-                    resources[iline->words[1]].pdata = pres;
-                    resources[iline->words[1]].size = resSize;
+                    resource.size = 2;
+                    resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
+                    resource.addressInitializer = &*iline;
                 }
-                FRIDGE_DWORD dwr;
-                FRIDGE_WORD wr;
-                if (parseHexDouble(&(iline->words[2]), dwr))
+                else if (iline->words[2][0] == '"')
                 {
-                    resSize = 2;
-                    FRIDGE_WORD* pres = (FRIDGE_WORD*)malloc(resSize);
-                    pres[0] = FRIDGE_HIGH_WORD(dwr);
-                    pres[1] = FRIDGE_LOW_WORD(dwr);
-                    resources[iline->words[1]].pdata = pres;
-                    resources[iline->words[1]].size = resSize;
+                    resource.size = iline->words[2].size() - 1;
+                    resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
+                    memcpy(resource.pdata, iline->words[2].c_str() + 1, resource.size - 1);
+                    resource.pdata[resource.size - 1] = 0;
                 }
-                if (parseChar(&(iline->words[2]), wr) || parseHex(&(iline->words[2]), wr) || parseDec(&(iline->words[2]), wr))
+                else
                 {
-                    resSize = 1;
-                    FRIDGE_WORD* pres = (FRIDGE_WORD*)malloc(resSize);
-                    pres[0] = wr;
-                    resources[iline->words[1]].pdata = pres;
-                    resources[iline->words[1]].size = resSize;
+                    FRIDGE_DWORD dwr;
+                    FRIDGE_WORD wr;
+                    auto& value = iline->words[2];
+                    if (parseHexDouble(&value, dwr))
+                    {
+                        resource.size = 2;
+                        resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
+                        resource.pdata[0] = FRIDGE_HIGH_WORD(dwr);
+                        resource.pdata[1] = FRIDGE_LOW_WORD(dwr);
+                    }
+                    else if (parseChar(&value, wr) || parseHex(&value, wr) || parseDec(&value, wr))
+                    {
+                        resource.size = 1;
+                        resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
+                        resource.pdata[0] = wr;
+                    }
                 }
-
-                if (resSize == 0)
+                if (resource.size == 0)
                 {
                     logerrout("Invalid resource value '" + iline->words[2] + "'.");
                     return false;
                 }
-                aliases[iline->words[1] + ResourceSizePostfix] = int_to_hex(resSize);
+                if (res != resources.end()) free(res->second.pdata);
+                resources[iline->words[1]] = resource;
+                aliases[iline->words[1] + ResourceSizePostfix] = int_to_hex(resource.size);
             }
             else
             {
@@ -666,7 +674,8 @@ bool FridgeAssemblyLanguageCompiler::dealias()
                 if (alias != aliases.end())
                     logwarnout("Alias '" + iline->words[1] + "' has already been declared.");
                 const auto value = aliases.find(iline->words[2]);
-                aliases[iline->words[1]] = value == aliases.end() ? iline->words[2] : value->second;
+                aliases[iline->words[1]] = value == aliases.end() || isAddressAlias(iline->words[2])
+                    ? iline->words[2] : value->second;
             }
             else
             {
@@ -683,7 +692,7 @@ bool FridgeAssemblyLanguageCompiler::dealias()
         for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
         {
             map<string, string>::iterator alias = aliases.find(*iword);
-            if (alias != aliases.end())
+            if (alias != aliases.end() && !isAddressAlias(*iword))
                 (*iword) = alias->second;
         }
     }
@@ -1139,71 +1148,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
 
     mainEntry = (mainEntryDeclared ? mainEntry : offset) + preambleShift;
 
-    // dealias entries and subroutines addresses
-    for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
-    {
-        currentLineNumber = iline->lineNumber;
-        currentSourceFile = iline->sourceFile;
-
-        bool isCall = false;
-        bool isJump = false;
-
-        if (iline->words.size() > 1)
-        {
-            unordered_set<string>::iterator icall = CallIRIDs.find(iline->words[0]);
-            if (icall != CallIRIDs.end())
-                isCall = true;
-            else
-            {
-                unordered_set<string>::iterator ijump = JumpIRIDs.find(iline->words[0]);
-                if (ijump != JumpIRIDs.end())
-                    isJump = true;
-            }
-        }
-
-        for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
-        {
-            // dealias entries address
-            map<string, FRIDGE_RAM_ADDR>::iterator ientry = entries.find(*iword);
-            if (ientry != entries.end())
-            {
-                if (isCall && !unsafeFlowAllowed)
-                {
-                    logerrout("Cannot CALL an entry.");
-                    noerrors = false;
-                }
-                else
-                {
-                    (*iword) = int_to_hex(ientry->second);
-                    iline->relocation = FalcRelocation::Base;
-                    if (isCall)
-                        logwarnout("Use of CALL instruction with an entry address.");
-                }
-            }
-            else
-            {
-                // dealias subroutines address
-                map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.find(*iword);
-                if (isub != subroutines.end())
-                {
-                    if (isJump && !unsafeFlowAllowed)
-                    {
-                        logerrout("Cannot JUMP to a subroutine.");
-                        noerrors = false;
-                    }
-                    else
-                    {
-                        (*iword) = int_to_hex(isub->second);
-                        iline->relocation = FalcRelocation::Base;
-                        if (isJump)
-                            logwarnout("Use of JMP instruction with a subroutine address.");
-                    }
-                }
-            }
-        }
-    }
-
-    if (resources.size() > 0)
+    if (!resources.empty())
     {
         imageSize += 3; // JMP to BootLoader to prevent from executing resources data
         resOrigin = static_cast<FRIDGE_RAM_ADDR>(imageSize);
@@ -1214,22 +1159,6 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
                 logerrout("Static resources exceed Fridge address space.");
                 return false;
             }
-            // dealias resource address
-            for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
-            {
-                currentLineNumber = iline->lineNumber;
-                currentSourceFile = iline->sourceFile;
-                for (vector<string>::iterator iword = iline->words.begin(); iword != iline->words.end(); ++iword)
-                {
-                    if ((*iword) == ires->first)
-                    {
-                        (*iword) = int_to_hex((FRIDGE_RAM_ADDR)(imageSize + offset));
-                        iline->relocation = FalcRelocation::Base;
-                    }
-                }
-
-            }
-
             ires->second.address = imageSize + offset;
             imageSize += ires->second.size;
         }
@@ -1240,13 +1169,84 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
     if (resources.empty() && !binarySections.empty()) resOrigin = static_cast<FRIDGE_RAM_ADDR>(unlinkedSize);
     programSize = static_cast<FRIDGE_RAM_ADDR>(imageSize);
 
+    map<string, FRIDGE_RAM_ADDR> addressAliases;
+    for (const auto& symbol : resources)
+        addressAliases[symbol.first + ResourceAddressPostfix] = symbol.second.address;
+    for (const auto& symbol : subroutines)
+        addressAliases[symbol.first + ResourceAddressPostfix] = symbol.second;
+    for (const auto& symbol : entries)
+        addressAliases[symbol.first + ResourceAddressPostfix] = symbol.second;
+    for (const auto& alias : addressAliases)
+        aliases[alias.first] = int_to_hex(alias.second);
+
+    for (auto& symbol : resources)
+    {
+        auto& resource = symbol.second;
+        const auto* initializer = resource.addressInitializer;
+        if (!initializer) continue;
+        const auto& operand = initializer->words[2];
+        const auto target = addressAliases.find(operand);
+        if (target == addressAliases.end())
+        {
+            currentSourceFile = initializer->sourceFile;
+            currentLineNumber = initializer->lineNumber;
+            logerrout("Unknown address alias '" + operand + "'.");
+            return false;
+        }
+        resource.pdata[0] = FRIDGE_HIGH_WORD(target->second);
+        resource.pdata[1] = FRIDGE_LOW_WORD(target->second);
+    }
+
     for (auto& line : lines)
     {
         if (KeywordIDs.count(line.words[0])) continue;
         currentSourceFile = line.sourceFile;
         currentLineNumber = line.lineNumber;
+        const bool isCall = CallIRIDs.count(line.words[0]) != 0;
+        const bool isJump = JumpIRIDs.count(line.words[0]) != 0;
         for (auto operand = line.words.begin() + 1; operand != line.words.end(); ++operand)
         {
+            if (isAddressAlias(*operand))
+            {
+                const auto target = addressAliases.find(*operand);
+                if (target == addressAliases.end())
+                {
+                    logerrout("Unknown address alias '" + *operand + "'.");
+                    return false;
+                }
+                *operand = int_to_hex(target->second);
+                line.relocation = FalcRelocation::Base;
+                continue;
+            }
+            const auto entry = entries.find(*operand);
+            const auto subroutine = subroutines.find(*operand);
+            const auto resource = resources.find(*operand);
+            if (entry != entries.end() || subroutine != subroutines.end() || resource != resources.end())
+            {
+                if (entry != entries.end() && isCall)
+                {
+                    if (!unsafeFlowAllowed)
+                    {
+                        logerrout("Cannot CALL an entry.");
+                        return false;
+                    }
+                    logwarnout("Use of CALL instruction with an entry address.");
+                }
+                else if (entry == entries.end() && subroutine != subroutines.end() && isJump)
+                {
+                    if (!unsafeFlowAllowed)
+                    {
+                        logerrout("Cannot JUMP to a subroutine.");
+                        return false;
+                    }
+                    logwarnout("Use of JMP instruction with a subroutine address.");
+                }
+                const auto address = entry != entries.end() ? entry->second :
+                    subroutine != subroutines.end() ? subroutine->second : resource->second.address;
+                *operand = int_to_hex(address);
+                line.relocation = FalcRelocation::Base;
+                continue;
+            }
             if (*operand == HeapOriginAlias)
             {
                 *operand = int_to_hex(static_cast<FRIDGE_RAM_ADDR>(programSize + offset));
@@ -1600,6 +1600,8 @@ bool FridgeAssemblyLanguageCompiler::generateObjectCode()
         for (map<string, StaticResourceInfo>::iterator ires = resources.begin(); ires != resources.end(); ++ires)
         {
             logout("Resource '" + ires->first + "' at " + int_to_hex(pos));
+            if (relocatable && ires->second.addressInitializer)
+                relocations.emplace(pos, FalcRelocation::Base);
             memcpy(objectCode + pos, ires->second.pdata, ires->second.size);
             pos += ires->second.size;
         }

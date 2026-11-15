@@ -26,7 +26,8 @@ using namespace std;
 #define IRCodeAliasPrefix "#"
 #define FRIDGE_INSTRUCTION_MAX_EXTRA_SIZE 2
 #define FRIDGE_INSTRUCTION_MAX_OPERANDS 2
-#define ResourceSizePostfix "_SIZE"
+#define ResourceSizePostfix "_$SIZE"
+#define ResourceAddressPostfix "_$ADDR"
 #define HeapOriginAlias "HEAP_ORIGIN"
 #define StackOriginAlias "STACK_ORIGIN"
 #define R_UNSAFE_FLOW "unsafe_flow"
@@ -65,6 +66,7 @@ struct StaticResourceInfo
     FRIDGE_WORD* pdata;
     FRIDGE_DWORD size;
     FRIDGE_RAM_ADDR address;
+    const ParsedLine* addressInitializer = nullptr;
 };
 
 class FridgeAssemblyLanguageCompiler

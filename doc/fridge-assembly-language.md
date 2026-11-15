@@ -209,18 +209,42 @@ Values can be:
 - A string literal: `static msg "Hello, World!"` (null-terminated)
 - A byte (decimal, hex, or char): `static timer 0`
 - A double-word hex: `static addr 0x1234` (2 bytes)
+- An address alias: `static addr handler_$ADDR` (2 bytes, high byte first)
 
 The resource's address can be referenced by name. Its size is available via
-the automatic alias `<name>_SIZE`.
+the automatic alias `<name>_$SIZE`.
 
 ```asm
 static HelloWorld "Hello, World!"
 // HelloWorld is now a label pointing to the string's address
-// HelloWorld_SIZE is an alias for the string's length
+// HelloWorld_$SIZE is the number of bytes, including the null terminator.
 ```
 
 The `HEAP_ORIGIN` alias resolves to the address just past all static resources
 (useful for a heap pointer).
+
+### Address aliases
+
+FALC provides `<name>_$ADDR` for every `static`, `entry`, `main`, and
+`subroutine` defined in the assembly unit. Use it as a 16-bit operand or
+static initializer. The assembler resolves forward references, and the
+linker adjusts those addresses when it places a relocatable library. An
+explicit address operand has the same flow-control rules as a numeric address.
+
+For example, an initializer can install a jump in the three-byte keyboard
+press vector. The interrupt calls that slot, and the handler's `RET` resumes
+the interrupted code.
+
+```asm
+    LXI HL, FRIDGE_IRQ_KEYBOARD_PRESS
+    INX HL
+    LXI DE, on_press_$ADDR
+    MOV M, D
+    INX HL
+    MOV M, E
+    MVI A, #JMP
+    STA FRIDGE_IRQ_KEYBOARD_PRESS
+```
 
 ### `unsafe_flow`
 
@@ -779,12 +803,12 @@ Options:
 1. **Preprocess**: read source file, expand `include` directives, parse each
    line into words, build the initial `ParsedLine` list.
 2. **Read resources**: parse `static` declarations, allocate data, set up
-   `<name>_SIZE` aliases.
+   `<name>_$SIZE` aliases.
 3. **Dealias**: apply `alias` substitutions (including built-in `#OPCODE` and
    `FRIDGE_*` aliases) to every word in every line.
 4. **Address markup**: walk the parsed lines, assign addresses, resolve
    `entry`/`subroutine` names to addresses, validate flow control, replace
-   label references with hex addresses.
+   label references with hex addresses, and record relocations for address aliases.
 5. **Code generation**: emit `JMP main` prefix if needed, match each
    instruction mnemonic+operands against the signature table, emit opcode +
    operands, append static resources with a `JMP 0x0000` guard.
