@@ -1799,6 +1799,8 @@ map<string, FRIDGE_WORD> FridgeAssemblyLanguageCompiler::IRIDs = {
     {"VPAL",  VPAL},
     {"VSS",   VSS},
     {"VSD",   VSD},
+    {"VRS",   VRS},
+    {"VRD",   VRD},
 #ifdef FRIDGE_POSIT16_SUPPORT
     {"PAM16C", PAM16C},
 #endif
@@ -2135,6 +2137,8 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
     { VPAL    , { { {NONE, NONE} }, 0} },
     { VSS     , { { {NONE, NONE} }, 0} },
     { VSD     , { { {NONE, NONE} }, 0} },
+    { VRS     , { { {NONE, NONE} }, 0} },
+    { VRD     , { { {NONE, NONE} }, 0} },
 #ifdef FRIDGE_POSIT16_SUPPORT
     { PAM16C  , { { {NONE, NONE} }, 0} },
 #endif
@@ -2389,6 +2393,8 @@ map<FRIDGE_WORD, string> FridgeAssemblyLanguageCompiler::IRNames =
         {VPAL,    "VPAL"},
         {VSS,     "VSS"},
         {VSD,     "VSD"},
+        {VRS,     "VRS"},
+        {VRD,     "VRD"},
 #ifdef FRIDGE_POSIT16_SUPPORT
         {PAM16C,  "PAM16C"},
 #endif

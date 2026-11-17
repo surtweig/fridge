@@ -4,6 +4,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "test_artifacts.h"
 
 static void require(int passed, const char* message)
 {
@@ -25,6 +26,15 @@ static void check_pixel(const unsigned char* rgb, size_t index,
 static unsigned pattern(unsigned x, unsigned y)
 {
     return (x/2 + y) % 16;
+}
+
+static void save_screen(const char* scene, const unsigned char* rgb)
+{
+    char name[80];
+    snprintf(name, sizeof(name), "video-%dx%d-%s", FRIDGE_GPU_FRAME_EGA_WIDTH,
+             FRIDGE_GPU_FRAME_EGA_HEIGHT, scene);
+    require(save_test_screen(name, rgb, FRIDGE_GPU_FRAME_EGA_WIDTH,
+                            FRIDGE_GPU_FRAME_EGA_HEIGHT), "Could not save screen");
 }
 
 int main(void)
@@ -58,6 +68,7 @@ int main(void)
         for (unsigned x = 0; x < width; ++x)
             check_pixel(rgb, y*width+x, gpu, pattern(x, y));
     require(rgb[bytes] == 0xa5, "Full-frame render overran output");
+    save_screen("ega", rgb);
 
     // Scrolling wraps at the selected frame dimensions.
     gpu->frame_hor_offset = width-3;
@@ -67,6 +78,7 @@ int main(void)
         for (unsigned x = 0; x < width; ++x)
             check_pixel(rgb, y*width+x, gpu,
                         pattern((x+width-3)%width, (y+7)%height));
+    save_screen("scrolling", rgb);
     gpu->frame_hor_offset = gpu->frame_ver_offset = 0;
 
     // Read the bottom-right area while preserving output row padding.
@@ -90,6 +102,7 @@ int main(void)
     FRIDGE_gpu_render_ega_rgb8(gpu, rgb);
     for (unsigned x = 0; x < width; ++x)
         check_pixel(rgb, x, gpu, x == 10 ? 1 : 0);
+    save_screen("sprite", rgb);
     gpu->sprite_list[0].mode = FRIDGE_GPU_SPRITE_INVISIBLE;
 
     // All complete cells render; partial cells use palette zero, not next-row data.
@@ -108,6 +121,7 @@ int main(void)
                         x < FRIDGE_GPU_TEXT_FRAME_WIDTH*FRIDGE_GPU_TEXT_GLYPH_WIDTH &&
                         y < FRIDGE_GPU_TEXT_FRAME_HEIGHT*FRIDGE_GPU_TEXT_GLYPH_HEIGHT ? 1 : 0);
     require(rgb[bytes] == 0xa5, "Text render overran output");
+    save_screen("text", rgb);
     free(rgb);
     free(gpu);
     printf("%ux%u EGA, scrolling, area, sprites and text: PASS\n", width, height);

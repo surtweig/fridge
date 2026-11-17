@@ -517,6 +517,125 @@ void ir_VSD(FRIDGE_SYSTEM* sys)
     }
 }
 
+void ir_VRS(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_GPU_RLE_LINE* line = &sys->gpu->rle_line_list[sys->cpu->rA];
+    line->data = FRIDGE_cpu_pair_HL(sys->cpu);
+    line->nominal_length = sys->cpu->rB;
+}
+
+static void gpu_rle_draw_pixel(FRIDGE_WORD* frame, int x, int y,
+                               FRIDGE_WORD color, FRIDGE_WORD mode)
+{
+    if (x < 0 || x >= FRIDGE_GPU_FRAME_EGA_WIDTH ||
+        y < 0 || y >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
+        return;
+    if (mode == FRIDGE_GPU_RLE_TRANSPARENT0 && color == 0)
+        return;
+    if (mode == FRIDGE_GPU_RLE_DITHERED && ((x ^ y) & 1))
+        return;
+
+    FRIDGE_SIZE_T address = (x + y*FRIDGE_GPU_FRAME_EGA_WIDTH) >> 1;
+    FRIDGE_WORD old = frame[address];
+    if (mode == FRIDGE_GPU_RLE_ADDITIVE)
+    {
+        FRIDGE_WORD background = (x & 1) ? FRIDGE_GPU_RIGHT_PIXEL(old) :
+                                                  FRIDGE_GPU_LEFT_PIXEL(old);
+        color = (background + color) & 0x0f;
+    }
+    if (x & 1)
+        frame[address] = FRIDGE_GPU_WORD(FRIDGE_GPU_LEFT_PIXEL(old), color);
+    else
+        frame[address] = FRIDGE_GPU_WORD(color, FRIDGE_GPU_RIGHT_PIXEL(old));
+}
+
+void ir_VRD(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_CPU* cpu = sys->cpu;
+    FRIDGE_GPU_RLE_LINE* line = &sys->gpu->rle_line_list[cpu->rA];
+    FRIDGE_WORD mode = cpu->rD;
+    if (mode > FRIDGE_GPU_RLE_ADDITIVE)
+    {
+        corePanic(cpu);
+        return;
+    }
+    FRIDGE_DWORD nominal = line->nominal_length;
+    FRIDGE_DWORD visible = cpu->rB;
+    if (nominal == 0 || visible == 0)
+        return;
+
+    int dx = cpu->rC >> 4;
+    int dy = cpu->rC & 0x0f;
+    if (dx & 8)
+        dx -= 16;
+    if (dy & 8)
+        dy -= 16;
+    int step_x = dx < 0 ? -1 : (dx > 0 ? 1 : 0);
+    int step_y = dy < 0 ? -1 : (dy > 0 ? 1 : 0);
+    int magnitude_x = dx < 0 ? -dx : dx;
+    int magnitude_y = dy < 0 ? -dy : dy;
+    int major = magnitude_x >= magnitude_y ? magnitude_x : magnitude_y;
+    int direction_phase = major >> 1;
+    int x = cpu->rH;
+    int y = cpu->rL;
+    FRIDGE_WORD* frame = FRIDGE_gpu_active_frame(sys->gpu);
+    // Keep a wide cursor so exhausting sprite memory cannot wrap to address zero.
+    FRIDGE_SIZE_T source = line->data;
+    FRIDGE_DWORD remaining = nominal;
+    // This phase gives source index floor(output_index * nominal / visible).
+    // Carry it across tokens; the temporary sum needs up to nine bits.
+    FRIDGE_DWORD scale_phase = nominal - 1;
+    while (remaining > 0)
+    {
+        if (source >= FRIDGE_GPU_SPRITE_MEMORY_SIZE)
+        {
+            corePanic(cpu);
+            return;
+        }
+        FRIDGE_WORD token = sys->gpu->sprite_mem[source++];
+        FRIDGE_WORD color = FRIDGE_GPU_LEFT_PIXEL(token);
+        FRIDGE_DWORD run = FRIDGE_GPU_RIGHT_PIXEL(token) + 1;
+        if (run > remaining)
+            run = remaining;
+        remaining -= run;
+        while (run > 0)
+        {
+            --run;
+            scale_phase += visible;
+            while (scale_phase >= nominal)
+            {
+                scale_phase -= nominal;
+                gpu_rle_draw_pixel(frame, x, y, color, mode);
+                // Advance along the dominant axis once per output pixel.
+                // The second accumulator distributes minor-axis steps evenly.
+                if (major > 0)
+                {
+                    if (magnitude_x >= magnitude_y)
+                    {
+                        x += step_x;
+                        direction_phase += magnitude_y;
+                        if (direction_phase >= major)
+                        {
+                            direction_phase -= major;
+                            y += step_y;
+                        }
+                    }
+                    else
+                    {
+                        y += step_y;
+                        direction_phase += magnitude_x;
+                        if (direction_phase >= major)
+                        {
+                            direction_phase -= major;
+                            x += step_x;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #ifdef FRIDGE_POSIT16_SUPPORT
 
 void ir_UCLR(FRIDGE_SYSTEM* sys)
@@ -994,6 +1113,8 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case VSLA:  ir_VSLA(sys);  break;
         case VSS:   ir_VSS(sys);   break;
         case VSD:   ir_VSD(sys);   break;
+        case VRS:   ir_VRS(sys);   break;
+        case VRD:   ir_VRD(sys);   break;
 
 #ifdef FRIDGE_POSIT16_SUPPORT
         case PAM16C : ir_PAM16C(sys); break;
@@ -1133,6 +1254,11 @@ void FRIDGE_gpu_reset (FRIDGE_GPU* gpu)
     for (int i = 0; i < FRIDGE_GPU_MAX_SPRITES; ++i)
     {
         gpu->sprite_list[i].mode = FRIDGE_GPU_SPRITE_INVISIBLE;
+    }
+    for (int i = 0; i < FRIDGE_GPU_MAX_RLE_LINES; ++i)
+    {
+        gpu->rle_line_list[i].data = 0;
+        gpu->rle_line_list[i].nominal_length = 0;
     }
     for (int i = 0; i < FRIDGE_GPU_PALETTE_SIZE; ++i)
     {

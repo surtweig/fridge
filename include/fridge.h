@@ -35,6 +35,7 @@ typedef unsigned int FRIDGE_SIZE_T;
 #endif
 #define FRIDGE_GPU_SPRITE_MEMORY_SIZE 0x10000 // bytes
 #define FRIDGE_GPU_MAX_SPRITES 64
+#define FRIDGE_GPU_MAX_RLE_LINES 256
 #define FRIDGE_GPU_MAX_SPRITES_PER_PIXEL 4
 #define FRIDGE_GPU_PALETTE_SIZE 48 // 3*16
 #define FRIDGE_GPU_FRAME_BUFFER_SIZE (FRIDGE_GPU_FRAME_EGA_WIDTH*FRIDGE_GPU_FRAME_EGA_HEIGHT/2) // 4 bits per pixel
@@ -210,14 +211,29 @@ typedef enum FRIDGE_IRCODE {
          // 6 - bitwise or
          // 7 - bitwise xor
 
+    // RLE lines
+    VRS, // setup line (index A, nominal length B, address HL)
+         // sprite-memory tokens: high nibble = color, low nibble = run length - 1
+         // nominal length bounds the decoded source pixels; zero disables the line
+    VRD, // draw line (index A, visible length B, stride C, mode D, position HL)
+         // writes the active framebuffer; H=x, L=y; B counts output pixels
+         // C: signed 4-bit dx in the high nibble, signed 4-bit dy in the low nibble
+         // rasterizes a connected line along that slope; 0x00 stays at one pixel
+         // e.g. 0x10 right, 0xf0 left, 0x01 down, 0x0f up, 0x21 slope 2:1
+         // zero visible length is a no-op; off-screen pixels are clipped
+         // mode:
+         // 0 - opaque
+         // 1 - transparent0
+         // 2 - dithered (every other pixel is skipped with checkerboard pattern on the screen)
+         // 3 - color index additive (with modulo)
+
+
 #ifdef FRIDGE_POSIT16_SUPPORT
     PAM16C,  // executes PAM16 command
              // command code is 4 low bits of A (A & 0x0f)
 #else
-    IR247,
-#endif
-    IR248,
     IR249,
+#endif
     IR250,
     IR251,
     IR252,
