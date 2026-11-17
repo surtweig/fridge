@@ -159,6 +159,25 @@ returns a byte in A. Wrappers can bind `uint8` to A, B, C, or D, `uint16` to BC
 or HL, and `string` to HL. FALC generates offsets for relocatable exports and
 absolute addresses for fixed-address exports.
 
+Add `inline` before the return type to copy the subroutine's instructions into
+the CPM wrapper as intrinsics instead of generating `__callsub`:
+
+```asm
+@inline void( (uint8 index : A), (uint8 red : B), (uint8 green : C), (uint8 blue : D) )
+subroutine set_palette
+    VPAL
+endsub
+```
+
+The generated wrapper loads its parameters and executes `__vpal;` directly.
+`@inline uint8:A(...)` also supports returning A. The implicit `endsub` return
+is omitted; local branches and explicit returns target labels inside the
+wrapper. Jumps outside the subroutine and indirect `PCHL` jumps are rejected.
+Library data references, nested calls, and `HEAP_ORIGIN` retain their relocation
+rules. Nested calls still call their target; inlining is not recursive. The
+binary retains the original subroutine, and calling the generated CPM function
+still uses CPM's normal function calling convention.
+
 ### `entry name`
 
 Declares a named label at the current address. Entries can be referenced as

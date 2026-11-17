@@ -61,6 +61,17 @@ struct InstructionSignature
     int extraSize;
 };
 
+// CPM instruction intrinsics share the assembler's operand and opcode tables.
+struct CpmInstruction
+{
+    FRIDGE_WORD opcode;
+    string assembly; // Includes fixed register operands and the separator before an immediate.
+    int extraSize;
+    bool bytePair;
+    FalcRelocation relocation = FalcRelocation::None;
+    bool localTarget = false;
+};
+
 struct StaticResourceInfo
 {
     FRIDGE_WORD* pdata;
@@ -97,6 +108,7 @@ private:
     map<string, string> aliases;
     map<string, FRIDGE_RAM_ADDR> entries;
     map<string, FRIDGE_RAM_ADDR> subroutines;
+    map<string, FRIDGE_RAM_ADDR> subroutineEnds;
     map<string, StaticResourceInfo> resources;
     unordered_set<string> includes;
     FRIDGE_RAM_ADDR offset;
@@ -133,6 +145,7 @@ private:
     bool relocateBinary(const string& path, size_t address, vector<FRIDGE_WORD>& bytes);
     bool generateObjectCode();
     bool generateCpmHeader(const string& binaryFile, string& header);
+    bool generateCpmInline(const string& symbol, ostream& body);
     bool saveRelocations(const string& path);
     bool saveObjectCode(string outputFile);
     bool saveObjectCodeVHDL(string outputFile);
@@ -170,6 +183,7 @@ public:
     void printCompiled();
     void printCompiled(ostream* f);
     inline static string GetIRName(FRIDGE_WORD ircode) { return IRNames[ircode]; }
+    static const map<string, CpmInstruction>& GetCpmInstructions();
 
     ~FridgeAssemblyLanguageCompiler();
 };

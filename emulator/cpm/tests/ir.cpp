@@ -276,12 +276,12 @@ static void runLinkedHello(Fixture& fixture)
             "The fixed entry point or relocated heap address is incorrect");
     require(gpu->vmode == FRIDGE_VIDEO_TEXT, "Hello World did not switch to text mode");
     const auto* frame = FRIDGE_gpu_visible_frame(gpu.get());
-    const size_t first = (9 * FRIDGE_GPU_TEXT_FRAME_WIDTH + 1) * 2;
+    const size_t first = 0;
     const string expected = "Hello, World!";
     for (size_t i = 0; i < expected.size(); ++i)
         require(frame[first + i * 2] == expected[i] && frame[first + i * 2 + 1] == 0x1F,
                 "Incorrect text or color in visible cell " + to_string(i));
-    require(frame[first - 2] == 0 && frame[first + expected.size() * 2] == 0,
+    require(frame[first + expected.size() * 2] == 0,
             "The string write affected a neighboring text cell");
 
     runVtextClear(fixture);

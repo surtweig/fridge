@@ -391,6 +391,14 @@ namespace CPM
                     }
                     if (value.intrinsic != CPMIntrinsic::None)
                     {
+                        if (value.intrinsic == CPMIntrinsic::Instruction || value.intrinsic == CPMIntrinsic::Label)
+                        {
+                            auto& instruction = emit(CPMIROp::Intrinsic, syntax, CPMIRNone);
+                            instruction.intrinsic = value.intrinsic;
+                            instruction.operation = value.intrinsicName;
+                            if (!value.operands.empty()) instruction.bytes = value.operands.front().bytes;
+                            return CPMIRNone;
+                        }
                         const auto& argument = value.operands.front();
                         size_t input = CPMIRNone;
                         if (argument.bytes.empty() || !argument.constant)

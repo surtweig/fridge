@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "CPMAssembly.h"
+#include "FridgeAssemblyLanguageCompiler.h"
 
 #include <filesystem>
 #include <iomanip>
@@ -502,6 +503,36 @@ namespace CPM
                 }
                 size_t value = 0;
                 for (auto byte : instruction.bytes) value = (value << 8) | byte;
+                if (instruction.intrinsic == CPMIntrinsic::Label)
+                {
+                    entry(functionLabel + "_inline_" + to_string(value));
+                    return;
+                }
+                if (instruction.intrinsic == CPMIntrinsic::Instruction)
+                {
+                    const auto& operation = FridgeAssemblyLanguageCompiler::GetCpmInstructions().at(instruction.operation);
+                    if (operation.extraSize == 0) op(operation.assembly);
+                    else if (operation.extraSize == 1) byte(operation.assembly, static_cast<FRIDGE_WORD>(value));
+                    else if (operation.bytePair)
+                        word(operation.assembly, hexOperand(value >> 8, 2) + ", " + hexOperand(value & 255, 2));
+                    else if (operation.localTarget)
+                        word(operation.assembly, functionLabel + "_inline_" + to_string(value));
+                    else if (operation.relocation == FalcRelocation::Heap)
+                        word(operation.assembly, "HEAP_ORIGIN");
+                    else if (operation.relocation == FalcRelocation::Base)
+                    {
+                        const auto* owner = function->symbol->owner;
+                        const auto library = libraries.find(owner);
+                        if (library == libraries.end() || value < library->second.begin || value >= library->second.end)
+                        {
+                            error(instruction.syntax, "Relocated instruction address is outside its imported binary.");
+                            return;
+                        }
+                        word(operation.assembly, libraryAddress(owner, value));
+                    }
+                    else word(operation.assembly, value);
+                    return;
+                }
                 if (instruction.intrinsic == CPMIntrinsic::CallSub)
                 {
                     const auto* owner = function->symbol->owner;

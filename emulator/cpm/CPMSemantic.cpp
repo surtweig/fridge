@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "CPMSemantic.h"
+#include "FridgeAssemblyLanguageCompiler.h"
 
 #include <algorithm>
 #include <charconv>
@@ -146,19 +147,29 @@ namespace CPM
 
     CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType* parameter)
     {
-        if (!parameter) return name == "__read_a" ? CPMIntrinsic::ReadA : CPMIntrinsic::None;
-        if (*parameter == baseType(CPM_DATATYPE_UINT8))
+        if (!parameter && name == "__read_a") return CPMIntrinsic::ReadA;
+        if (parameter && *parameter == baseType(CPM_DATATYPE_UINT8))
         {
             if (name == "__mvi_a") return CPMIntrinsic::MviA;
             if (name == "__mvi_b") return CPMIntrinsic::MviB;
             if (name == "__mvi_c") return CPMIntrinsic::MviC;
             if (name == "__mvi_d") return CPMIntrinsic::MviD;
         }
-        if (*parameter == baseType(CPM_DATATYPE_UINT16))
+        if (parameter && *parameter == baseType(CPM_DATATYPE_UINT16))
         {
             if (name == "__lxi_bc") return CPMIntrinsic::LxiBC;
             if (name == "__lxi_hl") return CPMIntrinsic::LxiHL;
             if (name == "__callsub") return CPMIntrinsic::CallSub;
+            if (name == "__label") return CPMIntrinsic::Label;
+        }
+        const auto& instructions = FridgeAssemblyLanguageCompiler::GetCpmInstructions();
+        const auto instruction = instructions.find(name);
+        if (instruction != instructions.end())
+        {
+            const auto size = instruction->second.extraSize;
+            if (size == 0 ? !parameter : parameter &&
+                *parameter == baseType(size == 1 ? CPM_DATATYPE_UINT8 : CPM_DATATYPE_UINT16))
+                return CPMIntrinsic::Instruction;
         }
         return CPMIntrinsic::None;
     }
@@ -412,6 +423,12 @@ namespace CPM
             CPMFindIntrinsic(name, operands.empty() ? nullptr : &operands[0].type) : CPMIntrinsic::None;
         if (intrinsic != CPMIntrinsic::None)
         {
+            if ((intrinsic == CPMIntrinsic::Instruction || intrinsic == CPMIntrinsic::Label) &&
+                !operands.empty() && (!operands[0].constant || operands[0].bytes.empty()))
+            {
+                error(head, "Instruction intrinsics require a compile-time immediate operand.");
+                return {};
+            }
             if (intrinsic == CPMIntrinsic::CallSub && (!operands[0].constant || operands[0].bytes.empty()))
             {
                 error(head, "__callsub requires a compile-time uint16 address.");
@@ -420,6 +437,7 @@ namespace CPM
             auto result = checked(CPMExprKind::Call, head,
                                   baseType(intrinsic == CPMIntrinsic::ReadA ? CPM_DATATYPE_UINT8 : CPM_DATATYPE_VOID));
             result.intrinsic = intrinsic;
+            result.intrinsicName = name;
             result.operands = std::move(operands);
             return result;
         }

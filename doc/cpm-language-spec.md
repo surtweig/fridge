@@ -321,6 +321,25 @@ Register loads from literals and named values preserve the other registers.
 Evaluate complex arguments into local variables before loading registers for
 a foreign call.
 
+FALC's `@inline` exports use instruction intrinsics named after the lowercase
+assembly mnemonic, with register operands appended using underscores:
+`__vpal;`, `__mov_b_a;`, `__inr_a;`, `__mvi_a 15;`, or `__lxi_hl 0x1234;`.
+They return `void`. An immediate operand must be a compile-time `uint8` for a
+one-byte operand or `uint16` for a two-byte operand. `__vfsi` and `__vssi` pack
+their two byte operands into one big-endian `uint16` (e.g. `0x1234` emits
+`VFSI 0x12, 0x34`). The existing register-load intrinsics above additionally
+accept runtime values and preserve the other registers.
+
+Generated wrappers use `__label 0xNNNN;` and `__jmp_local 0xNNNN;` (or a
+conditional jump such as `__jnz_local`) for labels scoped to the CPM function.
+For a two-byte address operand, the `_rel` suffix resolves an offset in the
+wrapper's imported binary; `_heap` resolves `HEAP_ORIGIN` at final link time
+(the generated operand is `0x0000`). Unsuffixed numeric operands stay literal.
+These instruction intrinsics emit the specified instruction without saving
+registers or managing the CPM stack frame. FALC translates assembly returns to
+local jumps before the wrapper's CPM return so that result handling and stack
+cleanup still run.
+
 ## 5. Expressions
 
 Expressions are uniformly prefix: `(operator operand, operand, …)`. There

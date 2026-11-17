@@ -2,6 +2,7 @@
 #include <cstring>
 #include <iterator>
 #include <regex>
+#include <set>
 
 #ifndef FALC_STD_PATH
 #define FALC_STD_PATH "../sdk/x2al_std/"
@@ -841,6 +842,143 @@ static bool cpmIdentifier(const string& name)
     return regex_match(name, identifier) && name.compare(0, 2, "__") != 0 && !reserved.count(name);
 }
 
+const map<string, CpmInstruction>& FridgeAssemblyLanguageCompiler::GetCpmInstructions()
+{
+    static const map<string, CpmInstruction> instructions = []
+    {
+        map<string, CpmInstruction> result;
+        for (const auto& mnemonic : IRIDs)
+        {
+            const auto& signature = IRSigs.at(mnemonic.second);
+            for (size_t variant = 0; variant < signature.operands.size(); ++variant)
+            {
+                string name = "__" + mnemonic.first;
+                string assembly = mnemonic.first;
+                bool first = true;
+                for (auto operand : signature.operands[variant])
+                {
+                    if (operand == NONE) continue;
+                    assembly += first ? " " : ", ";
+                    first = false;
+                    const auto reg = RegOperandsIDs.find(operand);
+                    if (reg != RegOperandsIDs.end())
+                    {
+                        name += "_" + reg->second;
+                        assembly += reg->second;
+                    }
+                    else
+                    {
+                        // The emitter splits the packed uint16 for VFSI/VSSI.
+                        break;
+                    }
+                }
+                for (auto& letter : name) letter = static_cast<char>(tolower(letter));
+                const bool bytePair = signature.operands[variant][0] == IM_WORD &&
+                                      signature.operands[variant][1] == IM_WORD;
+                CpmInstruction instruction{static_cast<FRIDGE_WORD>(mnemonic.second + variant),
+                                           assembly, signature.extraSize, bytePair};
+                result.emplace(name, instruction);
+                if (signature.extraSize == 2 && !bytePair)
+                {
+                    instruction.relocation = FalcRelocation::Base;
+                    result.emplace(name + "_rel", instruction);
+                    instruction.relocation = FalcRelocation::Heap;
+                    result.emplace(name + "_heap", instruction);
+                }
+                if (JumpIRIDs.count(mnemonic.first))
+                {
+                    instruction.relocation = FalcRelocation::None;
+                    instruction.localTarget = true;
+                    result.emplace(name + "_local", instruction);
+                }
+            }
+        }
+        return result;
+    }();
+    return instructions;
+}
+
+bool FridgeAssemblyLanguageCompiler::generateCpmInline(const string& symbol, ostream& body)
+{
+    const size_t begin = subroutines.at(symbol);
+    const size_t end = subroutineEnds.at(symbol); // The implicit endsub RET is omitted.
+    const auto& instructions = GetCpmInstructions();
+    map<FRIDGE_WORD, string> names;
+    for (const auto& instruction : instructions)
+        if (instruction.second.relocation == FalcRelocation::None && !instruction.second.localTarget)
+            names.emplace(instruction.second.opcode, instruction.first);
+    struct InlineInstruction { size_t address; string name; size_t operand; };
+    vector<InlineInstruction> decoded;
+    set<size_t> boundaries{end}, targets;
+    for (size_t address = begin; address < end;)
+    {
+        const size_t position = address - offset;
+        const auto found = names.find(objectCode[position]);
+        if (found == names.end())
+        {
+            logerrout("Cannot inline unknown instruction in '" + symbol + "'.");
+            return false;
+        }
+        const auto& instruction = instructions.at(found->second);
+        size_t operand = 0;
+        for (int byte = 0; byte < instruction.extraSize; ++byte)
+            operand = (operand << 8) | objectCode[position + byte + 1];
+        decoded.push_back({address, found->second, operand});
+        boundaries.insert(address);
+        address += 1 + instruction.extraSize;
+    }
+    for (auto& line : decoded)
+    {
+        const auto& instruction = instructions.at(line.name);
+        const string mnemonic = instruction.assembly.substr(0, instruction.assembly.find(' '));
+        if (RetIRIDs.count(mnemonic))
+        {
+            line.name = mnemonic == "RET" ? "__jmp_local" : "__j" + line.name.substr(3) + "_local";
+            line.operand = end - begin;
+            targets.insert(end);
+        }
+        else if (JumpIRIDs.count(mnemonic))
+        {
+            if (!boundaries.count(line.operand))
+            {
+                logerrout("Inline subroutine '" + symbol + "' must jump to an instruction within its own body.");
+                return false;
+            }
+            targets.insert(line.operand);
+            line.operand -= begin;
+            line.name += "_local";
+        }
+        else if (mnemonic == "PCHL")
+        {
+            logerrout("Cannot inline an indirect jump in '" + symbol + "'.");
+            return false;
+        }
+        else if (relocatable && instruction.extraSize == 2)
+        {
+            const auto relocation = relocations.find(line.address - offset + 1);
+            if (relocation != relocations.end())
+            {
+                line.name += relocation->second == FalcRelocation::Base ? "_rel" : "_heap";
+                if (relocation->second == FalcRelocation::Heap) line.operand = 0;
+            }
+        }
+    }
+    for (const auto& line : decoded)
+    {
+        if (targets.count(line.address))
+            body << "        __label " << int_to_hex(static_cast<FRIDGE_DWORD>(line.address - begin)) << ";\n";
+        body << "        " << line.name;
+        const auto& instruction = instructions.at(line.name);
+        if (instruction.extraSize)
+            body << ' ' << (instruction.extraSize == 1 ? to_string(line.operand) :
+                           int_to_hex(static_cast<FRIDGE_DWORD>(line.operand)));
+        body << ";\n";
+    }
+    if (targets.count(end))
+        body << "        __label " << int_to_hex(static_cast<FRIDGE_DWORD>(end - begin)) << ";\n";
+    return true;
+}
+
 bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile, string& header)
 {
     const auto slash = binaryFile.find_last_of("/\\");
@@ -864,7 +1002,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
     }
 
     static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
-    static const regex subExport(R"(@(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
+    static const regex subExport(R"(@(inline\s+)?(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
     static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|BC|HL)\s*\)\s*)");
     ostringstream result;
     result << "namespace " << name << " imports \"" << file << '"';
@@ -937,8 +1075,9 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             logerrout("Cannot resolve exported subroutine '" + symbol + "'.");
             return false;
         }
-        const bool returnsByte = match[1] != "void";
-        const string parameters = match[2];
+        const bool inlineBody = match[1].matched;
+        const bool returnsByte = match[2] != "void";
+        const string parameters = match[3];
         istringstream input(parameters);
         string argument;
         unordered_set<string> names, registers;
@@ -982,8 +1121,12 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             logerrout("Overlapping CPM register bindings for '" + symbol + "'.");
             return false;
         }
-        result << ")\n    (\n" << body.str()
-               << "        __callsub " << int_to_hex(subroutine->second) << ";\n";
+        result << ")\n    (\n" << body.str();
+        if (inlineBody)
+        {
+            if (!generateCpmInline(symbol, result)) return false;
+        }
+        else result << "        __callsub " << int_to_hex(subroutine->second) << ";\n";
         if (returnsByte) result << "        return (__read_a);\n";
         result << "    );\n";
     }
@@ -1022,6 +1165,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
     bool mainEntryDeclared = false;
 
     bool subClosed = true;
+    string currentSubroutine;
 
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
@@ -1071,6 +1215,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
             if (iline->words.size() == 2)
             {
                 string subname = iline->words[1];
+                currentSubroutine = subname;
                 map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.find(subname);
                 if (isub == subroutines.end())
                 {
@@ -1117,6 +1262,7 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
                 else
                 {
                     subClosed = true;
+                    subroutineEnds[currentSubroutine] = pc + offset;
                     // dealias ENDSUB as RET
                     iline->words[0] = R_ENDSUB_DEALIAS;
                 }
@@ -1170,6 +1316,8 @@ bool FridgeAssemblyLanguageCompiler::addressMarkup(bool exportCpm)
         ientry->second = (FRIDGE_RAM_ADDR)(ientry->second + preambleShift);
     for (map<string, FRIDGE_RAM_ADDR>::iterator isub = subroutines.begin(); isub != subroutines.end(); ++isub)
         isub->second = (FRIDGE_RAM_ADDR)(isub->second + preambleShift);
+    for (auto& end : subroutineEnds)
+        end.second = static_cast<FRIDGE_RAM_ADDR>(end.second + preambleShift);
 
     mainEntry = (mainEntryDeclared ? mainEntry : offset) + preambleShift;
 

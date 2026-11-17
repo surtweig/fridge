@@ -23,6 +23,7 @@ namespace CPM
         const CPMStaticSymbol* staticObject = nullptr;
         const CPMFunctionSymbol* function = nullptr;
         CPMIntrinsic intrinsic = CPMIntrinsic::None;
+        string intrinsicName;
         const CPMDataSymbol* field = nullptr;
         bool contextualNull = false;
         bool constant = false;
