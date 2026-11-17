@@ -100,8 +100,13 @@ bool test_cpu_stack(FRIDGE_SYSTEM* sys)
     for (int i = 0; i < stackTestLength; ++i)
     {
         int pair = i%4;
+#ifdef FRIDGE_ASCENDING_STACK
         FRIDGE_WORD r1 = cpu->ram[sp-2];
         FRIDGE_WORD r2 = cpu->ram[sp-1];
+#else
+        FRIDGE_WORD r1 = cpu->ram[sp];
+        FRIDGE_WORD r2 = cpu->ram[sp+1];
+#endif
         cpu->ram[pc++] = POP_AF + pair;
         FRIDGE_sys_tick(sys);
 
