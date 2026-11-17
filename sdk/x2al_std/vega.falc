@@ -1,8 +1,43 @@
 @const uint8
 alias VEGA_WIDTH FRIDGE_GPU_FRAME_EGA_WIDTH
-
 @const uint8
 alias VEGA_HEIGHT FRIDGE_GPU_FRAME_EGA_HEIGHT
+
+@const uint8
+alias VEGA_SPRITE_MODE_INVISIBLE 0
+@const uint8
+alias VEGA_SPRITE_MODE_OPAQUE 1
+@const uint8
+alias VEGA_SPRITE_MODE_TRANSPARENT_ZERO 2
+@const uint8
+alias VEGA_SPRITE_MODE_ADDITIVE 3
+@const uint8
+alias VEGA_SPRITE_MODE_SUBTRACTIVE 4
+@const uint8
+alias VEGA_SPRITE_MODE_BITWISE_AND 5
+@const uint8
+alias VEGA_SPRITE_MODE_BITWISE_OR 6
+@const uint8
+alias VEGA_SPRITE_MODE_BITWISE_XOR 7
+
+@const uint8
+alias VEGA_RLE_MODE_OPAQUE 0
+@const uint8
+alias VEGA_RLE_MODE_TRANSPARENT_ZERO 1
+@const uint8
+alias VEGA_RLE_MODE_DITHERED 2
+@const uint8
+alias VEGA_RLE_MODE_INDEX_ADDITIVE 3
+
+
+@static uint8
+static VEGA_SWAP_MODE FRIDGE_GPU_VIDEO_SWAP_AUTO
+
+@static uint8
+static VEGA_X_OFFSET 0
+
+@static uint8
+static VEGA_Y_OFFSET 0
 
 @inline void()
 subroutine vega_begin
@@ -12,12 +47,173 @@ endsub
 
 @inline void()
 subroutine vega_present
-    LXI HL, 0x0000
-    MVI A, FRIDGE_GPU_VIDEO_SWAP_AUTO
+    LDA VEGA_X_OFFSET
+    MOV H, A
+    LDA VEGA_Y_OFFSET
+    MOV L, A
+    LDA VEGA_SWAP_MODE
     VPRE
 endsub
 
 @inline void( (uint8 index : A), (uint8 r : B), (uint8 g : C), (uint8 b : D) )
 subroutine vega_set_pallette
     VPAL
+endsub
+
+// Packed bytes in the active framebuffer, two palette indices per byte.
+@inline uint8:A( (uint16 address : HL) )
+subroutine vega_frame_read_byte
+    VFLA
+endsub
+
+@inline void( (uint16 address : HL), (uint8 value : A) )
+subroutine vega_frame_write_byte
+    VFSA
+endsub
+
+// Positions throughout this library pack x in the high byte and y in the low byte.
+@inline uint8:A( (uint16 position : HL) )
+subroutine vega_frame_read_pixel
+    VFLAC
+endsub
+
+@inline void( (uint16 position : HL), (uint8 color : A) )
+subroutine vega_frame_write_pixel
+    // Put the palette index in both nibbles so VFSAC can select by x parity.
+    ANI 0x0F
+    MOV B, A
+    RLC
+    RLC
+    RLC
+    RLC
+    ORA B
+    VFSAC
+endsub
+
+// Copy count bytes from framebuffer offset source to RAM address dest.
+// Both ranges must fit. A zero count leaves memory alone.
+@void( (uint16 source : HL), (uint16 dest : DE), (uint16 count : BC) )
+subroutine vega_frame_download_batch
+    entry vega_frame_download_batch.loop
+        MOV A, B
+        ORA C
+        RZ
+        VFLA
+        STAX DE
+        INX HL
+        INX DE
+        DCX BC
+        JMP vega_frame_download_batch.loop
+endsub
+
+// Copy 16 bytes from RAM address source to framebuffer offset dest.
+// The full range must fit, and callers must not interrupt another call to this routine.
+@void( (uint16 source : HL), (uint16 dest : DE) )
+subroutine vega_frame_upload_batch_x16
+    PUSH DE
+    LXI DE, _vega_frame_upload_batch_x16_rack_$ADDR
+    CALL _vega_patch_batch_x16
+    POP DE
+    XCNG
+    CALL _vega_frame_upload_batch_x16_rack
+endsub
+
+@inline uint8:A( (uint16 address : HL) )
+subroutine vega_sprite_read_byte
+    VSLA
+endsub
+
+@inline void( (uint16 address : HL), (uint8 value : A) )
+subroutine vega_sprite_write_byte
+    VSSA
+endsub
+
+// Copy 16 bytes from RAM address source to sprite-memory offset dest.
+// The full range must fit, and callers must not interrupt another call to this routine.
+@void( (uint16 source : HL), (uint16 dest : DE) )
+subroutine vega_sprite_upload_batch_x16
+    PUSH DE
+    LXI DE, _vega_sprite_upload_batch_x16_rack_$ADDR
+    CALL _vega_patch_batch_x16
+    POP DE
+    XCNG
+    CALL _vega_sprite_upload_batch_x16_rack
+endsub
+
+// Copy count bytes from sprite-memory offset source to framebuffer offset dest.
+// Both ranges must fit. A zero count leaves memory alone.
+@void( (uint16 source : HL), (uint16 dest : BC), (uint16 count : DE) )
+subroutine vega_sprite_to_frame_batch
+    entry vega_sprite_to_frame_batch.loop
+        MOV A, D
+        ORA E
+        RZ
+        VS2F
+        INX HL
+        INX BC
+        DCX DE
+        JMP vega_sprite_to_frame_batch.loop
+endsub
+
+// Define a hidden sprite backed by packed pixels in sprite memory.
+@inline void( (uint8 index : A), (uint8 width : B), (uint8 height : C), (uint16 address : HL) )
+subroutine vega_sprite_setup
+    VSS
+endsub
+
+@inline void( (uint8 index : A), (uint8 mode : B), (uint16 position : HL) )
+subroutine vega_sprite_draw
+    VSD
+endsub
+
+// The high nibble of each sprite-memory token is color. The low nibble is run length minus one.
+@inline void( (uint8 index : A), (uint8 nominal_length : B), (uint16 address : HL) )
+subroutine vega_rle_line_setup
+    VRS
+endsub
+
+// stride packs signed dx in the high nibble and signed dy in the low nibble.
+@inline void( (uint8 index : A), (uint8 visible_length : B), (uint8 stride : C), (uint8 mode : D), (uint16 position : HL) )
+subroutine vega_rle_line_draw
+    VRD
+endsub
+
+// HL points to 16 source bytes. DE points to eight three-byte store instructions.
+subroutine _vega_patch_batch_x16
+    INX DE // skip the first opcode
+    MVI B, 8
+    entry _vega_patch_batch_x16.loop
+        LDAX HL
+        INX HL
+        STAX DE
+        INX DE
+        LDAX HL
+        INX HL
+        STAX DE
+        INX DE
+        INX DE // skip the next opcode
+        DCR B
+        JNZ _vega_patch_batch_x16.loop
+endsub
+
+subroutine _vega_frame_upload_batch_x16_rack
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+    VFSI 0x00, 0x00
+endsub
+
+subroutine _vega_sprite_upload_batch_x16_rack
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
+    VSSI 0x00, 0x00
 endsub

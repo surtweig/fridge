@@ -600,6 +600,11 @@ static bool isAddressAlias(const string& operand)
 
 bool FridgeAssemblyLanguageCompiler::readResources()
 {
+    // Resolve initializers before resource sizes exist. The later alias pass
+    // also sees the generated size aliases used by instruction operands.
+    auto initializerAliases = aliases;
+    if (!readAliases(initializerAliases, false)) return false;
+
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
         currentLineNumber = iline->lineNumber;
@@ -612,25 +617,29 @@ bool FridgeAssemblyLanguageCompiler::readResources()
                 if (res != resources.end())
                     logwarnout("Resource '" + iline->words[1] + "' has already been declared.");
 
+                const auto& operand = iline->words[2];
+                const auto alias = initializerAliases.find(operand);
+                auto value = alias == initializerAliases.end() || isAddressAlias(operand) ? operand : alias->second;
                 StaticResourceInfo resource{};
-                if (isAddressAlias(iline->words[2]))
+                if (isAddressAlias(value))
                 {
                     resource.size = 2;
                     resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
+                    iline->words[2] = value;
                     resource.addressInitializer = &*iline;
                 }
-                else if (iline->words[2][0] == '"')
+                else if (value.front() == '"')
                 {
-                    resource.size = iline->words[2].size() - 1;
+                    resource.isString = true;
+                    resource.size = value.size() - 1;
                     resource.pdata = (FRIDGE_WORD*)malloc(resource.size);
-                    memcpy(resource.pdata, iline->words[2].c_str() + 1, resource.size - 1);
+                    memcpy(resource.pdata, value.c_str() + 1, resource.size - 1);
                     resource.pdata[resource.size - 1] = 0;
                 }
                 else
                 {
                     FRIDGE_DWORD dwr;
                     FRIDGE_WORD wr;
-                    auto& value = iline->words[2];
                     if (parseHexDouble(&value, dwr))
                     {
                         resource.size = 2;
@@ -664,7 +673,7 @@ bool FridgeAssemblyLanguageCompiler::readResources()
     return true;
 }
 
-bool FridgeAssemblyLanguageCompiler::dealias()
+bool FridgeAssemblyLanguageCompiler::readAliases(map<string, string>& table, bool warnOnRedefinition)
 {
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
@@ -674,11 +683,10 @@ bool FridgeAssemblyLanguageCompiler::dealias()
         {
             if (iline->words.size() == 3)
             {
-                map<string, string>::iterator alias = aliases.find(iline->words[1]);
-                if (alias != aliases.end())
+                if (warnOnRedefinition && table.count(iline->words[1]))
                     logwarnout("Alias '" + iline->words[1] + "' has already been declared.");
-                const auto value = aliases.find(iline->words[2]);
-                aliases[iline->words[1]] = value == aliases.end() || isAddressAlias(iline->words[2])
+                const auto value = table.find(iline->words[2]);
+                table[iline->words[1]] = value == table.end() || isAddressAlias(iline->words[2])
                     ? iline->words[2] : value->second;
             }
             else
@@ -688,6 +696,12 @@ bool FridgeAssemblyLanguageCompiler::dealias()
             }
         }
     }
+    return true;
+}
+
+bool FridgeAssemblyLanguageCompiler::dealias()
+{
+    if (!readAliases(aliases, true)) return false;
 
     for (vector< ParsedLine >::iterator iline = lines.begin(); iline != lines.end(); ++iline)
     {
@@ -1003,7 +1017,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
 
     static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
     static const regex subExport(R"(@(inline\s+)?(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
-    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|BC|HL)\s*\)\s*)");
+    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|BC|DE|HL)\s*\)\s*)");
     ostringstream result;
     result << "namespace " << name << " imports \"" << file << '"';
     if (!relocatable) result << " at " << int_to_hex(offset);
@@ -1028,7 +1042,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             if (match[1] == "static" && words[0] == R_STATICRESOURCE)
             {
                 const auto& resource = resources.at(symbol);
-                if (words[2].front() == '"' || resource.size != (wide ? 2 : 1))
+                if (words[2].front() == '"' || resource.isString || resource.size != (wide ? 2 : 1))
                 {
                     logerrout("CPM static export type does not match resource '" + symbol + "'.");
                     return false;
@@ -1094,8 +1108,9 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
                     return false;
                 }
                 const string type = match[1], argumentName = match[2], reg = match[3];
+                const bool wordPair = reg == "BC" || reg == "DE";
                 const bool validBinding = reg == "HL" ? type != "uint8" :
-                    reg == "BC" ? type == "uint16" : type == "uint8";
+                    wordPair ? type == "uint16" : type == "uint8";
                 if (!validBinding)
                 {
                     logerrout("Invalid CPM parameter or register binding for '" + symbol + "'.");
@@ -1105,8 +1120,8 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
                 result << type << ' ' << argumentName;
                 if (reg == "HL")
                     body << "        __lxi_hl " << (type == "string" ? "(cast uint16, " + argumentName + ")" : argumentName) << ";\n";
-                else if (reg == "BC")
-                    body << "        __lxi_bc " << argumentName << ";\n";
+                else if (wordPair)
+                    body << "        __lxi_" << (reg == "BC" ? "bc" : "de") << ' ' << argumentName << ";\n";
                 else
                     body << "        __mvi_" << static_cast<char>(tolower(reg.front())) << ' ' << argumentName << ";\n";
             }
@@ -1116,7 +1131,8 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
                 return false;
             }
         }
-        if (registers.count("BC") && (registers.count("B") || registers.count("C")))
+        if ((registers.count("BC") && (registers.count("B") || registers.count("C"))) ||
+            (registers.count("DE") && registers.count("D")))
         {
             logerrout("Overlapping CPM register bindings for '" + symbol + "'.");
             return false;

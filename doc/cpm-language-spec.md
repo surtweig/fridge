@@ -314,6 +314,7 @@ declared with a matching prototype. Register loads and `__callsub` return `void`
 | `__mvi_a`, `__mvi_b`, `__mvi_c`, `__mvi_d` | `uint8` | Load A, B, C, or D. |
 | `__lxi_hl` | `uint16` | Load HL. A `string` can be bit-cast to `uint16`. |
 | `__lxi_bc` | `uint16` | Load BC. |
+| `__lxi_de` | `uint16` | Load DE. |
 | `__callsub` | Constant `uint16` | Call a routine using the register ABI and the address rules in §6. The callee can clobber general registers and flags. |
 | `__read_a` | None | Return the value of A as a `uint8`. |
 

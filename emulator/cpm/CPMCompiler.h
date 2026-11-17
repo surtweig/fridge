@@ -124,7 +124,7 @@ namespace CPM
 
     enum class CPMCompileMode { Emit, Check, Assembly };
     enum class CPMMainReturn { None, Bootloader, Halt };
-    enum class CPMIntrinsic { None, MviA, MviB, MviC, MviD, LxiBC, LxiHL, CallSub, ReadA, Instruction, Label };
+    enum class CPMIntrinsic { None, MviA, MviB, MviC, MviD, LxiBC, LxiDE, LxiHL, CallSub, ReadA, Instruction, Label };
 
     struct CPMCompileOptions
     {

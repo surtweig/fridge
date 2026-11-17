@@ -319,7 +319,7 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
             SHLD 0x000B
             MVI A, #JMP
             STA FRIDGE_IRQ_KEYBOARD
-            LXI BC, release_address_$SIZE
+            LXI BC, RELEASE_ADDRESS_SIZE
         endsub
 
         subroutine keyboard_handlers
@@ -333,7 +333,9 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
         endsub
 
         static init_address 0x0000
-        static release_address on_release_$ADDR
+        static release_address RELEASE_HANDLER
+        alias RELEASE_HANDLER on_release_$ADDR
+        alias RELEASE_ADDRESS_SIZE release_address_$SIZE
     )";
     std::ostringstream libraryLog;
     FridgeAssemblyLanguageCompiler library(root, "vectors.falc", root + "vectors.bin", {}, &libraryLog, false, false, true);
@@ -360,12 +362,12 @@ static void runKeyboardVectorRelocations(Fixture& fixture)
     const auto base = linked.getOffset() + linked.getProgramSize() - library.getProgramSize();
     const auto initAddress = base + library.getResources().at("init_address").address;
     require(cpu->state == FRIDGE_CPU_HALTED && !FRIDGE_cpu_flag_PANIC(cpu.get()) && cpu->SP == initialSP &&
-            cpu->rB == 0 && cpu->rC == 2 && FRIDGE_DWORD_HL(cpu->ram[initAddress], cpu->ram[initAddress + 1]) == base,
+            cpu->rB == 0 && cpu->rC == 2 && (FRIDGE_DWORD_HL(cpu->ram[initAddress], cpu->ram[initAddress + 1])) == base,
             "Driver initialization did not use the relocated static and subroutine addresses");
 
     const auto resume = cpu->PC;
     const auto release = base + library.getEntries().at("on_release");
-    require(FRIDGE_DWORD_HL(cpu->ram[0x000B], cpu->ram[0x000C]) == release,
+    require((FRIDGE_DWORD_HL(cpu->ram[0x000B], cpu->ram[0x000C])) == release,
             "The static entry initializer did not relocate");
     cpu->inte = FRIDGE_CPU_INTERRUPTS_ENABLED;
     FRIDGE_cpu_interrupt(&system, CALL, FRIDGE_DWORD_TO_WORDS(FRIDGE_IRQ_KEYBOARD));

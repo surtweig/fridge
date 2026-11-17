@@ -78,6 +78,7 @@ struct StaticResourceInfo
     FRIDGE_DWORD size;
     FRIDGE_RAM_ADDR address;
     const ParsedLine* addressInitializer = nullptr;
+    bool isString = false;
 };
 
 class FridgeAssemblyLanguageCompiler
@@ -138,6 +139,7 @@ private:
     void logerrout(string message);
     void logwarnout(string message);
     void initDefaultAliases();
+    bool readAliases(map<string, string>& table, bool warnOnRedefinition);
     bool readResources();
     bool dealias();
     bool addressMarkup(bool exportCpm);

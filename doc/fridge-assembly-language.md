@@ -155,8 +155,8 @@ endsub
 
 `@static` and `@const` export `uint8` or `uint16` values. `@void()` exports a
 subroutine with no parameters. Use `@uint8:A(...)` for a subroutine that
-returns a byte in A. Wrappers can bind `uint8` to A, B, C, or D, `uint16` to BC
-or HL, and `string` to HL. FALC generates offsets for relocatable exports and
+returns a byte in A. Wrappers can bind `uint8` to A, B, C, or D, `uint16` to BC,
+DE, or HL, and `string` to HL. FALC generates offsets for relocatable exports and
 absolute addresses for fixed-address exports.
 
 Add `inline` before the return type to copy the subroutine's instructions into
@@ -231,6 +231,10 @@ Values can be:
 - A byte (decimal, hex, or char): `static timer 0`
 - A double-word hex: `static addr 0x1234` (2 bytes)
 - An address alias: `static addr handler_$ADDR` (2 bytes, high byte first)
+
+A built-in alias or an `alias` declaration can supply any of these values. The
+resolved value determines the resource size. For example,
+`static swap_mode FRIDGE_GPU_VIDEO_SWAP_AUTO` stores one byte.
 
 The resource's address can be referenced by name. Its size is available via
 the automatic alias `<name>_$SIZE`.
@@ -846,8 +850,8 @@ Options:
 
 1. **Preprocess**: read source file, expand `include` directives, parse each
    line into words, build the initial `ParsedLine` list.
-2. **Read resources**: parse `static` declarations, allocate data, set up
-   `<name>_$SIZE` aliases.
+2. **Read resources**: resolve aliases in `static` initializers, allocate data,
+   and set up `<name>_$SIZE` aliases.
 3. **Dealias**: apply `alias` substitutions (including built-in `#OPCODE` and
    `FRIDGE_*` aliases) to every word in every line.
 4. **Address markup**: walk the parsed lines, assign addresses, resolve

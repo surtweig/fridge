@@ -21,9 +21,13 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
         @const uint8
         alias INITIAL 3
         @static uint8
-        static VALUE 0
+        static VALUE INITIAL_VALUE
         @static uint16
-        static HEAP 0x0000
+        static HEAP INITIAL_HEAP
+        static TEXT INITIAL_TEXT
+        alias INITIAL_VALUE FRIDGE_GPU_VIDEO_SWAP_AUTO
+        alias INITIAL_HEAP 0xABCD
+        alias INITIAL_TEXT "OK"
 
         subroutine helper
             MVI A, 0xA5
@@ -69,18 +73,31 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             LXI HL, 0x0000
             VFSI 0x12, 0x34
             VSSI 'A', 'B'
+            LXI DE, 0x0106
+            MVI A, 0xC7
+            STAX DE
         endsub
 
-        @void()
+        @void((uint16 source : HL), (uint8 value : A), (uint16 dest : DE))
         subroutine ordinary
-            MVI A, 0x5A
-            STA 0x0104
+            STAX DE
+            INX DE
+            LDAX HL
+            STAX DE
         endsub
     )" << (fixed ? "\nmain library_start\n    HLT\n" : "");
     std::ostringstream log;
     FridgeAssemblyLanguageCompiler library(root, "inline_lib.falc", root + "inline_lib.bin",
         {}, &log, false, false, true);
     require(library.succeeded(), log.str());
+    const auto* bytes = library.getObjectCode();
+    const auto initialValue = library.getResources().at("VALUE").address - library.getOffset();
+    const auto initialHeap = library.getResources().at("HEAP").address - library.getOffset();
+    const auto initialText = library.getResources().at("TEXT").address - library.getOffset();
+    require(bytes[initialValue] == FRIDGE_GPU_VIDEO_SWAP_AUTO &&
+            bytes[initialHeap] == 0xAB && bytes[initialHeap + 1] == 0xCD &&
+            bytes[initialText] == 'O' && bytes[initialText + 1] == 'K' && bytes[initialText + 2] == 0,
+            "Static aliases did not emit the expected byte, word, and string initializers");
     const auto header = read(fixture.directory / "inline_lib.cpm");
     require(header.find("__mov_b_a;") != string::npos && header.find("__add_b;") != string::npos &&
             header.find("__vpal;") != string::npos && header.find("__vfsi 0x1234;") != string::npos &&
@@ -90,6 +107,8 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
     const auto call = header.find("__callsub");
     require(call != string::npos && header.find("__callsub", call + 1) == string::npos,
             "Only the ordinary export should generate __callsub");
+    require(header.find("__lxi_de dest;") != string::npos && header.find("__lxi_de 0x0106;") != string::npos,
+            "Header did not generate the DE binding and inline load:\n" + header);
     if (!fixed)
         require(header.find("__sta_rel") != string::npos && header.find("__call_rel") != string::npos &&
                 header.find("__lxi_hl_heap") != string::npos,
@@ -108,7 +127,7 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             = (at output, 1), (count 4);
             = (at output, 2), (count 2);
             palette 1, value, 8, 9;
-            ordinary;
+            ordinary 0x0103, 0x5A, 0x0104;
         );
     )");
     CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
@@ -147,6 +166,7 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             " SP=" + to_string(cpu->SP) + " expected=" + to_string(expectedSP));
     require(cpu->ram[0x0100] == 3 && cpu->ram[0x0101] == 4 && cpu->ram[0x0102] == 12 &&
             cpu->ram[0x0103] == 0xA5 && cpu->ram[0x0104] == 0x5A &&
+            cpu->ram[0x0105] == 0xA5 && cpu->ram[0x0106] == 0xC7 &&
             cpu->ram[base + library.getResources().at("VALUE").address] == 10 &&
             FRIDGE_DWORD_HL(cpu->ram[heap], cpu->ram[heap + 1]) == expectedHeap &&
             gpu->palette[3] == 7 && gpu->palette[4] == 8 && gpu->palette[5] == 9 &&
@@ -155,14 +175,17 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             "Inline instructions, parameters, return values, or relocated addresses were incorrect");
 }
 
-static void rejectInvalidInline(Fixture& fixture)
+static void rejectInvalidExports(Fixture& fixture)
 {
     const auto root = fixture.directory.string() + "/";
     const vector<string> sources{
         "@inline static uint8\nstatic invalid 0\n",
         "@inline void()\nsubroutine invalid\nPCHL\nendsub\n",
         "@inline void()\nsubroutine invalid\nJMP external\nendsub\nentry external\nHLT\n",
-        "@inline void()\nsubroutine invalid\nMVI A, 0\nJMP 0x0001\nendsub\n"
+        "@inline void()\nsubroutine invalid\nMVI A, 0\nJMP 0x0001\nendsub\n",
+        "@inline void((uint8 value : D), (uint16 dest : DE))\nsubroutine invalid\nendsub\n",
+        "@inline void((uint8 dest : DE))\nsubroutine invalid\nendsub\n",
+        "@static uint16\nstatic invalid TEXT\nalias TEXT \"x\"\n"
     };
     for (const auto& source : sources)
     {
@@ -171,7 +194,7 @@ static void rejectInvalidInline(Fixture& fixture)
         FridgeAssemblyLanguageCompiler library(root, "invalid.falc", root + "invalid.bin", {}, &log,
             false, false, true);
         require(!library.succeeded() && !fs::exists(fixture.directory / "invalid.cpm"),
-                "An invalid inline export was accepted:\n" + source + log.str());
+                "An invalid export was accepted:\n" + source + log.str());
     }
     fixture.check("void main() (uint8 n 1; __adi n;);", false);
     fixture.check("void main() (__vpal 1;);", false);
@@ -187,7 +210,7 @@ int main()
         runInlineLibrary(fixture, false);
         Fixture fixedFixture;
         runInlineLibrary(fixedFixture, true);
-        rejectInvalidInline(fixture);
+        rejectInvalidExports(fixture);
         std::cout << "CPM inline header tests passed\n";
     }
     catch (const std::exception& error)

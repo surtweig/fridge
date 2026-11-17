@@ -546,16 +546,17 @@ namespace CPM
                     return;
                 }
                 const bool immediate = instruction.inputs.empty();
-                if (instruction.intrinsic == CPMIntrinsic::LxiBC)
+                if (instruction.intrinsic == CPMIntrinsic::LxiBC || instruction.intrinsic == CPMIntrinsic::LxiDE)
                 {
-                    if (immediate) word("LXI BC, ", value);
+                    const string pair = instruction.intrinsic == CPMIntrinsic::LxiBC ? "BC" : "DE";
+                    if (immediate) word("LXI " + pair + ", ", value);
                     else
                     {
                         op("PUSH HL");
                         address(instruction.inputs.front(), 0, 2);
-                        op("MOV B, M");
+                        op("MOV " + pair.substr(0, 1) + ", M");
                         op("INX HL");
-                        op("MOV C, M");
+                        op("MOV " + pair.substr(1) + ", M");
                         op("POP HL");
                     }
                     return;

@@ -158,6 +158,7 @@ namespace CPM
         if (parameter && *parameter == baseType(CPM_DATATYPE_UINT16))
         {
             if (name == "__lxi_bc") return CPMIntrinsic::LxiBC;
+            if (name == "__lxi_de") return CPMIntrinsic::LxiDE;
             if (name == "__lxi_hl") return CPMIntrinsic::LxiHL;
             if (name == "__callsub") return CPMIntrinsic::CallSub;
             if (name == "__label") return CPMIntrinsic::Label;
