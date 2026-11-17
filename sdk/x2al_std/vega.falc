@@ -1,0 +1,23 @@
+@const uint8
+alias VEGA_WIDTH FRIDGE_GPU_FRAME_EGA_WIDTH
+
+@const uint8
+alias VEGA_HEIGHT FRIDGE_GPU_FRAME_EGA_HEIGHT
+
+@inline void()
+subroutine vega_begin
+    MVI A, FRIDGE_GPU_VIDEO_MODE_EGA
+    VMODE
+endsub
+
+@inline void()
+subroutine vega_present
+    LXI HL, 0x0000
+    MVI A, FRIDGE_GPU_VIDEO_SWAP_AUTO
+    VPRE
+endsub
+
+@inline void( (uint8 index : A), (uint8 r : B), (uint8 g : C), (uint8 b : D) )
+subroutine vega_set_pallette
+    VPAL
+endsub
