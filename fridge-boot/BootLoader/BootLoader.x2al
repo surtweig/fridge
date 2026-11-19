@@ -1,143 +1,87 @@
-// =============================================================================================
-// BootLoader appears automatically in the RAM at address 0x0000 on system's powerup.
-// It loads a ROM section of given index (BOOT_SECTION_INDEX_ADDRESS) then passes the control.
-// =============================================================================================
-
-include "stdapp.inc"
-
-// Telling the compiler that the program starts at this address
+// Boot a section from the mounted fridgemulib ROM into RAM at 0x0200.
 offset 0x0000
 
-// Allows inconsistent use of JMP and CALL instructions
-unsafe_flow
+// Loading 253 segments ends at 0xFF00, leaving room for the return jump
+// and the descending stack at the top of RAM.
+alias BOOT_FIRST_OVERSIZE_COUNT 0xFE
 
-main BootLoader
-    JMP BootLoader.start
-    // BOOT_SECTION_INDEX_ADDRESS points at this address and default value is 0 (hence NOP).
-    // This zero can be modified by an executable to load another one.
-    NOP // 0x0003
+// Keep reset, section index and IRQ vectors at their fixed addresses.
+JMP boot.start
+NOP // FRIDGE_BOOT_SECTION_INDEX_ADDRESS (0x0003), default section 0.
 
-    // System timer IRQ
-    RET // 0x0004
-    NOP
-    NOP
-    // Shared keyboard IRQ. Programs can replace this jump with their handler.
-    JMP BootLoader.keyboard_irq // 0x0007
-    
-entry BootLoader.start    
-    // Enable interrupts
+subroutine boot.timer_irq // FRIDGE_IRQ_SYS_TIMER (0x0004)
     EI
-    // Stream pointer
-    LXI BC, EXECUTABLE_OFFSET
-    
-    // Sending ROM reset signal
+endsub
+NOP
+
+JMP boot.keyboard_irq // FRIDGE_IRQ_KEYBOARD (0x0007)
+
+entry boot.start
+    DI
+    LXI SP, 0xFFFF
+
+    // A program that jumps back to reset may have installed its own handlers.
+    LXI HL, FRIDGE_IRQ_SYS_TIMER
+    MVI M, #EI
+    INX HL
+    MVI M, #RET
+    INX HL
+    MVI M, #NOP
+    INX HL
+    MVI M, #JMP
+    LXI DE, boot.keyboard_irq_$ADDR
+    INX HL
+    MOV M, D
+    INX HL
+    MOV M, E
+
+    // The last mounted segment is the fallback end for the final TOC record.
     MVI A, 1
-    OUT XCM2_ROM_DEVICE_RESET_ID
-       
-    // Reading TOC 
-    MVI A, XCM2_ROM_DEVICE_MODE_LOAD
-    OUT XCM2_ROM_DEVICE_ID
-    MVI A, 0
-    OUT XCM2_ROM_DEVICE_ID
-    MVI A, 0
-    OUT XCM2_ROM_DEVICE_ID
-    HLT                             // Wait for the interruption signal from ROM
-    
-    entry TOCStream
-        //OUT XCM2_ROM_DEVICE_ID    // Signalling ROM that we are ready to read
-        IN XCM2_ROM_DEVICE_ID       // Read recieved byte from the stream
-        STAX BC                     // Write to the memory
-        INX BC                      // Increase pointer
-        MOV A, B                    // Check for stream end
-        CPI 0x02                    // TODO
-        JNZ TOCStream
-
-    // We need to get segment index of the executable we are loading,
-    // and segment index of the next one
-    LXI BC, EXECUTABLE_OFFSET // TOC starts here
-    LDA BOOT_SECTION_INDEX_ADDRESS
-    RLC // Index address position in TOC == Index*2
-    // C is a lower byte of address and it is always zero by convention, so we can safely add boot section index to it
-    MOV C, A
-    // Save the loaded executable's segment index to DE
-    LDAX BC
+    OUT FRIDGE_DEV_ROM_RESET_ID
+    IN FRIDGE_DEV_ROM_RESET_ID
     MOV D, A
-    INX BC
-    LDAX BC
+    IN FRIDGE_DEV_ROM_RESET_ID
     MOV E, A
-    // And the next one's to the stack
-    INX BC
-    LDAX BC
-    MOV H, A
-    INX BC
-    LDAX BC
-    MOV L, A
-    LXI SP 0xFFFF // Reset stack pointer
-    PUSH HL
+    ORA D
+    JZ boot.invalid
 
-    // Read executable data
-    LXI BC, EXECUTABLE_OFFSET
-    entry ReadSegment
-        XTHL     // restore end segment index to stack
-        MOV H, B
-        INR H    // H now holds higher byte of stream end address
-        
-        MVI A, XCM2_ROM_DEVICE_MODE_LOAD
-        OUT XCM2_ROM_DEVICE_ID
-        MOV A, D
-        OUT XCM2_ROM_DEVICE_ID
-        MOV A, E
-        OUT XCM2_ROM_DEVICE_ID
-        HLT                             // Wait for the interruption signal from ROM
-        entry SegmentStream
-            IN XCM2_ROM_DEVICE_ID       // Read recieved byte from the stream
-            STAX BC                     // Write to the memory
-            INX BC                      // Increase pointer
-            MOV A, B                    // Check for stream end
-            CMP H
-            JNZ SegmentStream
-            JMP SegmentStreamEnd
-        entry SegmentStreamEnd
-        
-        XTHL                           // temporary swapping with end segment index saved in stack
-        INX DE                         // move to next segment
+    // Reuse the executable buffer for TOC scratch space before loading data.
+    LXI HL, FRIDGE_EXECUTABLE_OFFSET
+    CALL rom_read_toc
+    LXI HL, FRIDGE_EXECUTABLE_OFFSET
+    LDA FRIDGE_BOOT_SECTION_INDEX_ADDRESS
+    CALL rom_section_bounds
+    JNZ boot.invalid
 
-        // Check for section end
-        MOV A, D
-        CMP H
-        JNZ ReadSegment
-        MOV A, E
-        CMP L
-        JNZ ReadSegment
-        
-        JMP ReadSegmentEnd
-        
-    entry ReadSegmentEnd
-    
-    // Reset @BOOT_SECTION_INDEX_ADDRESS
-    MVI A, 0
-    STA BOOT_SECTION_INDEX_ADDRESS
-    
-    // Writing JMP to BootLoader (0x0000) instruction after the loaded executable finishes
-    MVI A, #JMP
-    STAX BC
-    INX BC
-    MVI A, 0
-    STAX BC
-    INX BC
-    MVI A, 0
-    STAX BC
-    
-    // Reset stack pointer
-    LXI SP 0xFFFF
+    MOV A, D
+    ORA A
+    JNZ boot.invalid
+    MOV A, E
+    CPI BOOT_FIRST_OVERSIZE_COUNT
+    JP boot.invalid
+    CALL rom_read_section
+    JNZ boot.invalid
 
-    // Start executable
-    JMP EXECUTABLE_OFFSET
+    // An executable that falls through its padded section restarts the loader.
+    MVI M, #JMP
+    INX HL
+    MVI M, 0
+    INX HL
+    MVI M, 0
+    XRA A
+    STA FRIDGE_BOOT_SECTION_INDEX_ADDRESS
+    JMP FRIDGE_EXECUTABLE_OFFSET
 
-subroutine BootLoader.keyboard_interrupt
-    entry BootLoader.keyboard_irq
+entry boot.invalid
+    DI
+    HLT
+
+subroutine boot.keyboard_handler
+    entry boot.keyboard_irq
     PUSH AF
-    IN XCM2_KEYBOARD_DEVICE_ID
+    IN FRIDGE_DEV_KEYBOARD_ID
     POP AF
     EI
 endsub
+
+include "rom.falc"

@@ -83,6 +83,8 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_FLAG_PARITY_MASK 0x04
 #define FRIDGE_FLAG_CARRY_MASK  0x01
 
+// ROM reset OUT with a nonzero value. In mode-select, two INs give the last
+// mounted segment index, high byte first. Zero means no payload segments.
 #define FRIDGE_DEV_ROM_RESET_ID 0x01
 #define FRIDGE_DEV_ROM_ID 0x02
 #define FRIDGE_DEV_KEYBOARD_ID 0x03

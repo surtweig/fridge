@@ -730,7 +730,7 @@ static FRIDGE_WORD* rom_next_byte(FRIDGE_ROM* rom, FRIDGE_ROM_MODE mode)
 
 void rom_reset_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
 {
-    if (data > 0)
+    if (data > 0 && sys->rom)
     {
         FRIDGE_ROM *rom = sys->rom;
         rom->state = FRIDGE_ROM_SELECT_MODE;
@@ -738,6 +738,23 @@ void rom_reset_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
         rom->stream_position = 0;
         rom->active_segment = 0;
     }
+}
+
+static FRIDGE_WORD rom_reset_dev_input(FRIDGE_SYSTEM* sys)
+{
+    FRIDGE_ROM* rom = sys->rom;
+    if (!rom || rom->state != FRIDGE_ROM_SELECT_MODE || !rom->segments || rom->segments_count == 0)
+        return 0;
+
+    const FRIDGE_ROM_ADDR last_segment = (FRIDGE_ROM_ADDR)(rom->segments_count - 1);
+    // A reset starts the two-byte response at the high byte.
+    if (rom->stream_position == 0)
+    {
+        rom->stream_position = 1;
+        return FRIDGE_HIGH_WORD(last_segment);
+    }
+    rom->stream_position = 0;
+    return FRIDGE_LOW_WORD(last_segment);
 }
 
 void rom_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
@@ -748,6 +765,7 @@ void rom_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
         if (data == FRIDGE_ROM_MODE_LOAD || data == FRIDGE_ROM_MODE_STORE)
         {
             rom->mode = data;
+            rom->stream_position = 0;
             rom->state = FRIDGE_ROM_SEGHIGH;
         }
         else
@@ -830,6 +848,7 @@ void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
 
     cpu->input_dev[FRIDGE_DEV_KEYBOARD_ID] = &keyboard_controller_dev_input;
     cpu->input_dev[FRIDGE_DEV_ROM_ID] = &rom_dev_input;
+    cpu->input_dev[FRIDGE_DEV_ROM_RESET_ID] = &rom_reset_dev_input;
     cpu->output_dev[FRIDGE_DEV_ROM_RESET_ID] = &rom_reset_dev_output;
     cpu->output_dev[FRIDGE_DEV_ROM_ID] = &rom_dev_output;
 }

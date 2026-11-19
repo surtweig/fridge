@@ -14,6 +14,13 @@ if(BUILD_TESTING)
     target_link_libraries(rom_library_test PRIVATE falc_core)
     add_test(NAME rom_library COMMAND rom_library_test)
 
+    add_executable(rom_bootloader_test tests/rom_bootloader.cpp fridgemulib.c)
+    target_include_directories(rom_bootloader_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(rom_bootloader_test PRIVATE
+        FRIDGE_BOOTLOADER_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fridge-boot/BootLoader/")
+    target_link_libraries(rom_bootloader_test PRIVATE falc_core)
+    add_test(NAME rom_bootloader COMMAND rom_bootloader_test)
+
     set(FRIDGE_TEST_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/artifacts" CACHE PATH
         "Directory for emulator test screenshots")
     file(MAKE_DIRECTORY "${FRIDGE_TEST_ARTIFACT_DIR}")
