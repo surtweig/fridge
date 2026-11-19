@@ -6,6 +6,14 @@ add_executable(fridgemulib main.cpp fridgemulib.c fridgemulib.h posit.c posit.h)
 
 include(CTest)
 if(BUILD_TESTING)
+    if(NOT TARGET falc_core)
+        add_subdirectory(../falc falc EXCLUDE_FROM_ALL)
+    endif()
+    add_executable(rom_library_test tests/rom_library.cpp fridgemulib.c)
+    target_include_directories(rom_library_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(rom_library_test PRIVATE falc_core)
+    add_test(NAME rom_library COMMAND rom_library_test)
+
     set(FRIDGE_TEST_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/artifacts" CACHE PATH
         "Directory for emulator test screenshots")
     file(MAKE_DIRECTORY "${FRIDGE_TEST_ARTIFACT_DIR}")

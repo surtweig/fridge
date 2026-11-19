@@ -697,17 +697,35 @@ FRIDGE_WORD keyboard_controller_dev_input(FRIDGE_SYSTEM* sys)
     return kdata;
 }
 
-void rom_tick(FRIDGE_SYSTEM* sys)
+static void rom_tick(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_ROM *rom = sys->rom;
-    if (rom)
+    FRIDGE_ROM* rom = sys->rom;
+    FRIDGE_CPU* cpu = sys->cpu;
+    // Hold the ready interrupt through the address OUT until the CPU executes HLT.
+    if (rom && rom->state == FRIDGE_ROM_OPERATE && cpu->state == FRIDGE_CPU_HALTED &&
+        cpu->inte == FRIDGE_CPU_INTERRUPTS_ENABLED && !FRIDGE_cpu_flag_PANIC(cpu))
     {
-        if (rom->state == FRIDGE_ROM_OPERATE) {
-            FRIDGE_cpu_interrupt(sys, NOP, 0, 0);
-            rom->stream_position = 0;
-            rom->state = FRIDGE_ROM_STREAMING;
-        }
+        rom->state = FRIDGE_ROM_STREAMING;
+        FRIDGE_cpu_interrupt(sys, NOP, 0, 0);
     }
+}
+
+static FRIDGE_WORD* rom_next_byte(FRIDGE_ROM* rom, FRIDGE_ROM_MODE mode)
+{
+    // A synchronous IN/OUT can also consume readiness without waiting for the IRQ.
+    if (rom->mode != mode ||
+        (rom->state != FRIDGE_ROM_STREAMING && rom->state != FRIDGE_ROM_OPERATE))
+        return 0;
+
+    FRIDGE_WORD* byte = &rom->segments[rom->active_segment].data[rom->stream_position++];
+    if (rom->stream_position == FRIDGE_ROM_SEGMENT_SIZE)
+    {
+        rom->stream_position = 0;
+        rom->state = FRIDGE_ROM_OPERATE;
+    }
+    else
+        rom->state = FRIDGE_ROM_STREAMING;
+    return byte;
 }
 
 void rom_reset_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
@@ -756,34 +774,24 @@ void rom_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
             rom->state = FRIDGE_ROM_OPERATE;
     }
 
-    else if (rom->state == FRIDGE_ROM_STREAMING && rom->mode == FRIDGE_ROM_MODE_STORE)
-    {
-        rom->segments[rom->active_segment].data[rom->stream_position++] = data;
-        if (rom->stream_position == FRIDGE_ROM_SEGMENT_SIZE)
-        {
-            rom->state = FRIDGE_ROM_OPERATE;
-        }
-    }
-
     else
     {
-        corePanic(sys->cpu);
-        rom->state = FRIDGE_ROM_SELECT_MODE;
+        FRIDGE_WORD* byte = rom_next_byte(rom, FRIDGE_ROM_MODE_STORE);
+        if (byte)
+            *byte = data;
+        else
+        {
+            corePanic(sys->cpu);
+            rom->state = FRIDGE_ROM_SELECT_MODE;
+        }
     }
 }
 
 FRIDGE_WORD rom_dev_input(FRIDGE_SYSTEM* sys)
 {
-    FRIDGE_ROM *rom = sys->rom;
-    if (rom->state == FRIDGE_ROM_STREAMING && rom->mode == FRIDGE_ROM_MODE_LOAD)
-    {
-        FRIDGE_WORD data = rom->segments[rom->active_segment].data[rom->stream_position++];
-        if (rom->stream_position == FRIDGE_ROM_SEGMENT_SIZE)
-        {
-            rom->state = FRIDGE_ROM_OPERATE;
-        }
-        return data;
-    }
+    FRIDGE_WORD* byte = rom_next_byte(sys->rom, FRIDGE_ROM_MODE_LOAD);
+    if (byte)
+        return *byte;
     corePanic(sys->cpu);
     return 0;
 }

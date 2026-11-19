@@ -1,0 +1,240 @@
+// Fridgemulib ROM. Each transfer moves whole 256-byte segments.
+// Call from foreground code with a mounted ROM and a valid stack. Interrupt
+// handlers must preserve registers and leave the ROM device to the caller.
+// I/O calls that transfer data return with interrupts enabled.
+
+@const uint16
+alias ROM_SEGMENT_SIZE 0x0100
+@const uint8
+alias ROM_TOC_RECORDS 128
+@const uint8
+alias ROM_OK 0
+@const uint8
+alias ROM_INVALID 1
+alias ROM0_MODE_STORE 1
+alias ROM0_MODE_LOAD 2
+
+// Read/write segment 0 into/from a 256-byte buffer at HL. Preserves BC and DE.
+// On return HL advances by 256 and A and flags are clobbered.
+@void( (uint16 rom_buffer : HL) )
+subroutine rom_read_toc
+    PUSH BC
+    LXI BC, 0x0000
+    CALL rom_read_segment
+    POP BC
+endsub
+
+@void( (uint16 rom_buffer : HL) )
+subroutine rom_write_toc
+    PUSH BC
+    LXI BC, 0x0000
+    CALL rom_write_segment
+    POP BC
+endsub
+
+// Read/write segment BC into/from the buffer at HL. The segment must exist
+// on the mounted ROM and all 256 buffer bytes must fit in RAM.
+// Preserves BC and DE, advances HL by 256, and clobbers A and flags.
+@void( (uint16 rom_segment : BC), (uint16 rom_buffer : HL) )
+subroutine rom_read_segment
+    MVI A, ROM0_MODE_LOAD
+    CALL rom0.transfer_segment
+endsub
+
+@void( (uint16 rom_segment : BC), (uint16 rom_buffer : HL) )
+subroutine rom_write_segment
+    MVI A, ROM0_MODE_STORE
+    CALL rom0.transfer_segment
+endsub
+
+// Find the span of section A (0..127) in a TOC previously read into RAM at HL.
+// DE is the last usable segment index, inclusive (0xFFFF on a full-size ROM).
+// TOC records are big-endian start indices. A zero start is unused. The next
+// record gives the exclusive end when nonzero. If it is zero or this is slot
+// 127, the section extends through the supplied end. Equal, descending, or
+// out-of-range bounds are invalid. DE can limit the data area on larger ROMs.
+// Returns A=ROM_OK, BC=first segment and DE=segment count, or A=ROM_INVALID
+// (BC and DE unspecified). HL is preserved. Z is set on success.
+subroutine rom_section_bounds
+    ORA A
+    JM rom_section_bounds.bad_index
+    PUSH HL
+    ADD A
+    LXI BC, 0x0000
+    MOV C, A
+    DAD BC
+
+    CPI 0xFE // Byte offset of record 127.
+    MOV B, M
+    INX HL
+    MOV C, M
+    JZ rom_section_bounds.use_last
+
+    INX HL
+    MOV A, M
+    INX HL
+    MOV L, M
+    MOV H, A
+    ORA L
+    JZ rom_section_bounds.use_last
+    DCX HL // Convert the next start to an inclusive end.
+    MOV A, E
+    SUB L
+    MOV A, D
+    SBB H
+    JC rom_section_bounds.invalid
+    JMP rom_section_bounds.count
+
+    entry rom_section_bounds.use_last
+        XCNG
+
+    entry rom_section_bounds.count
+        MOV A, B
+        ORA C
+        JZ rom_section_bounds.invalid
+        MOV A, L
+        SUB C
+        MOV E, A
+        MOV A, H
+        SBB B
+        MOV D, A
+        JC rom_section_bounds.invalid
+        INX DE
+        XRA A
+        POP HL
+        RET
+
+    entry rom_section_bounds.invalid
+        POP HL
+    entry rom_section_bounds.bad_index
+        MVI A, ROM_INVALID
+        ORA A
+endsub
+
+// Same lookup with a four-byte result buffer at BC for CPM callers.
+// On ROM_OK, writes two big-endian uint16 values: first segment, then count.
+@uint8:A( (uint8 rom_section_index : A), (uint16 rom_toc_address : HL), (uint16 rom_last_segment : DE), (uint16 rom_span_address : BC) )
+subroutine rom_section_bounds_into
+    PUSH BC
+    CALL rom_section_bounds
+    POP HL
+    RNZ
+    MOV M, B
+    INX HL
+    MOV M, C
+    INX HL
+    MOV M, D
+    INX HL
+    MOV M, E
+endsub
+
+// Read/write a span returned by rom_section_bounds, or a chunk of that span.
+// BC = first segment, DE = number of segments, HL = RAM buffer. The caller
+// supplies a buffer large enough for the chunk and keeps it clear of the code
+// and stack. A count of zero succeeds without I/O. Use chunks for sections
+// that exceed available RAM.
+// Returns A=ROM_OK, BC and HL advanced, DE=0. A=ROM_INVALID means the span
+// includes the TOC or crosses the RAM or ROM address limit. On error BC, DE
+// and HL are preserved and no I/O is done. Z is set on success.
+@uint8:A( (uint16 rom_first_segment : BC), (uint16 rom_segment_count : DE), (uint16 rom_buffer : HL) )
+subroutine rom_read_section
+    MVI A, ROM0_MODE_LOAD
+    CALL rom0.transfer_section
+endsub
+
+@uint8:A( (uint16 rom_first_segment : BC), (uint16 rom_segment_count : DE), (uint16 rom_buffer : HL) )
+subroutine rom_write_section
+    MVI A, ROM0_MODE_STORE
+    CALL rom0.transfer_section
+endsub
+
+subroutine rom0.transfer_section
+    PUSH AF
+    MOV A, D
+    ORA A
+    JNZ rom0.transfer_section.invalid
+    MOV A, E
+    ORA A
+    JZ rom0.transfer_section.empty
+    MOV A, B
+    ORA C
+    JZ rom0.transfer_section.invalid
+
+    // E pages added to HL may reach 0x10000 exactly at the end of the buffer.
+    MOV A, E
+    ADD H
+    JNC rom0.transfer_section.check_last_segment
+    ORA L
+    JNZ rom0.transfer_section.invalid
+
+    entry rom0.transfer_section.check_last_segment
+        MOV A, E
+        DCR A
+        ADD C
+        MOV A, B
+        ACI 0
+        JC rom0.transfer_section.invalid
+        POP AF
+
+    entry rom0.transfer_section.loop
+        CALL rom0.transfer_segment
+        INX BC
+        DCR E
+        JNZ rom0.transfer_section.loop
+        XRA A
+        RET
+
+    entry rom0.transfer_section.empty
+        POP AF
+        XRA A
+        RET
+
+    entry rom0.transfer_section.invalid
+        POP AF
+        MVI A, ROM_INVALID
+        ORA A
+endsub
+
+// A selects direction. Preserve it for the next segment in a section transfer.
+subroutine rom0.transfer_segment
+    PUSH DE
+    MOV E, A
+    DI
+    MVI A, 1
+    OUT FRIDGE_DEV_ROM_RESET_ID
+    MOV A, E
+    OUT FRIDGE_DEV_ROM_ID
+    MOV A, B
+    OUT FRIDGE_DEV_ROM_ID
+    MOV A, C
+    OUT FRIDGE_DEV_ROM_ID
+    EI
+    HLT // The ready NOP wakes the CPU and clears interrupt enable.
+
+    MVI D, 0 // Decrementing from zero makes exactly 256 iterations.
+    MOV A, E
+    CPI ROM0_MODE_STORE
+    JZ rom0.transfer_segment.write
+
+    entry rom0.transfer_segment.read
+        IN FRIDGE_DEV_ROM_ID
+        MOV M, A
+        INX HL
+        DCR D
+        JNZ rom0.transfer_segment.read
+        JMP rom0.transfer_segment.done
+
+    entry rom0.transfer_segment.write
+        MOV A, M
+        OUT FRIDGE_DEV_ROM_ID
+        INX HL
+        DCR D
+        JNZ rom0.transfer_segment.write
+
+    entry rom0.transfer_segment.done
+        MVI A, 1
+        OUT FRIDGE_DEV_ROM_RESET_ID
+        MOV A, E
+        POP DE
+        EI
+endsub

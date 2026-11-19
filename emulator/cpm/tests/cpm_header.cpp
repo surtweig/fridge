@@ -202,6 +202,78 @@ static void rejectInvalidExports(Fixture& fixture)
     fixture.check("void __vpal(); void main() (__vpal;);", true);
 }
 
+static void runRomLibrary(Fixture& fixture)
+{
+    const auto root = fixture.directory.string() + "/";
+    fs::copy_file(CPM_ROM_LIBRARY, fixture.directory / "rom.falc");
+    std::ostringstream log;
+    FridgeAssemblyLanguageCompiler library(root, "rom.falc", root + "rom.bin",
+        {}, &log, false, false, true);
+    require(library.succeeded(), log.str());
+
+    fixture.source(R"(
+        include "rom.cpm";
+        using rom;
+        struct RomSpan (uint16 first; uint16 count;);
+        static RomSpan span imports 0x0100;
+        static <uint8 array 4> status imports 0x0104;
+        static <uint8 array ROM_SEGMENT_SIZE> toc imports 0x2000;
+        void main()
+        (
+            uint16 toc_address (cast uint16, (addr toc));
+            uint16 span_address (cast uint16, (addr span));
+            rom_read_toc toc_address;
+            = (at toc, 255), 0x5A;
+            rom_write_toc toc_address;
+            = (at status, 0), (rom_section_bounds_into 1, toc_address, 0x0103, span_address);
+            = (at status, 1), (rom_section_bounds_into ROM_TOC_RECORDS, toc_address, 0x0103, span_address);
+            = (at status, 2), (rom_write_section span.first, span.count, 0x2300);
+            = (at status, 3), (rom_read_section span.first, span.count, 0x2100);
+            rom_write_segment 0x0103, 0x2300;
+            rom_read_segment 0x0103, 0x2500;
+        );
+    )");
+    CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    std::istringstream assembly(compiler.AssemblyOutput());
+    FridgeAssemblyLanguageCompiler program(assembly, root, "program.falc", "", &log);
+    require(program.succeeded(), log.str() + compiler.AssemblyOutput());
+
+    FRIDGE_CPU cpu{};
+    FRIDGE_cpu_reset(&cpu);
+    cpu.PC = program.getOffset();
+    std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu.ram + cpu.PC);
+    std::fill_n(cpu.ram + 0x0104, 4, 0xff);
+    for (unsigned i = 0; i < 2 * FRIDGE_ROM_SEGMENT_SIZE; ++i)
+        cpu.ram[0x2300 + i] = static_cast<FRIDGE_WORD>(i ^ (i >> FRIDGE_WORD_BITS));
+
+    std::vector<FRIDGE_ROM_SEGMENT> segments(0x0104);
+    auto& toc = segments[0].data;
+    toc[1] = 1;
+    toc[2] = 1;
+    toc[3] = 1;
+    toc[4] = 1;
+    toc[5] = 3;
+    FRIDGE_ROM rom{};
+    rom.segments = segments.data();
+    rom.segments_count = segments.size();
+    FRIDGE_SYSTEM system{};
+    system.cpu = &cpu;
+    system.rom = &rom;
+    for (int steps = 0; steps < 30000 && cpu.state == FRIDGE_CPU_ACTIVE; ++steps) FRIDGE_sys_tick(&system);
+
+    require(cpu.state == FRIDGE_CPU_HALTED && !FRIDGE_cpu_flag_PANIC(&cpu), "CPM ROM program failed");
+    require(cpu.ram[0x0104] == 0 && cpu.ram[0x0105] == 1 && cpu.ram[0x0106] == 0 && cpu.ram[0x0107] == 0,
+            "CPM ROM wrapper returned incorrect status values");
+    const FRIDGE_DWORD first = FRIDGE_DWORD_HL(cpu.ram[0x0100], cpu.ram[0x0101]);
+    const FRIDGE_DWORD count = FRIDGE_DWORD_HL(cpu.ram[0x0102], cpu.ram[0x0103]);
+    require(first == 0x0101 && count == 2, "CPM ROM wrapper wrote incorrect section bounds");
+    require(toc[255] == 0x5A && std::equal(toc, toc + FRIDGE_ROM_SEGMENT_SIZE, cpu.ram + 0x2000),
+            "CPM TOC read or write failed");
+    require(std::equal(cpu.ram + 0x2100, cpu.ram + 0x2300, cpu.ram + 0x2300), "CPM section round trip failed");
+    require(std::equal(cpu.ram + 0x2500, cpu.ram + 0x2600, cpu.ram + 0x2300), "CPM segment round trip failed");
+}
+
 int main()
 {
     try
@@ -211,7 +283,8 @@ int main()
         Fixture fixedFixture;
         runInlineLibrary(fixedFixture, true);
         rejectInvalidExports(fixture);
-        std::cout << "CPM inline header tests passed\n";
+        runRomLibrary(fixture);
+        std::cout << "CPM header tests passed\n";
     }
     catch (const std::exception& error)
     {

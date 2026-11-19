@@ -76,6 +76,9 @@ if(BUILD_TESTING)
         ../../fridgemulib/posit.c
     )
     target_include_directories(cpm_header_tests PRIVATE ../../fridgemulib)
+    target_compile_definitions(cpm_header_tests PRIVATE
+        CPM_ROM_LIBRARY="${CMAKE_CURRENT_SOURCE_DIR}/../../sdk/x2al_std/rom.falc"
+    )
     target_link_libraries(cpm_header_tests PRIVATE cpm_core)
     add_test(NAME cpm_headers COMMAND cpm_header_tests)
 endif()
