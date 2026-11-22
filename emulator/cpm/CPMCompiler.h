@@ -130,6 +130,7 @@ namespace CPM
     {
         FRIDGE_RAM_ADDR offset = FRIDGE_EXECUTABLE_OFFSET;
         CPMMainReturn mainReturn = CPMMainReturn::Bootloader;
+        string binaryOutput;
     };
 
     struct CPMDataSymbol

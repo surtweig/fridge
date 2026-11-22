@@ -515,22 +515,33 @@ namespace CPM
         if (!validTypeLayout(type)) { fail("Invalid static value layout."); return; }
         int size = sizeOfTypeExpr(type);
         if (size <= 0 || size > DataMaxSize) { fail("Static symbol '" + name->text + "' is too large."); return; }
+        shared_ptr<CPMCheckedExpression> initializer;
         CPMSyntaxTreeNode* value = nullptr;
         int address = -1;
         if (node->children.size() == 5)
         {
             auto keyword = node->children[3];
             auto source = node->children[4];
-            if (keyword->type != CPM_ID || keyword->text != R_IMPORT || source->type != CPM_NUM)
-            { fail("Expected 'imports address'; array modifiers belong inside '<...>'."); return; }
-            auto importedAddress = analyzer.expression(source);
-            if (!importedAddress) return;
-            if (importedAddress.type.base != CPM_DATATYPE_UINT8 && importedAddress.type.base != CPM_DATATYPE_UINT16)
-            { fail("An import address must be an unsigned integer literal."); return; }
-            address = 0;
-            for (auto byte : importedAddress.bytes) address = (address << 8) | byte;
-            if (isConst || size > 65536 - address)
-            { fail("Invalid imported static address or size."); return; }
+            if (keyword->type != CPM_ID || keyword->text != R_IMPORT ||
+                (source->type != CPM_NUM && source->type != CPM_STR))
+            { fail("Expected 'imports address' or 'imports \"file.bin\"'."); return; }
+            if (source->type == CPM_STR)
+            {
+                auto checked = analyzer.binaryInitializer(source, type, name->text);
+                if (!checked) return;
+                initializer = make_shared<CPMCheckedExpression>(std::move(checked));
+            }
+            else
+            {
+                auto importedAddress = analyzer.expression(source);
+                if (!importedAddress) return;
+                if (importedAddress.type.base != CPM_DATATYPE_UINT8 && importedAddress.type.base != CPM_DATATYPE_UINT16)
+                { fail("An import address must be an unsigned integer literal."); return; }
+                address = 0;
+                for (auto byte : importedAddress.bytes) address = (address << 8) | byte;
+                if (isConst || size > 65536 - address)
+                { fail("Invalid imported static address or size."); return; }
+            }
         }
         else if (node->children.size() == 4)
         {
@@ -538,7 +549,6 @@ namespace CPM
             if (value->text == R_ARRAY || value->text == R_IMPORT)
             { fail("Invalid declaration initializer; compound types use '<...>'."); return; }
         }
-        shared_ptr<CPMCheckedExpression> initializer;
         if (value)
         {
             auto checked = analyzer.initializer(value, type);

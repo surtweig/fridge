@@ -131,6 +131,17 @@ int _tmain(int argc, _TCHAR* argv[])
     const fs::path source(argv[2]);
     const auto directory = source.parent_path();
     const auto root = directory.empty() ? string{} : (directory / "").string();
+    auto output = source;
+    if (option == "--bin")
+    {
+        output.replace_extension(".bin");
+        if (output == source)
+        {
+            std::cerr << "Binary output would overwrite the source file.\n";
+            return 1;
+        }
+        options.binaryOutput = output.string();
+    }
     CPMCompiler compiler(root, source.filename().string(), "", includeFolders,
                          checkOnly ? CPMCompileMode::Check : CPMCompileMode::Assembly, options);
     if (checkOnly)
@@ -149,13 +160,6 @@ int _tmain(int argc, _TCHAR* argv[])
         return 0;
     }
 
-    auto output = source;
-    output.replace_extension(".bin");
-    if (output == source)
-    {
-        std::cerr << "Binary output would overwrite the source file.\n";
-        return 1;
-    }
     auto assemblyName = source.filename();
     assemblyName.replace_extension(".falc");
     std::istringstream assembly(compiler.AssemblyOutput());

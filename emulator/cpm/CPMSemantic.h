@@ -111,6 +111,7 @@ namespace CPM
         void checkFunction(CPMFunctionSymbol& symbol);
         CPMCheckedExpression expression(CPMSyntaxTreeNode* node);
         CPMCheckedExpression initializer(CPMSyntaxTreeNode* node, const CPMType& type);
+        CPMCheckedExpression binaryInitializer(CPMSyntaxTreeNode* file, const CPMType& type, const string& name);
         int arrayCount(CPMSyntaxTreeNode* node);
     };
 }

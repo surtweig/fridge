@@ -120,7 +120,17 @@ int main()
             }
         });
 
+        std::ofstream(fixture.directory / "data.bin", std::ios::binary).write("\x00\x80\xFF", 3);
         const vector<std::pair<string, string>> invalid{
+            {"const uint8 data imports \"data.bin\";", "Declared type is uint8"},
+            {"static <uint16 array 3> data imports \"data.bin\";", "Declared type is <uint16 array 3>"},
+            {"const <<uint8 array 1> array 3> data imports \"data.bin\";", "requires a one-dimensional <uint8 array N>"},
+            {"const <uint8 array 4> data imports \"data.bin\";", "has 3 bytes. <uint8 array 4> requires exactly 4 bytes"},
+            {"static <uint8 array 2> data imports \"data.bin\";", "has 3 bytes. <uint8 array 2> requires exactly 2 bytes"},
+            {"const <uint8 array 3> data imports \"missing.bin\";", "missing.bin' cannot be accessed"},
+            {"const <uint8 array 3> data imports \".\";", "must refer to a regular file"},
+            {"void f() (<uint8 array 3> data imports \"data.bin\";);", "requires a static or const declaration"},
+            {"const <uint8 array 3> data imports \"data.bin\"; void f() (= (at data, 0), 1;);", "writable destination"},
             {"void f() (uint16 x 1;);", "Expected uint16, got uint8"},
             {"void f(uint8 x) (= x, (+ x, 1d););",
              "Operator '+' cannot accept operands of type 'uint8', 'uint16'. Implicit conversions are not allowed."},

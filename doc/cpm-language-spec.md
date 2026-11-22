@@ -241,8 +241,19 @@ A declaration may be prefixed by exactly one storage class keyword:
 |           | possible. Required for sizes used in array type-exprs.          |
 | (none)    | local: stack-allocated on function entry, deallocated on exit.  |
 
-The `imports` clause gives a namespace a library file or a static a fixed
-address (§6).
+Use `imports "data.bin"` to initialize a `static` or `const` one-dimensional
+`uint8` array from a binary file. The compiler resolves relative paths against
+the directory of the source file containing the declaration, including in an
+included source file. Each file byte initializes one element in order. The
+file size in bytes must equal the array count. A function-local `static`
+applies the initializer each time execution reaches the declaration (§8).
+
+```cpm
+const <uint8 array 16> bindata imports "data.bin";
+static <uint8 array 16> buffer imports "data.bin";
+```
+
+Namespace library imports and fixed-address static imports are described in §6.
 
 ### 4.3 Struct and union
 

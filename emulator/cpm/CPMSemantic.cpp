@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <set>
 
 namespace CPM
@@ -908,6 +910,77 @@ namespace CPM
                            node->children[0] : node, type);
     }
 
+    CPMCheckedExpression CPMSemanticAnalyzer::binaryInitializer(CPMSyntaxTreeNode* file, const CPMType& type,
+                                                                const string& name)
+    {
+        namespace fs = std::filesystem;
+        const auto label = "Binary initializer for '" + name + "'";
+        if (!type.isArray() || *type.child != baseType(CPM_DATATYPE_UINT8))
+        {
+            error(file, label + " requires a one-dimensional <uint8 array N>. Declared type is " +
+                        compiler.GetTypeName(type, true) + ".");
+            return {};
+        }
+
+        const auto filename = CPMSTRContent(file);
+        if (filename.empty())
+        {
+            error(file, label + " requires a nonempty file path.");
+            return {};
+        }
+        const auto* source = compiler.getSourceFile(file->sourceFileName);
+        const auto path = fs::path(source->rootFolder) / fs::path(source->name).parent_path() / filename;
+        const auto description = label + " from '" + path.string() + "'";
+        std::error_code ec;
+        if (!fs::is_regular_file(path, ec))
+        {
+            error(file, description + (ec ? " cannot be accessed (" + ec.message() + ")." :
+                                           " must refer to a regular file."));
+            return {};
+        }
+        const auto& output = compiler.options.binaryOutput;
+        if (!output.empty() && fs::equivalent(path, output, ec))
+        {
+            error(file, "Binary output '" + output + "' would overwrite the binary initializer for '" + name + "'.");
+            return {};
+        }
+
+        std::ifstream input(path, std::ios::binary | std::ios::ate);
+        if (!input)
+        {
+            error(file, description + " could not be opened.");
+            return {};
+        }
+        const std::streamoff actualSize = input.tellg();
+        if (actualSize < 0)
+        {
+            error(file, description + " could not be measured.");
+            return {};
+        }
+        if (actualSize != type.arrayCount)
+        {
+            error(file, description + " has " + to_string(actualSize) + " bytes. " +
+                        compiler.GetTypeName(type) + " requires exactly " + to_string(type.arrayCount) + " bytes.");
+            return {};
+        }
+
+        auto result = checked(CPMExprKind::Initializer, file, type);
+        result.constant = true;
+        result.bytes.resize(type.arrayCount);
+        input.seekg(0);
+        if (!input.read(reinterpret_cast<char*>(result.bytes.data()), type.arrayCount))
+        {
+            error(file, description + " could not be read completely. Expected " + to_string(type.arrayCount) + " bytes.");
+            return {};
+        }
+        if (input.peek() != std::char_traits<char>::eof() || input.bad())
+        {
+            error(file, description + " could not be read as exactly " + to_string(type.arrayCount) + " bytes.");
+            return {};
+        }
+        return result;
+    }
+
     CPMCheckedExpression CPMSemanticAnalyzer::initializer(CPMSyntaxTreeNode* node, const CPMType& type)
     {
         auto literal = unwrapSingle(node);
@@ -1252,6 +1325,29 @@ namespace CPM
         parts.lineNumber = result.syntax->lineNumber;
         parts.children.assign(node->children.begin() + begin, node->children.begin() + end);
         parts.commaBefore.assign(node->commaBefore.begin() + begin, node->commaBefore.begin() + end);
+        CPMSyntaxTreeNode* binaryFile = nullptr;
+        if (parts.children.size() >= 3 && parts.children[2]->text == R_IMPORT)
+        {
+            if (!isConst && !isStatic)
+            {
+                error(parts.children[2], "A binary initializer requires a static or const declaration.");
+                return result;
+            }
+            if (parts.children.size() != 4 || parts.children[3]->type != CPM_STR)
+            {
+                error(parts.children[2], "Expected 'imports \"file.bin\"' for a function-local binary initializer.");
+                return result;
+            }
+            if (!CPMValidateDeclaration(&parts, compiler.CompilerLog()))
+            {
+                failed = true;
+                compiler.Error();
+                return result;
+            }
+            binaryFile = parts.children[3];
+            parts.children.resize(2);
+            parts.commaBefore.resize(2);
+        }
         CPMType type;
         if (!compiler.parseDataDeclaration(&parts, type, owner, this))
         {
@@ -1260,12 +1356,12 @@ namespace CPM
         }
         auto name = parts.children[1];
         if (!checkName(name)) return result;
-        if (parts.children.size() == 3)
+        if (binaryFile || parts.children.size() == 3)
         {
-            auto value = initializer(parts.children[2], type);
+            auto value = binaryFile ? binaryInitializer(binaryFile, type, name->text) : initializer(parts.children[2], type);
             if (!value) return result;
             if (isConst && !value.constant)
-                error(parts.children[2], "A const initializer must be computable at compile time.");
+                error(value.syntax, "A const initializer must be computable at compile time.");
             result.expressions.push_back(std::move(value));
         }
         auto& local = checkedFunction->locals.emplace_back();

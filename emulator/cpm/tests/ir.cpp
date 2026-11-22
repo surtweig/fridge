@@ -114,7 +114,8 @@ static void runAssembly(Fixture& fixture, const string& source)
 
     const vector<FRIDGE_WORD> expected{
         0x3C, 0x78, 5, 'b', 'c', 'H', 3, 10, 0, 1,
-        0x01, 0x00, 0x02, 0x12, 0xFF, 0xFD, 42, 21, 10, 1, 2, 6, 3, 42
+        0x01, 0x00, 0x02, 0x12, 0xFF, 0xFD, 42, 21, 10, 1, 2, 6, 3, 42,
+        0, 3, 0xFF, '\r', '\n', 0xFF, 3, '\n', 0x80
     };
     for (size_t i = 0; i < expected.size(); ++i)
         require(cpu->ram[0x0100 + i] == expected[i],
@@ -666,10 +667,28 @@ int main()
         runStringFormatting(fixture);
         runFunctionAddresses(fixture);
         runMainReturnModes(fixture);
+        const auto assets = fixture.directory / "assets";
+        fs::create_directory(assets);
+        std::ofstream(assets / "test data.bin", std::ios::binary).write("\x00\x03\xFF\r\n", 5);
+        std::ofstream(assets / "data.cpm") << R"(
+            const uint8 asset_size 5;
+            const <uint8 array asset_size> asset imports "test data.bin";
+            static <uint8 array asset_size> writable_asset imports "test data.bin";
+            uint8 local_asset_byte()
+            (
+                static <uint8 array asset_size> local_asset imports "test data.bin";
+                uint8 value (at local_asset, 4);
+                = (at local_asset, 4), 1;
+                return value;
+            );
+        )";
         const string source = R"(
-            static <uint8 array 24> output imports 0x0100;
+            include "assets/data.cpm";
+            static <uint8 array 33> output imports 0x0100;
             const string greeting "Hello";
             static uint8 touches;
+            static uint8 asset_index 2;
+            const uint8 asset_count (at asset, 1);
 
             uint8 choose(uint8 first; uint16 second)
             (
@@ -744,6 +763,14 @@ int main()
                 = (at output, 21), (persistent 5);
                 = (at output, 22), (persistent 2);
                 = (at output, 23), (early_exit 42);
+                = (at (cast <<uint8 array asset_size> ptr>, (addr (at output, 24)))), writable_asset;
+                = (at output, 29), (at asset, asset_index);
+                = (at output, 30), asset_count;
+                local_asset_byte;
+                = (at output, 31), (local_asset_byte);
+                const <uint8 array asset_size> local_asset imports "assets/test data.bin";
+                = (at writable_asset, 0), 0x80;
+                = (at output, 32), (| (at local_asset, 0), (at writable_asset, 0));
             );
         )";
         inspectIR(fixture, source);
