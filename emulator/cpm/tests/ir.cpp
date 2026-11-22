@@ -234,13 +234,16 @@ static void runLinkedHello(Fixture& fixture)
     const auto colorLine = hello.find(colorAssignment);
     require(colorLine != string::npos, "Expected Hello World to set its text color");
     hello.replace(colorLine, colorAssignment.size(), R"(
-        palette.select_color;
-        = VTEXT_BACK_COLOR, palette.COLOR;
+        = VTEXT_BACK_COLOR, (palette.select_default_color);
         = image_end, palette.IMAGE_END;
         fixed.marker;
     )");
     fixture.source(R"(
         include "library files/vtext.cpm";
+        namespace palette
+        (
+            uint8 select_default_color() (select_color; return COLOR;);
+        );
         include "library files/palette.cpm";
         include "library files/fixed.cpm";
         static uint16 image_end imports 0x0101;

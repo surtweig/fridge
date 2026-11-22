@@ -185,6 +185,11 @@ int main()
             {"const uint8 a b; const uint8 b 1;", "Unknown name"},
             {"const uint8 a a;", "Unknown name"},
             {"using Z; namespace A (const uint8 early Z.later;); namespace Z (const uint8 later 1;);", "Unknown name"},
+            {"namespace A (const uint8 n 1;); namespace A (const uint8 n 2;);",
+             "Static symbol 'n' is already declared"},
+            {"namespace A (void f() ();); namespace A (void f() (););", "Function is already defined"},
+            {"namespace A imports \"one.bin\" (const uint8 first 1;); "
+             "namespace A imports \"two.bin\" (const uint8 second 2;);", "Namespace 'A' already imports a binary"},
             {"static uint8 size 4; struct P (<uint8 array size> values;);", "compile-time integer"},
             {"void f(uint8 i) (static <uint8 array 2> a; const <uint8 ptr> p (addr (at a, i)););", "compile time"},
             {"bool predicate(); void f() (const bool value (&& false, (predicate)););", "compile time"}
@@ -200,6 +205,11 @@ int main()
         fixture.check("include \"constants.cpm\"; static <uint8 array count> data;", true);
         fixture.check("static <uint8 array count> data; include \"constants.cpm\";", false);
         fixture.check("namespace Z (const uint8 n 3;); using Z; namespace A (const uint8 m n;);", true);
+        fixture.check(R"(
+            namespace A (const uint8 count 3; uint8 get(););
+            namespace A (static <uint8 array count> data; uint8 get() (return count;););
+            uint8 size() (return (A.get););
+        )", true);
         std::ofstream(fixture.directory / "screen.cpm") << R"(
             namespace Screen
             (

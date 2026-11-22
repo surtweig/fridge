@@ -722,6 +722,10 @@ using NAME;                            // bring NAME's symbols into scope
 ```
 
 - A namespace owns a set of structs, statics, `const`s, and functions.
+- Multiple blocks with the same namespace name, including blocks from included
+  files, contribute declarations to the same scope in source order. The usual
+  duplicate declaration rules apply. At most one block can specify `imports`,
+  which applies to the whole namespace.
 - `using NS;` makes `NS`'s public names referenceable without qualification.
   It is **not** transitive; only direct members of `NS` are visible.
 - `imports "file.bin"` lets the linker choose where to place the library.

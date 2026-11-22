@@ -930,10 +930,11 @@ namespace CPM
                 continue;
             }
             const auto& parts = node->children;
+            const bool imports = parts.size() > 3;
             const bool fixedImport = parts.size() == 7;
             if ((parts.size() != 3 && parts.size() != 5 && !fixedImport) || !CPMIsUserIdentifier(parts[1]) ||
                 parts.back()->type != CPM_BLOCK ||
-                (parts.size() > 3 && (parts[2]->text != R_IMPORT || parts[3]->type != CPM_STR)) ||
+                (imports && (parts[2]->text != R_IMPORT || parts[3]->type != CPM_STR)) ||
                 (fixedImport && (parts[4]->text != R_AT || parts[5]->type != CPM_NUM)))
             {
                 compilerLog.Add(LOG_ERROR, "Invalid namespace declaration syntax.", node->sourceFileName, node->lineNumber);
@@ -941,9 +942,18 @@ namespace CPM
                 continue;
             }
             const auto& name = parts[1]->text;
-            if (namespaces.count(name))
+            if (name == GlobalNamespace)
             {
-                compilerLog.Add(LOG_ERROR, "Namespace '" + name + "' is already declared.", node->sourceFileName, node->lineNumber);
+                compilerLog.Add(LOG_ERROR, "Namespace 'global' is reserved.", node->sourceFileName, node->lineNumber);
+                Error();
+                continue;
+            }
+            const auto existing = namespaces.find(name);
+            const bool reopening = existing != namespaces.end();
+            if (imports && reopening && existing->second->importNode)
+            {
+                compilerLog.Add(LOG_ERROR, "Namespace '" + name + "' already imports a binary.",
+                                node->sourceFileName, node->lineNumber);
                 Error();
                 continue;
             }
@@ -962,16 +972,17 @@ namespace CPM
                 address = 0;
                 for (auto byte : origin.bytes) address = (address << 8) | byte;
             }
-            auto ns = new CPMNamespace(name);
-            namespaces.emplace(name, ns);
-            if (parts.size() > 3)
+            auto ns = reopening ? existing->second : new CPMNamespace(name);
+            if (!reopening) namespaces.emplace(name, ns);
+            if (imports)
             {
                 ns->importSource = CPMSTRContent(parts[3]);
                 ns->importAddress = address;
                 ns->importNode = parts[3];
             }
             for (auto child : parts.back()->children) add(ns, child);
-            compilerLog.Add(LOG_MESSAGE, "Namespace " + name, node->sourceFileName, node->lineNumber);
+            compilerLog.Add(LOG_MESSAGE, (reopening ? "Extending namespace " : "Namespace ") + name,
+                            node->sourceFileName, node->lineNumber);
         }
 
         for (map<string, CPMSourceFile>::iterator isrc = sources.begin(); isrc != sources.end(); ++isrc)
