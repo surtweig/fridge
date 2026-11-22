@@ -566,6 +566,8 @@ void FridgeAssemblyLanguageCompiler::initDefaultAliases()
     aliases["FRIDGE_DEV_ROM_RESET_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_RESET_ID);
     aliases["FRIDGE_DEV_ROM_ID"]                 = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_ROM_ID);
     aliases["FRIDGE_DEV_KEYBOARD_ID"]            = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_KEYBOARD_ID);
+    aliases["FRIDGE_DEV_TIMER_ID"]               = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_TIMER_ID);
+    aliases["FRIDGE_DEV_STOPWATCH_ID"]           = int_to_hex((FRIDGE_WORD)FRIDGE_DEV_STOPWATCH_ID);
     aliases["FRIDGE_GPU_VIDEO_MODE_EGA"]         = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_MODE_EGA);
     aliases["FRIDGE_GPU_VIDEO_MODE_TEXT"]        = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_MODE_TEXT);
     aliases["FRIDGE_GPU_VIDEO_FRAME_0"]          = int_to_hex((FRIDGE_WORD)FRIDGE_GPU_VIDEO_FRAME_0);

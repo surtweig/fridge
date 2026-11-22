@@ -11,9 +11,7 @@
 #include "fridgemulib.h"
 
 // Worker thread driving FRIDGE_sys_tick at a throttled target frequency.
-// Ported from fridge_opengl_emulator/EmulatorThread.cpp — same tick series
-// + system-timer-interval (= targetFrequency/256) + Panic handling logic,
-// just swapped Qt primitives for std primitives.
+// Advances the hardware timers using elapsed wall time at CPU batch boundaries.
 //
 // All public methods are safe to call from the main thread. While the
 // worker holds LoopMutex via Lock(), it is paused at the top of its loop
@@ -45,7 +43,7 @@ public:
     void Unlock();
 
     // Single-step the CPU exactly one instruction. Caller must already hold Lock()
-    // and the worker must be inactive. Triggers system timer if due.
+    // and the worker must be inactive.
     // Returns true on success, false if the CPU panicked.
     bool StepOnce();
 
@@ -66,18 +64,11 @@ private:
     std::condition_variable cv_;
     std::atomic<bool>       stop_   {false};
     std::atomic<bool>       active_ {false};
+    std::atomic<bool>       restart_timing_ {false};
 
     int target_frequency_   = 1000000; // 1 MHz default
     int tick_series_length_ = 10000;
-    int sys_timer_interval_ = target_frequency_ / 256;
-    int sys_timer_counter_  = 0;
-
     std::atomic<double> measured_freq_ {0.0};
-    long long active_ticks_counter_ = 0;
-
-    // Timing baseline (chronosteady_clock microseconds).
-    long long tick_timer_us_   = 0;
-    long long active_timer_us_ = 0;
 
     std::function<void()> on_frame_;
     std::function<void()> on_panic_;

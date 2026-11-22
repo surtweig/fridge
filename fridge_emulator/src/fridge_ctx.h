@@ -19,11 +19,13 @@ struct FridgeCtx {
     FRIDGE_GPU    gpu;
     FRIDGE_KEYBOARD_CONTROLLER kbrd;
     FRIDGE_ROM    rom;
+    FRIDGE_TIMER  timer;
+    FRIDGE_TIMER  stopwatch;
 };
 
 void FridgeCtx_Init(FridgeCtx& ctx);
 void FridgeCtx_Shutdown(FridgeCtx& ctx);
 
-// Reinitialises CPU, GPU and keyboard to a clean post-reset state.
+// Reinitialises CPU, GPU, keyboard and timers to a clean post-reset state.
 // RAM is cleared and the default bootloader is installed.
 void FridgeCtx_Reset(FridgeCtx& ctx);

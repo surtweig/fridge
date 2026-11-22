@@ -1,5 +1,7 @@
 #include "fridgemulib.h"
 
+#include <stdint.h>
+
 
 void setPanicFlag(FRIDGE_CPU* cpu, FRIDGE_WORD flag)
 {
@@ -814,6 +816,63 @@ FRIDGE_WORD rom_dev_input(FRIDGE_SYSTEM* sys)
     return 0;
 }
 
+static FRIDGE_WORD timer_input(const FRIDGE_TIMER* timer)
+{
+    if (!timer)
+        return 0;
+    return timer->read_high ? FRIDGE_HIGH_WORD(timer->counter) : FRIDGE_LOW_WORD(timer->counter);
+}
+
+static void timer_output(FRIDGE_TIMER* timer, FRIDGE_WORD data)
+{
+    if (!timer)
+        return;
+
+    const FRIDGE_WORD command = data >> 4;
+    switch (command)
+    {
+        case FRIDGE_TIMER_RESET:
+            timer->counter = 0;
+            break;
+        case FRIDGE_TIMER_SET_INTERVAL_NIB0:
+        case FRIDGE_TIMER_SET_INTERVAL_NIB1:
+        case FRIDGE_TIMER_SET_INTERVAL_NIB2:
+        case FRIDGE_TIMER_SET_INTERVAL_NIB3:
+        {
+            const unsigned shift = 4 * (command - FRIDGE_TIMER_SET_INTERVAL_NIB0);
+            const unsigned mask = 0x0fu << shift;
+            timer->interval = (FRIDGE_DWORD)((timer->interval & ~mask) | ((data & 0x0fu) << shift));
+            break;
+        }
+        case FRIDGE_TIMER_GET_COUNTER_HIGH:
+            timer->read_high = 1;
+            break;
+        case FRIDGE_TIMER_GET_COUNTER_LOW:
+            timer->read_high = 0;
+            break;
+    }
+}
+
+static FRIDGE_WORD timer_dev_input(FRIDGE_SYSTEM* sys)
+{
+    return timer_input(sys->timer);
+}
+
+static FRIDGE_WORD stopwatch_dev_input(FRIDGE_SYSTEM* sys)
+{
+    return timer_input(sys->stopwatch);
+}
+
+static void timer_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
+{
+    timer_output(sys->timer, data);
+}
+
+static void stopwatch_dev_output(FRIDGE_SYSTEM* sys, FRIDGE_WORD data)
+{
+    timer_output(sys->stopwatch, data);
+}
+
 void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
 {
     cpu->state = FRIDGE_CPU_ACTIVE;
@@ -851,6 +910,10 @@ void FRIDGE_cpu_reset (FRIDGE_CPU* cpu)
     cpu->input_dev[FRIDGE_DEV_ROM_RESET_ID] = &rom_reset_dev_input;
     cpu->output_dev[FRIDGE_DEV_ROM_RESET_ID] = &rom_reset_dev_output;
     cpu->output_dev[FRIDGE_DEV_ROM_ID] = &rom_dev_output;
+    cpu->input_dev[FRIDGE_DEV_TIMER_ID] = &timer_dev_input;
+    cpu->output_dev[FRIDGE_DEV_TIMER_ID] = &timer_dev_output;
+    cpu->input_dev[FRIDGE_DEV_STOPWATCH_ID] = &stopwatch_dev_input;
+    cpu->output_dev[FRIDGE_DEV_STOPWATCH_ID] = &stopwatch_dev_output;
 }
 
 void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
@@ -1197,9 +1260,25 @@ void FRIDGE_cpu_interrupt (FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode, FRIDGE_WORD a
     cpu->state = FRIDGE_CPU_ACTIVE;
 }
 
-void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys)
+static int timer_tick(FRIDGE_TIMER* timer, FRIDGE_SIZE_T elapsed_ms)
 {
-    if (sys->cpu->inte == FRIDGE_CPU_INTERRUPTS_ENABLED && !FRIDGE_cpu_flag_PANIC(sys->cpu))
+    if (!timer || !timer->interval || !elapsed_ms)
+        return 0;
+
+    const uint64_t count = (uint64_t)timer->counter + elapsed_ms;
+    const int rolled_over = count > timer->interval;
+    // Keep an exact interval at the upper endpoint, even across multiple periods.
+    timer->counter = (FRIDGE_DWORD)(rolled_over ? (count - 1) % timer->interval + 1 : count);
+    return rolled_over;
+}
+
+void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys, FRIDGE_SIZE_T elapsed_ms)
+{
+    const int timer_rolled_over = timer_tick(sys->timer, elapsed_ms);
+    timer_tick(sys->stopwatch, elapsed_ms);
+
+    if (timer_rolled_over && sys->cpu && sys->cpu->inte == FRIDGE_CPU_INTERRUPTS_ENABLED &&
+        !FRIDGE_cpu_flag_PANIC(sys->cpu))
         FRIDGE_cpu_interrupt(sys, CALL, FRIDGE_DWORD_TO_WORDS(FRIDGE_IRQ_SYS_TIMER));
 }
 

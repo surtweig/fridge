@@ -30,8 +30,6 @@ void EmuWorker::Start()
     }
     stop_.store(false, std::memory_order_relaxed);
     thread_ = std::thread(&EmuWorker::RunLoop, this);
-    tick_timer_us_   = NowUs();
-    active_timer_us_ = NowUs();
 }
 
 void EmuWorker::Stop()
@@ -45,14 +43,9 @@ void EmuWorker::Stop()
 
 void EmuWorker::SetActive(bool active)
 {
-    active_.store(active, std::memory_order_relaxed);
     if (active)
-    {
-        tick_timer_us_   = NowUs();
-        active_timer_us_ = NowUs();
-        active_ticks_counter_ = 0;
-        sys_timer_counter_ = 0;
-    }
+        restart_timing_.store(true);
+    active_.store(active);
     cv_.notify_all();
 }
 
@@ -62,8 +55,6 @@ void EmuWorker::SetTargetFrequency(int targetFrequency, int tickSeriesLength)
     target_frequency_   = targetFrequency;
     if (tickSeriesLength > 0)
         tick_series_length_ = tickSeriesLength;
-    sys_timer_interval_ = (target_frequency_ > 256) ? (target_frequency_ / 256) : 1;
-    sys_timer_counter_  = 0;
 }
 
 void EmuWorker::Lock()
@@ -93,57 +84,61 @@ bool EmuWorker::StepOnce()
         return false;
     }
 
-    if (++sys_timer_counter_ >= sys_timer_interval_)
-    {
-        FRIDGE_sys_timer_tick(sys_);
-        sys_timer_counter_ = 0;
-        if (FRIDGE_cpu_flag_PANIC(sys_->cpu))
-        {
-            active_.store(false, std::memory_order_relaxed);
-            if (on_panic_) on_panic_();
-            return false;
-        }
-    }
     return true;
 }
 
 void EmuWorker::RunLoop()
 {
-    tick_timer_us_   = NowUs();
-    active_timer_us_ = NowUs();
+    long long tick_timer_us = NowUs();
+    long long active_timer_us = tick_timer_us;
+    long long active_ticks_counter = 0;
+    long long timer_remainder_us = 0;
 
     while (!stop_.load(std::memory_order_relaxed))
     {
-        bool active = active_.load(std::memory_order_relaxed);
-        if (!active || !thread_.joinable())
+        if (!active_.load())
         {
             // Park until woken. Use sleep fallback to keep polls cheap.
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
 
-        long long now          = NowUs();
-        long long elapsed_us   = now - tick_timer_us_;
-        long long target_us    = 1000000LL * tick_series_length_ / target_frequency_;
-        if (elapsed_us < target_us)
+        if (restart_timing_.exchange(false))
         {
-            std::this_thread::sleep_for(std::chrono::microseconds(target_us - elapsed_us));
-            now        = NowUs();
-            elapsed_us = now - tick_timer_us_;
+            tick_timer_us = NowUs();
+            active_timer_us = tick_timer_us;
+            active_ticks_counter = 0;
+            timer_remainder_us = 0;
         }
 
-        long long series_count = elapsed_us * tick_series_length_ /
-                                  (1000000LL * tick_series_length_);
-        if (series_count <= 0)
-            series_count = 1;
+        long long target_us;
+        {
+            std::lock_guard<std::mutex> lk(loop_mutex_);
+            target_us = 1000000LL * tick_series_length_ / target_frequency_;
+        }
+        const long long elapsed_us = NowUs() - tick_timer_us;
+        if (elapsed_us < target_us)
+            std::this_thread::sleep_for(std::chrono::microseconds(target_us - elapsed_us));
 
         bool panicked = false;
 
         {
             std::lock_guard<std::mutex> lk(loop_mutex_);
-            tick_timer_us_ = NowUs();
+            if (stop_.load(std::memory_order_relaxed) || !active_.load() || restart_timing_.load())
+                continue;
 
-            for (long long si = 0; si < series_count; ++si)
+            const long long now = NowUs();
+            const long long batch_elapsed_us = now - tick_timer_us;
+            tick_timer_us = now;
+            const long long timer_elapsed_us = batch_elapsed_us + timer_remainder_us;
+            FRIDGE_sys_timer_tick(sys_, static_cast<FRIDGE_SIZE_T>(timer_elapsed_us / 1000));
+            timer_remainder_us = timer_elapsed_us % 1000;
+
+            const long long series_count = batch_elapsed_us < 1000000 ? 1 : batch_elapsed_us / 1000000;
+            panicked = FRIDGE_cpu_flag_PANIC(sys_->cpu);
+            if (panicked)
+                active_.store(false, std::memory_order_relaxed);
+            for (long long si = 0; si < series_count && !panicked; ++si)
             {
                 for (int i = 0; i < tick_series_length_; ++i)
                 {
@@ -162,26 +157,14 @@ void EmuWorker::RunLoop()
                         panicked = true;
                         break;
                     }
-
-                    if (++sys_timer_counter_ >= sys_timer_interval_)
-                    {
-                        FRIDGE_sys_timer_tick(sys_);
-                        sys_timer_counter_ = 0;
-                        if (FRIDGE_cpu_flag_PANIC(sys_->cpu))
-                        {
-                            active_.store(false, std::memory_order_relaxed);
-                            panicked = true;
-                            break;
-                        }
-                    }
                 }
                 if (panicked) break;
-                active_ticks_counter_ += tick_series_length_;
+                active_ticks_counter += tick_series_length_;
             }
 
-            long long active_elapsed = NowUs() - active_timer_us_;
+            long long active_elapsed = NowUs() - active_timer_us;
             if (active_elapsed > 0)
-                measured_freq_.store(1000000.0 * (double)active_ticks_counter_ / (double)active_elapsed,
+                measured_freq_.store(1000000.0 * (double)active_ticks_counter / (double)active_elapsed,
                                    std::memory_order_relaxed);
         }
 

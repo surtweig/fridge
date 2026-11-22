@@ -18,6 +18,8 @@ void FridgeCtx_Init(FridgeCtx& ctx)
     ctx.system.gpu  = &ctx.gpu;
     ctx.system.rom  = &ctx.rom;
     ctx.system.kbrd = &ctx.kbrd;
+    ctx.system.timer = &ctx.timer;
+    ctx.system.stopwatch = &ctx.stopwatch;
 
     ctx.rom.segments = nullptr;
     ctx.rom.segments_count = 0;
@@ -36,6 +38,8 @@ void FridgeCtx_Reset(FridgeCtx& ctx)
     FRIDGE_gpu_reset(&ctx.gpu);
 
     ctx.kbrd = {};
+    ctx.timer = {};
+    ctx.stopwatch = {};
 
     ctx.rom.state = FRIDGE_ROM_SELECT_MODE;
     ctx.rom.mode = FRIDGE_ROM_MODE_IDLE;

@@ -184,7 +184,8 @@ void FRIDGE_gpu_render_ega_rgb8_area  (FRIDGE_GPU* gpu, unsigned char* pixels,
                                        FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset);
 void FRIDGE_gpu_render_txt_rgb8       (FRIDGE_GPU* gpu, unsigned char* pixels, const FRIDGE_WORD* glyphBitmap);
 
-void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys);
+// Advance both devices by elapsed milliseconds. A tick can deliver one timer IRQ.
+void FRIDGE_sys_timer_tick(FRIDGE_SYSTEM* sys, FRIDGE_SIZE_T elapsed_ms);
 void FRIDGE_keyboard_press(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);
 void FRIDGE_keyboard_release(FRIDGE_SYSTEM* sys, FRIDGE_WORD key);
 
@@ -212,6 +213,28 @@ typedef struct FRIDGE_KEYBOARD_CONTROLLER
     FRIDGE_WORD pending_interrupts; // The newest events whose interrupts have yet to be delivered.
 } FRIDGE_KEYBOARD_CONTROLLER;
 
+// OUT encodes the command in bits 7-4 and the argument in bits 3-0.
+// NIB0 writes the least significant interval nibble.
+typedef enum FRIDGE_TIMER_COMMAND
+{
+    FRIDGE_TIMER_NOP,
+    FRIDGE_TIMER_RESET,
+    FRIDGE_TIMER_SET_INTERVAL_NIB0,
+    FRIDGE_TIMER_SET_INTERVAL_NIB1,
+    FRIDGE_TIMER_SET_INTERVAL_NIB2,
+    FRIDGE_TIMER_SET_INTERVAL_NIB3,
+    FRIDGE_TIMER_GET_COUNTER_HIGH,
+    FRIDGE_TIMER_GET_COUNTER_LOW,
+} FRIDGE_TIMER_COMMAND;
+
+// Zero-initialize each device to start with counting disabled.
+typedef struct FRIDGE_TIMER
+{
+    FRIDGE_DWORD counter;
+    FRIDGE_DWORD interval;
+    FRIDGE_WORD read_high; // IN reads the selected byte of the current counter.
+} FRIDGE_TIMER;
+
 #ifdef FRIDGE_POSIT16_SUPPORT
     typedef struct FRIDGE_PAM16
     {
@@ -238,6 +261,8 @@ typedef struct FRIDGE_SYSTEM
     FRIDGE_GPU* gpu;
     FRIDGE_ROM* rom;
     FRIDGE_KEYBOARD_CONTROLLER* kbrd;
+    FRIDGE_TIMER* timer;
+    FRIDGE_TIMER* stopwatch;
 #ifdef FRIDGE_POSIT16_SUPPORT
     FRIDGE_PAM16* pam;
 #endif

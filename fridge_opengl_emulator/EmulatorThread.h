@@ -19,8 +19,6 @@ class EmulatorThread : public QThread
     FRIDGE_SYSTEM* sys;
     int targetFrequency;
     int tickSeriesLength;
-    int sysTimerInterval;
-    int sysTimerTicksCounter;
     QMutex* tickMutex;
     QElapsedTimer* tickTimer;
     QElapsedTimer* activeTimer;

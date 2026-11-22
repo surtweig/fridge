@@ -1,0 +1,177 @@
+// Fridgemulib timer and stopwatch, in milliseconds.
+alias TIMER_CMD_RESET 0x10
+alias TIMER_CMD_INTERVAL_NIB0 0x20
+alias TIMER_CMD_INTERVAL_NIB1 0x30
+alias TIMER_CMD_INTERVAL_NIB2 0x40
+alias TIMER_CMD_INTERVAL_NIB3 0x50
+alias TIMER_CMD_COUNTER_HIGH 0x60
+alias TIMER_CMD_COUNTER_LOW 0x70
+
+// Address of a no-argument timer IRQ callback that returns with RET. Zero skips it.
+@static uint16
+static TIMER_IRQ_HANDLER 0x0000
+
+// Set the 16-bit interval from HL. Zero stops counting. Use the reset routine
+// to clear the counter. Each nibble takes effect on its OUT. Clobbers A and flags.
+@void( (uint16 timer_interval_ms : HL) )
+subroutine timer_set_interval
+    MOV A, H
+    RRC
+    RRC
+    RRC
+    RRC
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB3
+    OUT FRIDGE_DEV_TIMER_ID
+    MOV A, H
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB2
+    OUT FRIDGE_DEV_TIMER_ID
+    MOV A, L
+    RRC
+    RRC
+    RRC
+    RRC
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB1
+    OUT FRIDGE_DEV_TIMER_ID
+    MOV A, L
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB0
+    OUT FRIDGE_DEV_TIMER_ID
+endsub
+
+// Same interval operation for the stopwatch.
+@void( (uint16 stopwatch_interval_ms : HL) )
+subroutine stopwatch_set_interval
+    MOV A, H
+    RRC
+    RRC
+    RRC
+    RRC
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB3
+    OUT FRIDGE_DEV_STOPWATCH_ID
+    MOV A, H
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB2
+    OUT FRIDGE_DEV_STOPWATCH_ID
+    MOV A, L
+    RRC
+    RRC
+    RRC
+    RRC
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB1
+    OUT FRIDGE_DEV_STOPWATCH_ID
+    MOV A, L
+    ANI 0x0F
+    ORI TIMER_CMD_INTERVAL_NIB0
+    OUT FRIDGE_DEV_STOPWATCH_ID
+endsub
+
+// Reset the counter to zero. Clobbers A.
+@void()
+subroutine timer_reset
+    MVI A, TIMER_CMD_RESET
+    OUT FRIDGE_DEV_TIMER_ID
+endsub
+
+@void()
+subroutine stopwatch_reset
+    MVI A, TIMER_CMD_RESET
+    OUT FRIDGE_DEV_STOPWATCH_ID
+endsub
+
+// Return the counter in DE. Retry if the high byte changes during the read.
+// Clobbers A and flags. Serialize reads of each device with its interrupt users.
+subroutine timer_read_counter
+    entry timer_read_counter.retry
+        MVI A, TIMER_CMD_COUNTER_HIGH
+        OUT FRIDGE_DEV_TIMER_ID
+        IN FRIDGE_DEV_TIMER_ID
+        MOV D, A
+        MVI A, TIMER_CMD_COUNTER_LOW
+        OUT FRIDGE_DEV_TIMER_ID
+        IN FRIDGE_DEV_TIMER_ID
+        MOV E, A
+        MVI A, TIMER_CMD_COUNTER_HIGH
+        OUT FRIDGE_DEV_TIMER_ID
+        IN FRIDGE_DEV_TIMER_ID
+        CMP D
+        JNZ timer_read_counter.retry
+endsub
+
+subroutine stopwatch_read_counter
+    entry stopwatch_read_counter.retry
+        MVI A, TIMER_CMD_COUNTER_HIGH
+        OUT FRIDGE_DEV_STOPWATCH_ID
+        IN FRIDGE_DEV_STOPWATCH_ID
+        MOV D, A
+        MVI A, TIMER_CMD_COUNTER_LOW
+        OUT FRIDGE_DEV_STOPWATCH_ID
+        IN FRIDGE_DEV_STOPWATCH_ID
+        MOV E, A
+        MVI A, TIMER_CMD_COUNTER_HIGH
+        OUT FRIDGE_DEV_STOPWATCH_ID
+        IN FRIDGE_DEV_STOPWATCH_ID
+        CMP D
+        JNZ stopwatch_read_counter.retry
+endsub
+
+// Write a big-endian uint16 at HL. Preserves HL and clobbers DE, A and flags.
+@void( (uint16 timer_counter_address : HL) )
+subroutine timer_read_counter_into
+    CALL timer_read_counter
+    MOV M, D
+    INX HL
+    MOV M, E
+    DCX HL
+endsub
+
+@void( (uint16 stopwatch_counter_address : HL) )
+subroutine stopwatch_read_counter_into
+    CALL stopwatch_read_counter
+    MOV M, D
+    INX HL
+    MOV M, E
+    DCX HL
+endsub
+
+// Install the timer IRQ dispatch and enable CPU interrupts.
+// Assign TIMER_IRQ_HANDLER to receive callbacks. Clobbers A, DE and HL.
+@void()
+subroutine timer_begin
+    DI
+    LXI HL, FRIDGE_IRQ_SYS_TIMER
+    LXI DE, timer0.interrupt_$ADDR
+    INX HL
+    MOV M, D
+    INX HL
+    MOV M, E
+    MVI A, #JMP
+    STA FRIDGE_IRQ_SYS_TIMER
+    EI
+endsub
+
+subroutine timer0.interrupt
+    PUSH AF
+    PUSH BC
+    PUSH DE
+    PUSH HL
+
+    LHLD TIMER_IRQ_HANDLER
+    MOV A, H
+    ORA L
+    CNZ timer0.call_hl
+
+    POP HL
+    POP DE
+    POP BC
+    POP AF
+    EI
+endsub
+
+subroutine timer0.call_hl
+    PCHL
+endsub

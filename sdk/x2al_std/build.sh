@@ -7,3 +7,4 @@ CDPATH= cd "$(dirname "$0")"
 ../bin/falc str.falc str.bin --cpm-header
 ../bin/falc vega.falc vega.bin --cpm-header
 ../bin/falc rom.falc rom.bin --cpm-header
+../bin/falc timer.falc timer.bin --cpm-header

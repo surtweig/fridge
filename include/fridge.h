@@ -20,7 +20,7 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_ROM_MAX_SEGMENTS 0x10000
 #define FRIDGE_ROM_SEGMENT_SIZE 0x100 // bytes (16Mb maximum)
 #define FRIDGE_WORD_BITS 8 // number of bits in a word
-#define FRIDGE_MAX_IO_DEVICES 4
+#define FRIDGE_MAX_IO_DEVICES 16
 #define FRIDGE_MAX_INSTRUCTIONS 0x100
 #define FRIDGE_GPU_BUS_SIZE 4
 #if defined(FRIDGE_VIDEO_240X180)
@@ -88,6 +88,8 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_DEV_ROM_RESET_ID 0x01
 #define FRIDGE_DEV_ROM_ID 0x02
 #define FRIDGE_DEV_KEYBOARD_ID 0x03
+#define FRIDGE_DEV_TIMER_ID 0x07 // timer can make irqs
+#define FRIDGE_DEV_STOPWATCH_ID 0x08 // stopwatch is supposed to be reset manually
 
 #ifdef FRIDGE_POSIT16_SUPPORT
     #define FRIDGE_PAM16_STACK_SIZE 8

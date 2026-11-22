@@ -47,6 +47,8 @@ void MainWindow::initFridge()
     sys = new FRIDGE_SYSTEM();
     sys->cpu = new FRIDGE_CPU();
     sys->gpu = new FRIDGE_GPU();
+    sys->timer = new FRIDGE_TIMER();
+    sys->stopwatch = new FRIDGE_TIMER();
     sys->pam = new FRIDGE_PAM16();
     FRIDGE_cpu_reset(sys->cpu);
     FRIDGE_gpu_reset(sys->gpu);
@@ -57,6 +59,8 @@ void MainWindow::destroyFridge()
 {
     delete sys->cpu;
     delete sys->gpu;
+    delete sys->timer;
+    delete sys->stopwatch;
     delete sys->pam;
     delete sys;
 }
@@ -188,6 +192,8 @@ void MainWindow::on_sysResetBtn_clicked()
     emuThread->SetLock();
     FRIDGE_cpu_reset(sys->cpu);
     FRIDGE_gpu_reset(sys->gpu);
+    *sys->timer = {};
+    *sys->stopwatch = {};
     emuThread->ReleaseLock();
     ui->asmCompileBtn->setEnabled(true);
     updateAll();

@@ -6,6 +6,10 @@ add_executable(fridgemulib main.cpp fridgemulib.c fridgemulib.h posit.c posit.h)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(timer_test tests/timer.cpp fridgemulib.c)
+    target_include_directories(timer_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME timer COMMAND timer_test)
+
     if(NOT TARGET falc_core)
         add_subdirectory(../falc falc EXCLUDE_FROM_ALL)
     endif()

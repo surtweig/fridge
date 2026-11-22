@@ -14,13 +14,12 @@ EmulatorThread::EmulatorThread(FRIDGE_SYSTEM* sys, int targetFrequency, int tick
     this->measuredFreq = 0.0;
     activeTimer->start();
     activeTicksCounter = 0;
-    sysTimerInterval = targetFrequency / 256;
-    sysTimerTicksCounter = 0;
 }
 
 void EmulatorThread::run()
 {
     tickTimer->start();
+    qint64 lastTimerTickMs = 0;
 
     while (!isStopped)
     {
@@ -29,6 +28,7 @@ void EmulatorThread::run()
             tickTimer->restart();
             activeTimer->restart();
             activeTicksCounter = 0;
+            lastTimerTickMs = 0;
             continue;
         }
 
@@ -40,30 +40,22 @@ void EmulatorThread::run()
         {
             tickTimer->restart();
             SetLock();
+            const qint64 timerTickMs = activeTimer->elapsed();
+            FRIDGE_sys_timer_tick(sys, static_cast<FRIDGE_SIZE_T>(timerTickMs - lastTimerTickMs));
+            lastTimerTickMs = timerTickMs;
             //for (qint64 si = 0; si < seriesCount; ++si)
             {
                 FRIDGE_VIDEO_FRAME_INDEX visibleFrame = sys->gpu->visible_frame;
                 for (int i = 0; i < tickSeriesLength; ++i)
                 {
-                    FRIDGE_sys_tick(sys);
+                    if (!FRIDGE_cpu_flag_PANIC(sys->cpu))
+                        FRIDGE_sys_tick(sys);
 
                     if (FRIDGE_cpu_flag_PANIC(sys->cpu))
                     {
                         isActive = false;
                         emit corePanic();
                         break;
-                    }
-
-                    if (++sysTimerTicksCounter >= sysTimerInterval)
-                    {
-                        FRIDGE_sys_timer_tick(sys);
-                        sysTimerTicksCounter = 0;
-                        if (FRIDGE_cpu_flag_PANIC(sys->cpu))
-                        {
-                            isActive = false;
-                            emit corePanic();
-                            break;
-                        }
                     }
 
                     /*
@@ -117,8 +109,6 @@ void EmulatorThread::SetTargetFrequncy(int targetFrequency, int tickSeriesLength
     this->targetFrequency = targetFrequency;
     if (tickSeriesLength > 0)
         this->tickSeriesLength = tickSeriesLength;
-    sysTimerInterval = targetFrequency / 256;
-    sysTimerTicksCounter = 0;
     ReleaseLock();
 }
 

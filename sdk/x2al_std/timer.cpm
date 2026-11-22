@@ -1,0 +1,36 @@
+namespace timer imports "timer.bin"
+(
+    static uint16 TIMER_IRQ_HANDLER imports 0x00bf;
+    void timer_set_interval (uint16 timer_interval_ms)
+    (
+        __lxi_hl timer_interval_ms;
+        __callsub 0x0000;
+    );
+    void stopwatch_set_interval (uint16 stopwatch_interval_ms)
+    (
+        __lxi_hl stopwatch_interval_ms;
+        __callsub 0x0025;
+    );
+    void timer_reset ()
+    (
+        __callsub 0x004a;
+    );
+    void stopwatch_reset ()
+    (
+        __callsub 0x004f;
+    );
+    void timer_read_counter_into (uint16 timer_counter_address)
+    (
+        __lxi_hl timer_counter_address;
+        __callsub 0x0086;
+    );
+    void stopwatch_read_counter_into (uint16 stopwatch_counter_address)
+    (
+        __lxi_hl stopwatch_counter_address;
+        __callsub 0x008e;
+    );
+    void timer_begin ()
+    (
+        __callsub 0x0096;
+    );
+);
