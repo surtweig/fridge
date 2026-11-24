@@ -3,6 +3,9 @@ include "vegalib.cpm";
 
 using vega;
 
+const uint8 rectangle_width 50;
+const uint8 rectangle_height 30;
+
 void main()
 (
     InitVega VEGA_SWAP_MODE_MANUAL_00;
@@ -19,8 +22,8 @@ void main()
         += y, 1;
         if (> fg, 15) (= fg, 0);
         if (> bg, 15) (= bg, 0);
-        if (> x, 213) (= x, 0);
-        if (> y, 167) (= y, 0);
-        DrawRectangle fg, bg, x, y, 50, 30, 0, 2;
+        if (> x, (- VEGA_WIDTH, rectangle_width)) (= x, 0);
+        if (> y, (- VEGA_HEIGHT, rectangle_height)) (= y, 0);
+        DrawRectangle fg, bg, x, y, rectangle_width, rectangle_height, 0, 2;
     );
 );

@@ -57,7 +57,7 @@ namespace vega
     struct RLELine
     (
         uint8 SegmentsCount;
-        <RLESegment ptr> Segments;        
+        <RLESegment ptr> Segments;
     );
 
     struct RLEBitmap
@@ -80,6 +80,7 @@ namespace vega
     void SetPaletteColor(uint8 index; uint8 r; uint8 g; uint8 b);
     void StartLine(uint8 color);
     void DrawLine(uint8 x; uint8 y; int8 dx; int8 dy; uint8 length; uint8 mode);
+    // The rectangle must fit in the viewport. An outline requires w and h of at least 2.
     void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode);
 
 
@@ -97,10 +98,10 @@ namespace vega
     (
         for (uint8 i 0; < i, MAX_COLORS; ++ i)
         (
-            vega_set_pallette i, 
+            vega_set_pallette i,
                 (at palette.Colors, i).R,
                 (at palette.Colors, i).G,
-                (at palette.Colors, i).B;            
+                (at palette.Colors, i).B;
         );
         = CurrentPalette, palette;
     );
@@ -127,30 +128,17 @@ namespace vega
 
     void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode)
     (
-        if (|| (== w, 0), (== h, 0), (>= x, VEGA_WIDTH), (>= y, VEGA_HEIGHT)) return;
-
         if (|| (!= outline, fill), (!= outline_mode, fill_mode))
         (
             StartLine outline;
             DrawLine x, y, +1, +0, w, outline_mode;
-
-            uint16 bottom (+ (convert uint16, y), (convert uint16, (- h, 1)));
-            if (&& (> h, 1), (< bottom, (convert uint16, VEGA_HEIGHT)))
-                DrawLine x, (convert uint8, bottom), +1, +0, w, outline_mode;
+            DrawLine x, (+ y, (- h, 1)), +1, +0, w, outline_mode;
 
             // The horizontal edges already cover the corners.
-            if (> h, 2)
-            (
-                uint8 sideY (+ y, 1);
-                uint8 sideLength (- h, 2);
-                DrawLine x, sideY, +0, +1, sideLength, outline_mode;
-
-                uint16 right (+ (convert uint16, x), (convert uint16, (- w, 1)));
-                if (&& (> w, 1), (< right, (convert uint16, VEGA_WIDTH)))
-                    DrawLine (convert uint8, right), sideY, +0, +1, sideLength, outline_mode;
-            );
-
-            if (|| (<= w, 2), (<= h, 2)) return;
+            uint8 sideY (+ y, 1);
+            uint8 sideLength (- h, 2);
+            DrawLine x, sideY, +0, +1, sideLength, outline_mode;
+            DrawLine (+ x, (- w, 1)), sideY, +0, +1, sideLength, outline_mode;
 
             ++ x;
             ++ y;
@@ -159,7 +147,7 @@ namespace vega
         );
 
         StartLine fill;
-        for (uint8 i 0; && (< i, h), (< y, VEGA_HEIGHT); ++ i)
+        for (uint8 i 0; < i, h; ++ i)
         (
             DrawLine x, y, +1, +0, w, fill_mode;
             ++ y;
