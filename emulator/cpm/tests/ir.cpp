@@ -659,6 +659,57 @@ static void runMainReturnModes(Fixture& fixture)
     }
 }
 
+static void checkStackOffsets(Fixture& fixture)
+{
+    const auto root = fixture.directory.string() + "/";
+    fixture.source(R"(
+        void main()
+        (
+            uint8 first 0x11;
+            <uint8 array 254> padding;
+            uint8 last_short 0x22;
+            uint8 first_long 0x33;
+        );
+    )");
+    CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly);
+    require(compiler.NoErrors(), compiler.CompilerLog()->GetText());
+    const auto& assembly = compiler.AssemblyOutput();
+    require(assembly.find("    HLSP\n    MVI M, 0x11\n") != string::npos &&
+            assembly.find("    HLSPF 0xFF\n    MVI M, 0x22\n") != string::npos &&
+            assembly.find("    HLSP\n    DAI 0x0100\n    MVI M, 0x33\n") != string::npos,
+            "Expected short and long stack offsets to use their respective encodings");
+
+    std::ostringstream log;
+    std::istringstream input("HLSPF 0x00\nHLSPF 0x80\nHLSPF 255\nHLT\n");
+    FridgeAssemblyLanguageCompiler assembler(input, root, "stack.falc", "", &log);
+    require(assembler.succeeded(), log.str());
+    const vector<FRIDGE_WORD> expected{0xFA, 0x00, 0xFA, 0x80, 0xFA, 0xFF, HLT};
+    require(assembler.getProgramSize() == expected.size() &&
+            std::equal(expected.begin(), expected.end(), assembler.getObjectCode()),
+            "HLSPF must be encoded as opcode 0xFA followed by one unsigned byte");
+    std::istringstream invalid("HLSPF 256\n");
+    FridgeAssemblyLanguageCompiler rejected(invalid, root, "invalid.falc", "", &log);
+    require(!rejected.succeeded(), "HLSPF must reject offsets larger than a byte");
+
+    auto cpu = std::make_unique<FRIDGE_CPU>();
+    FRIDGE_cpu_reset(cpu.get());
+    FRIDGE_SYSTEM system{};
+    system.cpu = cpu.get();
+    std::copy_n(assembler.getObjectCode(), assembler.getProgramSize(), cpu->ram);
+    cpu->SP = 0xFF80;
+    cpu->rF = FRIDGE_FLAG_SIGN_MASK | FRIDGE_FLAG_ZERO_MASK | FRIDGE_FLAG_AUX_MASK |
+              FRIDGE_FLAG_PARITY_MASK | FRIDGE_FLAG_CARRY_MASK;
+    const auto flags = cpu->rF;
+    const vector<FRIDGE_DWORD> addresses{0xFF80, 0x0000, 0x007F};
+    for (size_t i = 0; i < addresses.size(); ++i)
+    {
+        FRIDGE_sys_tick(&system);
+        require(FRIDGE_cpu_pair_HL(cpu.get()) == addresses[i] && cpu->PC == (i + 1) * 2 &&
+                cpu->SP == 0xFF80 && cpu->rF == flags,
+                "HLSPF must zero-extend the offset and preserve SP and flags");
+    }
+}
+
 int main()
 {
     try
@@ -671,6 +722,7 @@ int main()
         runStringFormatting(fixture);
         runFunctionAddresses(fixture);
         runMainReturnModes(fixture);
+        checkStackOffsets(fixture);
         const auto assets = fixture.directory / "assets";
         fs::create_directory(assets);
         std::ofstream(assets / "test data.bin", std::ios::binary).write("\x00\x03\xFF\r\n", 5);

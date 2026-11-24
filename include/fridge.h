@@ -242,7 +242,7 @@ typedef enum FRIDGE_IRCODE {
 #else
     IR249,
 #endif
-    IR250,
+    HLSPF, // HL = SP + unsigned byte immediate
     IR251,
     IR252,
     IR253,

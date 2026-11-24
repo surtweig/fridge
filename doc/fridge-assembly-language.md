@@ -538,7 +538,11 @@ POP pair    ; pop pair from stack
 XTHL        ; exchange HL with top of stack
 SPHL        ; SP = HL
 HLSP        ; HL = SP (Fridge-specific)
+HLSPF k     ; HL = SP + k (Fridge-specific, unsigned 8-bit immediate)
 ```
+
+`HLSPF` encodes as `0xFA` followed by the offset byte. The addition wraps
+at 16 bits and preserves SP and the flags.
 
 In **ascending stack** mode, `SP` grows upward. `PUSH` increments SP by 2 and
 stores the pair; `POP` reads the pair and decrements SP by 2.

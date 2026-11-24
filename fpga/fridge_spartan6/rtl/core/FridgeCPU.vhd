@@ -1036,7 +1036,7 @@ architecture main of FridgeCPU is
      end procedure ir_SPHL;
 
      procedure ir_HLSP(signal rH, rL : inout XCM2_WORD;
-                       signal SP : in XCM2_DWORD;
+                       SP : in XCM2_DWORD;
                        signal state : in CPUState; variable nextState : inout CPUState) is
      begin
           if (state = CPU_EXECUTE_IR) then
@@ -1446,7 +1446,8 @@ begin
                        buf_currentIRCode = XRI or
                        buf_currentIRCode = CPI or
                        buf_currentIRCode = IIN or
-                       buf_currentIRCode = IOUT
+                       buf_currentIRCode = IOUT or
+                       buf_currentIRCode = HLSPF
                        --or buf_currentIRCode = VMODE
                     then
                          -- 2byte instructions
@@ -1735,6 +1736,7 @@ begin
 
                     when SPHL => ir_SPHL(rH, rL, buf_nextSP, state, buf_nextState);
                     when HLSP => ir_HLSP(rH, rL, SP, state, buf_nextState);
+                    when HLSPF => ir_HLSP(rH, rL, SP + resize(IRArg0, SP'length), state, buf_nextState);
 
                     when HLT => ir_HLT(state, buf_nextState);
                     when EI => ir_EnableInterrupt('1', interruptsEnabled, state, buf_nextState);

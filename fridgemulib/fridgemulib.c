@@ -1181,6 +1181,13 @@ void cpu_execute(FRIDGE_SYSTEM* sys, FRIDGE_WORD ircode)
         case XTHL: ir_XTHL(cpu); break;
         case SPHL: cpu->SP = FRIDGE_cpu_pair_HL(cpu); break;
         case HLSP: cpu->rH = FRIDGE_HIGH_WORD(cpu->SP); cpu->rL = FRIDGE_LOW_WORD(cpu->SP); break;
+        case HLSPF:
+        {
+            FRIDGE_DWORD address = cpu->SP + pcRead(cpu);
+            cpu->rH = FRIDGE_HIGH_WORD(address);
+            cpu->rL = FRIDGE_LOW_WORD(address);
+            break;
+        }
 
         case IIN:  ir_safe_IIN(sys); break;
         case IOUT: ir_safe_IOUT(sys); break;

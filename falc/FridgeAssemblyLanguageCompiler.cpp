@@ -796,7 +796,10 @@ bool FridgeAssemblyLanguageCompiler::parseDec(string* word, FRIDGE_WORD& value)
     for (int i = 0; i < word->size(); i++)
         if ((*word)[i] < '0' || (*word)[i] > '9')
             return false;
-    value = strtol(word->c_str(), nullptr, 10);
+    const long parsed = strtol(word->c_str(), nullptr, 10);
+    if (parsed >= (1L << FRIDGE_WORD_BITS))
+        return false;
+    value = static_cast<FRIDGE_WORD>(parsed);
     return true;
 }
 
@@ -1947,6 +1950,7 @@ map<string, FRIDGE_WORD> FridgeAssemblyLanguageCompiler::IRIDs = {
     {"XTHL",  XTHL},
     {"SPHL",  SPHL},
     {"HLSP",  HLSP},
+    {"HLSPF", HLSPF},
     {"IN",    IIN},
     {"OUT",   IOUT},
     {"HLT",   HLT},
@@ -2285,6 +2289,7 @@ map<FRIDGE_WORD, InstructionSignature> FridgeAssemblyLanguageCompiler::IRSigs =
     { XTHL    , { { {NONE, NONE} }, 0} },
     { SPHL    , { { {NONE, NONE} }, 0} },
     { HLSP    , { { {NONE, NONE} }, 0} },
+    { HLSPF   , { { {IM_WORD, NONE} }, 1} },
     { IIN     , { { {IM_WORD, NONE} }, 1} },
     { IOUT    , { { {IM_WORD, NONE} }, 1} },
     { HLT     , { { {NONE, NONE} }, 0} },
@@ -2541,6 +2546,7 @@ map<FRIDGE_WORD, string> FridgeAssemblyLanguageCompiler::IRNames =
         {XTHL,    "XTHL"},
         {SPHL,    "SPHL"},
         {HLSP,    "HLSP"},
+        {HLSPF,   "HLSPF"},
         {IIN,     "IIN"},
         {IOUT,    "IOUT"},
         {HLT,     "HLT"},

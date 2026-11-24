@@ -105,15 +105,21 @@ namespace CPM
 
             void spAddress(size_t offset)
             {
-                op("HLSP");
-                if (offset != 0) word("DAI ", offset);
+                if (offset == 0)
+                    op("HLSP");
+                else if (offset < (1u << FRIDGE_WORD_BITS))
+                    byte("HLSPF ", static_cast<FRIDGE_WORD>(offset));
+                else
+                {
+                    op("HLSP");
+                    word("DAI ", offset);
+                }
             }
 
             void adjustSP(int amount)
             {
                 if (amount == 0) return;
-                op("HLSP");
-                word("DAI ", amount);
+                spAddress(static_cast<FRIDGE_DWORD>(amount));
                 op("SPHL");
             }
 
