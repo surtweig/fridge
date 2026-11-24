@@ -67,9 +67,13 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
         subroutine empty
         endsub
 
-        @inline void((uint8 index : A), (uint8 red : B), (uint8 green : C), (uint8 blue : D))
+        @inline void((uint8 index : A), (uint8 red : B), (uint8 green : C), (uint8 blue : D), (uint8 x : H), (uint8 y : L))
         subroutine palette
             VPAL
+            SHLD 0x0107
+            MVI H, 0xCD
+            MVI L, 0xEF
+            SHLD 0x0109
             LXI HL, 0x0000
             VFSI 0x12, 0x34
             VSSI 'A', 'B'
@@ -126,7 +130,7 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             = (at output, 0), (count 3);
             = (at output, 1), (count 4);
             = (at output, 2), (count 2);
-            palette 1, value, 8, 9;
+            palette 1, value, 8, 9, 0x12, 0x34;
             ordinary 0x0103, 0x5A, 0x0104;
         );
     )");
@@ -167,6 +171,8 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
     require(cpu->ram[0x0100] == 3 && cpu->ram[0x0101] == 4 && cpu->ram[0x0102] == 12 &&
             cpu->ram[0x0103] == 0xA5 && cpu->ram[0x0104] == 0x5A &&
             cpu->ram[0x0105] == 0xA5 && cpu->ram[0x0106] == 0xC7 &&
+            cpu->ram[0x0107] == 0x12 && cpu->ram[0x0108] == 0x34 &&
+            cpu->ram[0x0109] == 0xCD && cpu->ram[0x010A] == 0xEF &&
             cpu->ram[base + library.getResources().at("VALUE").address] == 10 &&
             FRIDGE_DWORD_HL(cpu->ram[heap], cpu->ram[heap + 1]) == expectedHeap &&
             gpu->palette[3] == 7 && gpu->palette[4] == 8 && gpu->palette[5] == 9 &&
@@ -185,6 +191,10 @@ static void rejectInvalidExports(Fixture& fixture)
         "@inline void()\nsubroutine invalid\nMVI A, 0\nJMP 0x0001\nendsub\n",
         "@inline void((uint8 value : D), (uint16 dest : DE))\nsubroutine invalid\nendsub\n",
         "@inline void((uint8 dest : DE))\nsubroutine invalid\nendsub\n",
+        "@inline void((uint8 x : H), (uint16 dest : HL))\nsubroutine invalid\nendsub\n",
+        "@inline void((string text : HL), (uint8 y : L))\nsubroutine invalid\nendsub\n",
+        "@inline void((uint16 dest : H))\nsubroutine invalid\nendsub\n",
+        "@inline void((string text : L))\nsubroutine invalid\nendsub\n",
         "@static uint16\nstatic invalid TEXT\nalias TEXT \"x\"\n"
     };
     for (const auto& source : sources)

@@ -1,0 +1,26 @@
+include "vega.cpm";
+include "vegalib.cpm";
+
+using vega;
+
+void main()
+(
+    InitVega VEGA_SWAP_MODE_MANUAL_00;
+
+    uint8 fg 15;
+    uint8 bg 1;
+    uint8 x 10;
+    uint8 y 10;
+    for (uint8 i 0; true ; ++ i)
+    (
+        ++ fg;
+        ++ bg;
+        += x, 1;
+        += y, 1;
+        if (> fg, 15) (= fg, 0);
+        if (> bg, 15) (= bg, 0);
+        if (> x, 213) (= x, 0);
+        if (> y, 167) (= y, 0);
+        DrawRectangle fg, bg, x, y, 50, 30, 0, 2;
+    );
+);

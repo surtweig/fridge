@@ -30,6 +30,23 @@ alias VEGA_RLE_MODE_DITHERED 2
 alias VEGA_RLE_MODE_INDEX_ADDITIVE 3
 
 
+@const uint8
+alias VEGA_SWAP_MODE_NONE FRIDGE_GPU_VIDEO_SWAP_NONE
+@const uint8
+alias VEGA_SWAP_MODE_AUTO FRIDGE_GPU_VIDEO_SWAP_AUTO
+@const uint8
+alias VEGA_SWAP_MODE_MANUAL_00 FRIDGE_GPU_VIDEO_SWAP_MANUAL_00
+@const uint8
+alias VEGA_SWAP_MODE_MANUAL_01 FRIDGE_GPU_VIDEO_SWAP_MANUAL_01
+@const uint8
+alias VEGA_SWAP_MODE_MANUAL_10 FRIDGE_GPU_VIDEO_SWAP_MANUAL_10
+@const uint8
+alias VEGA_SWAP_MODE_MANUAL_11 FRIDGE_GPU_VIDEO_SWAP_MANUAL_11
+
+
+@const uint16
+alias VEGA_VMEM_ALLOC_OFFSET 0x0100 // first 256 bytes are scratch space
+
 @static uint8
 static VEGA_SWAP_MODE FRIDGE_GPU_VIDEO_SWAP_AUTO
 
@@ -128,6 +145,22 @@ subroutine vega_sprite_write_byte
     VSSA
 endsub
 
+@inline void( (uint16 address : HL), (uint8 high : B), (uint8 low : C) )
+subroutine vega_sprite_write_two_nibbles
+    MOV A, B
+    RAL
+    RAL
+    RAL
+    RAL
+    ANI 0xF0
+    MOV B, A
+    MOV A, C
+    ANI 0x0F
+    ORA B
+    VSSA
+endsub
+
+
 // Copy 16 bytes from RAM address source to sprite-memory offset dest.
 // The full range must fit, and callers must not interrupt another call to this routine.
 @void( (uint16 source : HL), (uint16 dest : DE) )
@@ -173,7 +206,7 @@ subroutine vega_rle_line_setup
 endsub
 
 // stride packs signed dx in the high nibble and signed dy in the low nibble.
-@inline void( (uint8 index : A), (uint8 visible_length : B), (uint8 stride : C), (uint8 mode : D), (uint16 position : HL) )
+@inline void( (uint8 index : A), (uint8 visible_length : B), (uint8 stride : C), (uint8 mode : D), (uint8 posx : H), (uint8 posy : L) )
 subroutine vega_rle_line_draw
     VRD
 endsub

@@ -1,0 +1,168 @@
+include "vega.cpm";
+
+namespace vega
+(
+    struct ComponentColor
+    (
+        uint8 R;
+        uint8 G;
+        uint8 B;
+    );
+
+    const uint8 MAX_COLORS 16;
+
+    struct Palette
+    (
+        <ComponentColor array MAX_COLORS> Colors;
+    );
+
+    const Palette DefaultPalette
+    (
+        Colors
+        (
+            (R 0x00; G 0x00; B 0x00); // black
+            (R 0x00; G 0x00; B 0x80); // blue
+            (R 0x00; G 0x80; B 0x00); // green
+            (R 0x00; G 0x80; B 0x80); // cyan
+            (R 0x80; G 0x00; B 0x00); // red
+            (R 0x80; G 0x00; B 0x80); // magenta
+            (R 0x80; G 0x40; B 0x00); // brown
+            (R 0x80; G 0x80; B 0x80); // light gray
+            (R 0x40; G 0x40; B 0x40); // dark gray
+            (R 0x00; G 0x40; B 0xff); // bright blue
+            (R 0x40; G 0xff; B 0x40); // bright green
+            (R 0x40; G 0xff; B 0xff); // bright cyan
+            (R 0xff; G 0x40; B 0x40); // bright red
+            (R 0xff; G 0x40; B 0xff); // bright magenta
+            (R 0xff; G 0xff; B 0x40); // bright yellow
+            (R 0xff; G 0xff; B 0xff); // white
+        );
+    );
+
+    static Palette CurrentPalette;
+
+    struct Bitmap
+    (
+        uint8 Width;
+        uint8 Height;
+        <uint8 ptr> Pixels; // pixels are arranged line by line, top left pixel first
+    );
+
+    struct RLESegment
+    (
+        uint8 Color;
+        uint8 TailLength; // first pixel doesn't count, so TailLength=0 means one pixel total
+    );
+
+    struct RLELine
+    (
+        uint8 SegmentsCount;
+        <RLESegment ptr> Segments;        
+    );
+
+    struct RLEBitmap
+    (
+        uint8 LinesCount;
+        uint8 LineLength;
+        <RLELine ptr> Lines;
+    );
+
+    struct SpriteHandler
+    (
+        uint8 Index;
+        uint8 Width;
+        uint8 Height;
+        uint16 SprMemAddress;
+    );
+
+    void InitVega(uint8 swapMode);
+    void SetPalette(Palette palette);
+    void SetPaletteColor(uint8 index; uint8 r; uint8 g; uint8 b);
+    void StartLine(uint8 color);
+    void DrawLine(uint8 x; uint8 y; int8 dx; int8 dy; uint8 length; uint8 mode);
+    void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode);
+
+
+    void InitVega(uint8 swapMode)
+    (
+        vega_begin;
+        = VEGA_SWAP_MODE, swapMode;
+        = VEGA_X_OFFSET, 0;
+        = VEGA_Y_OFFSET, 0;
+        SetPalette DefaultPalette;
+        vega_present;
+    );
+
+    void SetPalette(Palette palette)
+    (
+        for (uint8 i 0; < i, MAX_COLORS; ++ i)
+        (
+            vega_set_pallette i, 
+                (at palette.Colors, i).R,
+                (at palette.Colors, i).G,
+                (at palette.Colors, i).B;            
+        );
+        = CurrentPalette, palette;
+    );
+
+    void SetPaletteColor(uint8 index; uint8 r; uint8 g; uint8 b)
+    (
+        if (>= index, MAX_COLORS) return;
+        vega_set_pallette index, r, g, b;
+        ComponentColor newColor (R r; G g; B b);
+        = (at CurrentPalette.Colors, index), newColor;
+    );
+
+    void StartLine(uint8 color)
+    (
+        vega_sprite_write_two_nibbles 0x0000, color, 1;
+        vega_rle_line_setup 0, 1, 0x0000;
+    );
+
+    void DrawLine(uint8 x; uint8 y; int8 dx; int8 dy; uint8 length; uint8 mode)
+    (
+        uint8 stride (word (cast uint8, dx), (cast uint8, dy));
+        vega_rle_line_draw 0, length, stride, mode, x, y;
+    );
+
+    void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode)
+    (
+        if (|| (== w, 0), (== h, 0), (>= x, VEGA_WIDTH), (>= y, VEGA_HEIGHT)) return;
+
+        if (|| (!= outline, fill), (!= outline_mode, fill_mode))
+        (
+            StartLine outline;
+            DrawLine x, y, +1, +0, w, outline_mode;
+
+            uint16 bottom (+ (convert uint16, y), (convert uint16, (- h, 1)));
+            if (&& (> h, 1), (< bottom, (convert uint16, VEGA_HEIGHT)))
+                DrawLine x, (convert uint8, bottom), +1, +0, w, outline_mode;
+
+            // The horizontal edges already cover the corners.
+            if (> h, 2)
+            (
+                uint8 sideY (+ y, 1);
+                uint8 sideLength (- h, 2);
+                DrawLine x, sideY, +0, +1, sideLength, outline_mode;
+
+                uint16 right (+ (convert uint16, x), (convert uint16, (- w, 1)));
+                if (&& (> w, 1), (< right, (convert uint16, VEGA_WIDTH)))
+                    DrawLine (convert uint8, right), sideY, +0, +1, sideLength, outline_mode;
+            );
+
+            if (|| (<= w, 2), (<= h, 2)) return;
+
+            ++ x;
+            ++ y;
+            -= w, 2;
+            -= h, 2;
+        );
+
+        StartLine fill;
+        for (uint8 i 0; && (< i, h), (< y, VEGA_HEIGHT); ++ i)
+        (
+            DrawLine x, y, +1, +0, w, fill_mode;
+            ++ y;
+        );
+    );
+);
