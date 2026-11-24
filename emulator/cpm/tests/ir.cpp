@@ -115,7 +115,8 @@ static void runAssembly(Fixture& fixture, const string& source)
     const vector<FRIDGE_WORD> expected{
         0x3C, 0x78, 5, 'b', 'c', 'H', 3, 10, 0, 1,
         0x01, 0x00, 0x02, 0x12, 0xFF, 0xFD, 42, 21, 10, 1, 2, 6, 3, 42,
-        0, 3, 0xFF, '\r', '\n', 0xFF, 3, '\n', 0x80
+        0, 3, 0xFF, '\r', '\n', 0xFF, 3, '\n', 0x80,
+        0xE2, 0xE3, 0x0E, 0x03, 0x34, 0xE4
     };
     for (size_t i = 0; i < expected.size(); ++i)
         require(cpu->ram[0x0100 + i] == expected[i],
@@ -687,7 +688,7 @@ int main()
         )";
         const string source = R"(
             include "assets/data.cpm";
-            static <uint8 array 33> output imports 0x0100;
+            static <uint8 array 39> output imports 0x0100;
             const string greeting "Hello";
             static uint8 touches;
             static uint8 asset_index 2;
@@ -774,6 +775,14 @@ int main()
                 const <uint8 array asset_size> local_asset imports "assets/test data.bin";
                 = (at writable_asset, 0), 0x80;
                 = (at output, 32), (| (at local_asset, 0), (at writable_asset, 0));
+                uint8 byte_source 0xE2;
+                uint16 packed_bytes (dword byte_source, (++ byte_source));
+                = (at output, 33), (high packed_bytes);
+                = (at output, 34), (low packed_bytes);
+                = (at output, 35), (high byte_source);
+                = (at output, 36), (low byte_source);
+                = (at output, 37), (word byte_source, (++ byte_source));
+                = (at output, 38), byte_source;
             );
         )";
         inspectIR(fixture, source);

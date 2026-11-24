@@ -317,8 +317,23 @@ body      ::= "(" statement … ")"
 
 ### 4.5 Intrinsics
 
-CPM emits intrinsics inline. The built-in names can be used directly or
-declared with a matching prototype. Register loads and `__callsub` return `void`.
+CPM emits intrinsics inline.
+
+| Intrinsic | Parameters | Result |
+|-----------|------------|--------|
+| `high`, `low` | `uint16` | The high or low byte as a `uint8`. |
+| `high`, `low` | `uint8` | The high or low nibble as a `uint8` in the range 0–15. |
+| `dword` | `uint8`, `uint8` | A `uint16` with the first argument as the high byte and the second as the low byte. |
+| `word` | `uint8`, `uint8` | A `uint8` with the low four bits of the first argument in the high nibble and the low four bits of the second in the low nibble. |
+
+For example, `(high 0xABCD)` yields `0xAB`, `(low 0xAB)` yields `0x0B`,
+`(dword 0xAB, 0xCD)` yields `0xABCD`, and `(word 0xAB, 0xCD)` yields `0xBD`.
+These names are available in unqualified calls when no declared overload
+matches. Calls with compile-time known arguments can be used in constant
+expressions.
+
+Register intrinsics can be used directly or declared with a matching prototype.
+Register loads and `__callsub` return `void`.
 
 | Intrinsic | Parameter | Effect |
 |-----------|-----------|--------|

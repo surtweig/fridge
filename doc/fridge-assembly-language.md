@@ -155,9 +155,10 @@ endsub
 
 `@static` and `@const` export `uint8` or `uint16` values. `@void()` exports a
 subroutine with no parameters. Use `@uint8:A(...)` for a subroutine that
-returns a byte in A. Wrappers can bind `uint8` to A, B, C, or D, `uint16` to BC,
-DE, or HL, and `string` to HL. FALC generates offsets for relocatable exports and
-absolute addresses for fixed-address exports.
+returns a byte in A. Wrappers can bind `uint8` to A, B, C, D, H, or L, `uint16`
+to BC, DE, or HL, and `string` to HL. H and L can be bound independently in the
+same wrapper. Binding HL reserves both registers. FALC generates offsets for
+relocatable exports and absolute addresses for fixed-address exports.
 
 Add `inline` before the return type to copy the subroutine's instructions into
 the CPM wrapper as intrinsics instead of generating `__callsub`:

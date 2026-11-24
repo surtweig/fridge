@@ -383,14 +383,17 @@ namespace CPM
                 }
                 case CPMExprKind::Call:
                 {
-                    if (value.intrinsic == CPMIntrinsic::ReadA)
-                    {
-                        const size_t result = frame(value.type);
-                        emit(CPMIROp::Intrinsic, syntax, result).intrinsic = value.intrinsic;
-                        return result;
-                    }
                     if (value.intrinsic != CPMIntrinsic::None)
                     {
+                        if (!value.type.isVoid())
+                        {
+                            vector<size_t> inputs;
+                            for (const auto& operand : value.operands)
+                                inputs.push_back(expression(operand));
+                            const size_t result = frame(value.type);
+                            emit(CPMIROp::Intrinsic, syntax, result, std::move(inputs)).intrinsic = value.intrinsic;
+                            return result;
+                        }
                         if (value.intrinsic == CPMIntrinsic::Instruction || value.intrinsic == CPMIntrinsic::Label)
                         {
                             auto& instruction = emit(CPMIROp::Intrinsic, syntax, CPMIRNone);

@@ -88,6 +88,10 @@ typedef unsigned int FRIDGE_SIZE_T;
 #define FRIDGE_DEV_ROM_RESET_ID 0x01
 #define FRIDGE_DEV_ROM_ID 0x02
 #define FRIDGE_DEV_KEYBOARD_ID 0x03
+#define FRIDGE_DEV_KEYBOARD0_ID 0x03
+#define FRIDGE_DEV_KEYBOARD1_ID 0x04
+#define FRIDGE_DEV_KEYBOARD2_ID 0x05
+#define FRIDGE_DEV_KEYBOARD3_ID 0x06
 #define FRIDGE_DEV_TIMER_ID 0x07 // timer can make irqs
 #define FRIDGE_DEV_STOPWATCH_ID 0x08 // stopwatch is supposed to be reset manually
 

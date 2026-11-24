@@ -1019,7 +1019,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
 
     static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
     static const regex subExport(R"(@(inline\s+)?(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
-    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|BC|DE|HL)\s*\)\s*)");
+    static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|H|L|BC|DE|HL)\s*\)\s*)");
     ostringstream result;
     result << "namespace " << name << " imports \"" << file << '"';
     if (!relocatable) result << " at " << int_to_hex(offset);
@@ -1134,7 +1134,8 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             }
         }
         if ((registers.count("BC") && (registers.count("B") || registers.count("C"))) ||
-            (registers.count("DE") && registers.count("D")))
+            (registers.count("DE") && registers.count("D")) ||
+            (registers.count("HL") && (registers.count("H") || registers.count("L"))))
         {
             logerrout("Overlapping CPM register bindings for '" + symbol + "'.");
             return false;

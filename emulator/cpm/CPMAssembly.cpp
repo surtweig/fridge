@@ -491,8 +491,63 @@ namespace CPM
                 adjustSP(static_cast<int>(depth));
             }
 
+            void extractBitPart(const CPMIRInstruction& instruction)
+            {
+                const size_t input = instruction.inputs[0];
+                const bool low = instruction.intrinsic == CPMIntrinsic::Low;
+                const bool wide = slot(input).size == 2;
+                address(input, wide && low ? 1 : 0);
+                op("MOV A, M");
+                if (!wide)
+                {
+                    if (!low)
+                        for (int bit = 0; bit < 4; ++bit) op("RRC");
+                    byte("ANI ", 0x0F);
+                }
+                address(instruction.output);
+                op("MOV M, A");
+            }
+
+            void packBitParts(const CPMIRInstruction& instruction)
+            {
+                const bool wide = instruction.intrinsic == CPMIntrinsic::Dword;
+                address(instruction.inputs[0]);
+                if (wide) op("MOV B, M");
+                else
+                {
+                    op("MOV A, M");
+                    for (int bit = 0; bit < 4; ++bit) op("RLC");
+                    byte("ANI ", 0xF0);
+                    op("MOV B, A");
+                }
+                address(instruction.inputs[1]);
+                op("MOV A, M");
+                if (!wide)
+                {
+                    byte("ANI ", 0x0F);
+                    op("ORA B");
+                }
+                address(instruction.output);
+                if (wide)
+                {
+                    op("MOV M, B");
+                    op("INX HL");
+                }
+                op("MOV M, A");
+            }
+
             void intrinsic(const CPMIRInstruction& instruction)
             {
+                if (instruction.intrinsic == CPMIntrinsic::High || instruction.intrinsic == CPMIntrinsic::Low)
+                {
+                    extractBitPart(instruction);
+                    return;
+                }
+                if (instruction.intrinsic == CPMIntrinsic::Dword || instruction.intrinsic == CPMIntrinsic::Word)
+                {
+                    packBitParts(instruction);
+                    return;
+                }
                 if (instruction.intrinsic == CPMIntrinsic::ReadA)
                 {
                     op("PUSH HL");
@@ -573,10 +628,24 @@ namespace CPM
                     }
                     return;
                 }
-                const string reg = instruction.intrinsic == CPMIntrinsic::MviA ? "A" :
-                                   instruction.intrinsic == CPMIntrinsic::MviB ? "B" :
-                                   instruction.intrinsic == CPMIntrinsic::MviC ? "C" : "D";
+                static const map<CPMIntrinsic, string> byteRegisters{
+                    {CPMIntrinsic::MviA, "A"}, {CPMIntrinsic::MviB, "B"},
+                    {CPMIntrinsic::MviC, "C"}, {CPMIntrinsic::MviD, "D"},
+                    {CPMIntrinsic::MviH, "H"}, {CPMIntrinsic::MviL, "L"}
+                };
+                const auto& reg = byteRegisters.at(instruction.intrinsic);
                 if (immediate) byte("MVI " + reg + ", ", static_cast<FRIDGE_WORD>(value));
+                else if (reg == "H" || reg == "L")
+                {
+                    // Save HL while it addresses the argument and use A to carry the byte.
+                    op("PUSH AF");
+                    op("PUSH HL");
+                    address(instruction.inputs.front(), 0, 4);
+                    op("MOV A, M");
+                    op("POP HL");
+                    op("MOV " + reg + ", A");
+                    op("POP AF");
+                }
                 else
                 {
                     op("PUSH HL");

@@ -20,6 +20,12 @@ int main()
             union Word (Pair pair;) (uint16 bits;);
             const Word word (bits 0x1234);
             const uint8 high_byte word.pair.high;
+            const uint16 packed_bytes (dword 0xAB, 0xCD);
+            const uint8 extracted_high_byte (high packed_bytes);
+            const uint8 extracted_low_byte (low packed_bytes);
+            const uint8 packed_nibbles (word 0xEB, 0xCD);
+            const uint8 extracted_high_nibble (high packed_nibbles);
+            const uint8 extracted_low_nibble (low packed_nibbles);
             const <uint8 array 2> bytes (cast <uint8 array 2>, word);
             const uint16 round_trip (cast uint16, bytes);
             const int8 wrapped (+ +127, +1);
@@ -85,7 +91,9 @@ int main()
                 {"high_byte", 0x12}, {"round_trip", 0x1234}, {"wrapped", 0x80},
                 {"quotient", 0xFD}, {"remainder", 2}, {"shifted", 0xFE},
                 {"negative", 255}, {"distinct", 0}, {"raw_bool", 5}, {"logical_bool", 1},
-                {"skipped", 0}, {"terminator", 0}, {"moved", 0x1004}
+                {"skipped", 0}, {"terminator", 0}, {"moved", 0x1004},
+                {"packed_bytes", 0xABCD}, {"extracted_high_byte", 0xAB}, {"extracted_low_byte", 0xCD},
+                {"packed_nibbles", 0xBD}, {"extracted_high_nibble", 0x0B}, {"extracted_low_nibble", 0x0D}
             };
             for (const auto& [name, value] : expected)
                 require(ns.statics.at(name).immediateData == value, "Incorrect constant bytes for " + name);
@@ -132,6 +140,10 @@ int main()
             {"void f() (<uint8 array 3> data imports \"data.bin\";);", "requires a static or const declaration"},
             {"const <uint8 array 3> data imports \"data.bin\"; void f() (= (at data, 0), 1;);", "writable destination"},
             {"void f() (uint16 x 1;);", "Expected uint16, got uint8"},
+            {"const uint8 x (high -1);", "No matching overload for 'high(int8)'"},
+            {"const uint8 x (low 1, 2);", "No matching overload for 'low(uint8, uint8)'"},
+            {"const uint16 x (dword 1, 2d);", "No matching overload for 'dword(uint8, uint16)'"},
+            {"const uint8 x (word 1);", "No matching overload for 'word(uint8)'"},
             {"void f(uint8 x) (= x, (+ x, 1d););",
              "Operator '+' cannot accept operands of type 'uint8', 'uint16'. Implicit conversions are not allowed."},
             {"void f() (if (1) (););", "Expected bool, got uint8"},

@@ -71,6 +71,39 @@ namespace CPM
             return bits;
         }
 
+        CPMCheckedExpression bitParts(CPMSyntaxTreeNode* head, vector<CPMCheckedExpression>& operands)
+        {
+            const auto byte = baseType(CPM_DATATYPE_UINT8);
+            const auto dword = baseType(CPM_DATATYPE_UINT16);
+            const auto& name = head->text;
+            const bool extract = operands.size() == 1 && (name == "high" || name == "low") &&
+                                 (operands[0].type == byte || operands[0].type == dword);
+            const bool pack = operands.size() == 2 && (name == "dword" || name == "word") &&
+                              operands[0].type == byte && operands[1].type == byte;
+            if (!extract && !pack) return {};
+
+            auto result = checked(CPMExprKind::Call, head, name == "dword" ? dword : byte);
+            if (extract) result.intrinsic = name == "high" ? CPMIntrinsic::High : CPMIntrinsic::Low;
+            else result.intrinsic = name == "dword" ? CPMIntrinsic::Dword : CPMIntrinsic::Word;
+            result.operands = std::move(operands);
+            result.constant = all_of(result.operands.begin(), result.operands.end(),
+                [](const auto& operand) { return operand.constant && !operand.bytes.empty(); });
+            if (!result.constant) return result;
+
+            const auto& first = result.operands[0].bytes;
+            if (extract && first.size() == 2)
+                result.bytes = {name == "high" ? first.front() : first.back()};
+            else if (extract)
+                result.bytes = encode((first[0] >> (name == "high" ? 4 : 0)) & 0x0F, 1);
+            else
+            {
+                const auto second = result.operands[1].bytes[0];
+                if (name == "dword") result.bytes = {first[0], second};
+                else result.bytes = encode(((first[0] & 0x0F) << 4) | (second & 0x0F), 1);
+            }
+            return result;
+        }
+
         int64_t floorDivide(int64_t numerator, int64_t denominator)
         {
             const int64_t quotient = numerator / denominator;
@@ -156,6 +189,8 @@ namespace CPM
             if (name == "__mvi_b") return CPMIntrinsic::MviB;
             if (name == "__mvi_c") return CPMIntrinsic::MviC;
             if (name == "__mvi_d") return CPMIntrinsic::MviD;
+            if (name == "__mvi_h") return CPMIntrinsic::MviH;
+            if (name == "__mvi_l") return CPMIntrinsic::MviL;
         }
         if (parameter && *parameter == baseType(CPM_DATATYPE_UINT16))
         {
@@ -446,6 +481,11 @@ namespace CPM
         }
         if (!match)
         {
+            if (head->type == CPM_ID)
+            {
+                auto result = bitParts(head, operands);
+                if (result) return result;
+            }
             string signature = head->text + "(";
             for (size_t i = 0; i < operands.size(); ++i)
             {
