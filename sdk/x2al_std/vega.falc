@@ -171,6 +171,7 @@ endsub
 
 // Copy 16 bytes from RAM address source to sprite-memory offset dest.
 // The full range must fit, and callers must not interrupt another call to this routine.
+// Returns the next sprite-memory offset in HL and the next RAM address in DE.
 @void( (uint16 source : HL), (uint16 dest : DE) )
 subroutine vega_sprite_upload_batch_x16
     PUSH DE
@@ -179,6 +180,78 @@ subroutine vega_sprite_upload_batch_x16
     POP DE
     XCNG
     CALL _vega_sprite_upload_batch_x16_rack
+endsub
+
+// Copy count bytes from RAM address source to sprite-memory offset dest.
+// Both ranges must fit. A zero count leaves memory alone.
+// Calls that use the shared 16-byte uploader must not interrupt one another.
+// Advances HL and DE by count and leaves BC zero.
+@void( (uint16 source : HL), (uint16 dest : DE), (uint16 count : BC) )
+subroutine vega_sprite_upload_batch
+    entry vega_sprite_upload_batch.loop
+        MOV A, B
+        ORA A
+        JNZ vega_sprite_upload_batch.block
+        MOV A, C
+        CPI 16
+        JM vega_sprite_upload_batch.tail
+
+    entry vega_sprite_upload_batch.block
+        MOV A, C
+        SUI 16
+        MOV C, A
+        MOV A, B
+        SBI 0
+        MOV B, A
+        PUSH BC
+        CALL vega_sprite_upload_batch_x16
+        POP BC
+        XCNG
+        JMP vega_sprite_upload_batch.loop
+
+    entry vega_sprite_upload_batch.tail
+        MOV A, C
+        ORA A
+        RZ
+        XCNG
+    entry vega_sprite_upload_batch.byte
+        LDAX DE
+        VSSA
+        INX DE
+        INX HL
+        DCR C
+        JNZ vega_sprite_upload_batch.byte
+        XCNG
+endsub
+
+// Copy count bytes from RAM address source to sprite-memory offset dest.
+// Both ranges must fit. A zero count leaves memory alone.
+// Advances HL and DE by count and leaves BC zero.
+@void( (uint16 source : HL), (uint16 dest : DE), (uint16 count : BC) )
+subroutine vega_sprite_upload
+    XCNG
+    MOV A, C
+    ORA A
+    JZ vega_sprite_upload.next_chunk
+
+    entry vega_sprite_upload.byte
+        LDAX DE
+        VSSA
+        INX DE
+        INX HL
+        DCR C
+        JNZ vega_sprite_upload.byte
+
+    entry vega_sprite_upload.next_chunk
+        MOV A, B
+        ORA A
+        JZ vega_sprite_upload.done
+        DCR B
+        // Starting at C = 0 makes the byte loop run for 256 bytes.
+        JMP vega_sprite_upload.byte
+
+    entry vega_sprite_upload.done
+        XCNG
 endsub
 
 // Copy count bytes from sprite-memory offset source to framebuffer offset dest.
