@@ -45,7 +45,15 @@ alias VEGA_SWAP_MODE_MANUAL_11 FRIDGE_GPU_VIDEO_SWAP_MANUAL_11
 
 
 @const uint16
-alias VEGA_VMEM_ALLOC_OFFSET 0x0100 // first 256 bytes are scratch space
+alias VEGA_VMEM_ALLOC_OFFSET 0x0200 // first 256 bytes are scratch space
+@const uint16
+alias VEGA_VMEM_CHECKPOINT_STACK_ADDR 0x0100 // page-aligned for byte indexing
+@const uint8
+alias VEGA_VMEM_MAX_CHECKPOINTS 128
+@static uint8
+static VEGA_VMEM_CHECKPOINT_COUNTER 0
+@static uint16
+static VEGA_VMEM_ALLOC_POINTER VEGA_VMEM_ALLOC_OFFSET
 
 @static uint8
 static VEGA_SWAP_MODE FRIDGE_GPU_VIDEO_SWAP_AUTO
@@ -249,4 +257,87 @@ subroutine _vega_sprite_upload_batch_x16_rack
     VSSI 0x00, 0x00
     VSSI 0x00, 0x00
     VSSI 0x00, 0x00
+endsub
+
+// Save the allocation pointer in the next big-endian checkpoint slot.
+// Returns the zero-based slot index in A.
+@uint8:A()
+subroutine vega_vmem_checkpoint_acquire
+    LDA VEGA_VMEM_CHECKPOINT_COUNTER
+    CPI VEGA_VMEM_MAX_CHECKPOINTS
+    JP _vega_vmem_panic // Fridge CPI sets Sign when A is less than the operand.
+    MOV B, A
+    ADD A
+    LHLD VEGA_VMEM_ALLOC_POINTER
+    XCNG
+    LXI HL, VEGA_VMEM_CHECKPOINT_STACK_ADDR
+    MOV L, A
+    MOV A, D
+    VSSA
+    INX HL
+    MOV A, E
+    VSSA
+    MOV A, B
+    INR A
+    STA VEGA_VMEM_CHECKPOINT_COUNTER
+    MOV A, B
+endsub
+
+// Restore the allocation pointer and return the popped slot index in A.
+@uint8:A()
+subroutine vega_vmem_checkpoint_release
+    LDA VEGA_VMEM_CHECKPOINT_COUNTER
+    ORA A
+    JZ _vega_vmem_panic
+    DCR A
+    MOV B, A
+    ADD A
+    LXI HL, VEGA_VMEM_CHECKPOINT_STACK_ADDR
+    MOV L, A
+    VSLA
+    MOV C, A
+    INX HL
+    VSLA
+    MOV L, A
+    MOV H, C
+    SHLD VEGA_VMEM_ALLOC_POINTER
+    MOV A, B
+    STA VEGA_VMEM_CHECKPOINT_COUNTER
+endsub
+
+// HL takes the size in bytes and returns the original allocation pointer.
+// Zero encodes the one-past-end pointer for the emulator's 64 KiB of VMEM.
+// A zero-size allocation returns the current pointer without advancing it.
+subroutine vega_vmem_alloc
+    XCNG
+    LHLD VEGA_VMEM_ALLOC_POINTER
+    MOV A, D
+    ORA E
+    RZ
+    MOV A, H
+    ORA L
+    JZ _vega_vmem_panic
+
+    XCNG // DE holds the original pointer.
+    MOV A, L
+    ADD E
+    MOV L, A
+    MOV A, H
+    ADC D
+    MOV H, A
+    JNC vega_vmem_alloc.commit
+    ORA L // A carry is valid only for an exact fit ending at 0x10000.
+    JNZ _vega_vmem_panic
+
+    entry vega_vmem_alloc.commit
+        SHLD VEGA_VMEM_ALLOC_POINTER
+        XCNG
+        RET
+
+    entry _vega_vmem_panic
+        DI
+        LXI HL, 0x0020 // FRIDGE_FLAG_PANIC_MASK in F.
+        PUSH HL
+        POP AF
+        HLT
 endsub
