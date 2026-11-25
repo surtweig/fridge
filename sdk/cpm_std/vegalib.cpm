@@ -87,11 +87,17 @@ namespace vega
     void InitVega(uint8 swapMode)
     (
         vega_begin;
+        vega_vmem_checkpoint_acquire;
         = VEGA_SWAP_MODE, swapMode;
         = VEGA_X_OFFSET, 0;
         = VEGA_Y_OFFSET, 0;
         SetPalette DefaultPalette;
         vega_present;
+    );
+    
+    void DeinitVega()
+    (
+        vega_vmem_checkpoint_release;
     );
 
     void SetPalette(Palette palette)

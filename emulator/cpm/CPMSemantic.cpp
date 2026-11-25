@@ -183,6 +183,7 @@ namespace CPM
     CPMIntrinsic CPMFindIntrinsic(const string& name, const CPMType* parameter)
     {
         if (!parameter && name == "__read_a") return CPMIntrinsic::ReadA;
+        if (!parameter && name == "__read_hl") return CPMIntrinsic::ReadHL;
         if (parameter && *parameter == baseType(CPM_DATATYPE_UINT8))
         {
             if (name == "__mvi_a") return CPMIntrinsic::MviA;
@@ -210,6 +211,13 @@ namespace CPM
                 return CPMIntrinsic::Instruction;
         }
         return CPMIntrinsic::None;
+    }
+
+    CPMType CPMIntrinsicReturnType(CPMIntrinsic intrinsic)
+    {
+        if (intrinsic == CPMIntrinsic::ReadA) return baseType(CPM_DATATYPE_UINT8);
+        if (intrinsic == CPMIntrinsic::ReadHL) return baseType(CPM_DATATYPE_UINT16);
+        return baseType(CPM_DATATYPE_VOID);
     }
 
     CPMSemanticAnalyzer::CPMSemanticAnalyzer(CPMCompiler& compiler, CPMNamespace* owner,
@@ -472,8 +480,7 @@ namespace CPM
                 error(head, "__callsub requires a compile-time uint16 address.");
                 return {};
             }
-            auto result = checked(CPMExprKind::Call, head,
-                                  baseType(intrinsic == CPMIntrinsic::ReadA ? CPM_DATATYPE_UINT8 : CPM_DATATYPE_VOID));
+            auto result = checked(CPMExprKind::Call, head, CPMIntrinsicReturnType(intrinsic));
             result.intrinsic = intrinsic;
             result.intrinsicName = name;
             result.operands = std::move(operands);

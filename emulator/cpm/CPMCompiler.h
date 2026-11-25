@@ -126,7 +126,7 @@ namespace CPM
     enum class CPMMainReturn { None, Bootloader, Halt };
     enum class CPMIntrinsic
     {
-        None, MviA, MviB, MviC, MviD, MviH, MviL, LxiBC, LxiDE, LxiHL, CallSub, ReadA,
+        None, MviA, MviB, MviC, MviD, MviH, MviL, LxiBC, LxiDE, LxiHL, CallSub, ReadA, ReadHL,
         Instruction, Label, High, Low, Dword, Word
     };
 

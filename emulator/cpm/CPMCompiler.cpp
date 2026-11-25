@@ -870,9 +870,7 @@ namespace CPM
             const auto& parameters = signature.arguments;
             const auto operation = parameters.size() <= 1 ?
                 CPMFindIntrinsic(signature.name, parameters.empty() ? nullptr : &parameters.front().typeExpr) : CPMIntrinsic::None;
-            const bool validResult = operation == CPMIntrinsic::ReadA ?
-                result.isBase() && result.base == CPM_DATATYPE_UINT8 : result.isVoid();
-            if (operation == CPMIntrinsic::None || !validResult)
+            if (operation == CPMIntrinsic::None || result != CPMIntrinsicReturnType(operation))
             {
                 fail("Unknown intrinsic or invalid intrinsic signature for '" + signature.name + "'.");
                 return;

@@ -308,6 +308,7 @@ endsub
 // HL takes the size in bytes and returns the original allocation pointer.
 // Zero encodes the one-past-end pointer for the emulator's 64 KiB of VMEM.
 // A zero-size allocation returns the current pointer without advancing it.
+@uint16:HL ( (uint16 size : HL) )
 subroutine vega_vmem_alloc
     XCNG
     LHLD VEGA_VMEM_ALLOC_POINTER

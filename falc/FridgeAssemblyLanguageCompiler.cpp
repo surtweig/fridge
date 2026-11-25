@@ -159,7 +159,7 @@ bool FridgeAssemblyLanguageCompiler::preprocessSource(istream& source, const str
                 logerrout("A CPM decorator requires a static, alias, or subroutine declaration.");
                 return false;
             }
-            cpmExports.push_back({std::move(decorator), parsed});
+            cpmExports.push_back({std::move(decorator), decoratorLine, parsed});
             decorator.clear();
         }
         if (parsed.words.size() == 2 && parsed.words[0] == R_INCLUDE)
@@ -1021,7 +1021,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
     }
 
     static const regex dataExport("@(static|const)[ \\t]+(uint8|uint16)[ \\t]*");
-    static const regex subExport(R"(@(inline\s+)?(void|uint8\s*:\s*A)\s*\((.*)\)\s*)");
+    static const regex subExport(R"(@(inline\s+)?([^\s():]+)(?:\s*:\s*([^\s():]+))?\s*\((.*)\)\s*)");
     static const regex parameter(R"(\s*\(\s*(uint8|uint16|string)\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*(A|B|C|D|H|L|BC|DE|HL)\s*\)\s*)");
     ostringstream result;
     result << "namespace " << name << " imports \"" << file << '"';
@@ -1039,6 +1039,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             return false;
         }
         const string& symbol = words[1];
+        currentLineNumber = item.decoratorLine;
         smatch match;
         if (regex_match(item.decorator, match, dataExport))
         {
@@ -1083,9 +1084,29 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
                 continue;
             }
         }
-        if (words[0] != R_SUBROUTINE || !regex_match(item.decorator, match, subExport))
+        if (words[0] != R_SUBROUTINE)
         {
-            logerrout("Invalid CPM decorator for '" + symbol + "'.");
+            const string expected = words[0] == R_STATICRESOURCE ? "@static" : "@const";
+            logerrout("Invalid CPM decorator '" + falcTrimSpace(item.decorator) + "' for '" + symbol +
+                      "'. A '" + words[0] + "' declaration requires '" + expected + " uint8' or '" + expected + " uint16'.");
+            return false;
+        }
+        if (!regex_match(item.decorator, match, subExport))
+        {
+            logerrout("Malformed CPM subroutine decorator '" + falcTrimSpace(item.decorator) + "' for '" + symbol +
+                      "'. Expected '@void(...)', '@uint8:A(...)', or '@uint16:HL(...)', with optional 'inline' after '@'.");
+            return false;
+        }
+        const string returnType = match[2];
+        const string returnRegister = match[3];
+        const bool returnsByte = returnType == "uint8" && returnRegister == "A";
+        const bool returnsWord = returnType == "uint16" && returnRegister == "HL";
+        const bool returnsVoid = returnType == "void" && returnRegister.empty();
+        if (!returnsByte && !returnsWord && !returnsVoid)
+        {
+            const string returnSpec = returnRegister.empty() ? returnType : returnType + ":" + returnRegister;
+            logerrout("Unsupported CPM return specification '" + returnSpec + "' for '" + symbol +
+                      "'. Supported returns are 'void', 'uint8:A' (8-bit), and 'uint16:HL' (16-bit).");
             return false;
         }
         const auto subroutine = subroutines.find(symbol);
@@ -1095,13 +1116,12 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
             return false;
         }
         const bool inlineBody = match[1].matched;
-        const bool returnsByte = match[2] != "void";
-        const string parameters = match[3];
+        const string parameters = match[4];
         istringstream input(parameters);
         string argument;
         unordered_set<string> names, registers;
         ostringstream body;
-        result << "    " << (returnsByte ? "uint8 " : "void ") << symbol << " (";
+        result << "    " << returnType << ' ' << symbol << " (";
         if (parameters.find_first_not_of(" \t") != string::npos)
         {
             while (getline(input, argument, ','))
@@ -1150,6 +1170,7 @@ bool FridgeAssemblyLanguageCompiler::generateCpmHeader(const string& binaryFile,
         }
         else result << "        __callsub " << int_to_hex(subroutine->second) << ";\n";
         if (returnsByte) result << "        return (__read_a);\n";
+        if (returnsWord) result << "        return (__read_hl);\n";
         result << "    );\n";
     }
     result << ");\n";

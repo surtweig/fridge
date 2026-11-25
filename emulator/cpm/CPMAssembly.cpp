@@ -184,10 +184,10 @@ namespace CPM
                 op("MOV H, A");
             }
 
-            void storeHL(size_t output)
+            void storeHL(size_t output, size_t depth = 0)
             {
                 op("XCNG");
-                address(output);
+                address(output, 0, depth);
                 op("MOV M, D");
                 op("INX HL");
                 op("MOV M, E");
@@ -560,6 +560,14 @@ namespace CPM
                     address(instruction.output, 0, 2);
                     op("MOV M, A");
                     op("POP HL");
+                    return;
+                }
+                if (instruction.intrinsic == CPMIntrinsic::ReadHL)
+                {
+                    op("PUSH DE");
+                    storeHL(instruction.output, 2);
+                    op("XCNG");
+                    op("POP DE");
                     return;
                 }
                 size_t value = 0;

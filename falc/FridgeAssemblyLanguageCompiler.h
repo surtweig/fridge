@@ -87,6 +87,7 @@ private:
     struct CpmExport
     {
         string decorator;
+        int decoratorLine;
         ParsedLine declaration;
     };
 

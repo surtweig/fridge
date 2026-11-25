@@ -155,10 +155,12 @@ endsub
 
 `@static` and `@const` export `uint8` or `uint16` values. `@void()` exports a
 subroutine with no parameters. Use `@uint8:A(...)` for a subroutine that
-returns a byte in A. Wrappers can bind `uint8` to A, B, C, D, H, or L, `uint16`
-to BC, DE, or HL, and `string` to HL. H and L can be bound independently in the
-same wrapper. Binding HL reserves both registers. FALC generates offsets for
-relocatable exports and absolute addresses for fixed-address exports.
+returns a byte in A and `@uint16:HL(...)` for a subroutine that returns a
+16-bit value in HL. For parameters, wrappers can bind `uint8` to A, B, C, D, H,
+or L, `uint16` to BC, DE, or HL, and `string` to HL. H and L can be bound
+independently in the same wrapper. Binding an HL parameter reserves both
+registers for that parameter. FALC generates offsets for relocatable exports
+and absolute addresses for fixed-address exports.
 
 Add `inline` before the return type to copy the subroutine's instructions into
 the CPM wrapper as intrinsics instead of generating `__callsub`:
@@ -171,9 +173,9 @@ endsub
 ```
 
 The generated wrapper loads its parameters and executes `__vpal;` directly.
-`@inline uint8:A(...)` also supports returning A. The implicit `endsub` return
-is omitted; local branches and explicit returns target labels inside the
-wrapper. Jumps outside the subroutine and indirect `PCHL` jumps are rejected.
+Inline exports also support `uint8:A` and `uint16:HL` returns. The implicit
+`endsub` return is omitted. Local branches and explicit returns target labels
+inside the wrapper. Jumps outside the subroutine and indirect `PCHL` jumps are rejected.
 Library data references, nested calls, and `HEAP_ORIGIN` retain their relocation
 rules. Nested calls still call their target; inlining is not recursive. The
 binary retains the original subroutine, and calling the generated CPM function

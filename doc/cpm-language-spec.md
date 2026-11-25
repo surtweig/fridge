@@ -343,6 +343,7 @@ Register loads and `__callsub` return `void`.
 | `__lxi_de` | `uint16` | Load DE. |
 | `__callsub` | Constant `uint16` | Call a routine using the register ABI and the address rules in §6. The callee can clobber general registers and flags. |
 | `__read_a` | None | Return the value of A as a `uint8`. |
+| `__read_hl` | None | Return the value of HL as a `uint16`, with H as the high byte. |
 
 Register loads from literals and named values preserve the other registers.
 Evaluate complex arguments into local variables before loading registers for
@@ -975,7 +976,7 @@ semantic analysis and IR work. Q numbers refer to the discussion file.
 | D5 — computed members | Exact spelling for `at`-receiver members, plus readable/assignable/addressable fields of other temporary receivers (Q12). | Support `(at values, i).field` and named chains; reject other computed receivers in v1. |
 | D6 — bounds | Compile-time and runtime out-of-range access policy, including negative array indices (Q03). | Diagnose statically known invalid array indices; otherwise perform unchecked access. Ordinary pointers/strings carry no length. Null dereference is already UB. |
 | D7 — names and constants | Overload merging is resolved in §10. Other name collisions and constant-expression ordering are covered by the D7 worksheet. | Reject collisions with visible names and allow reuse in disjoint scopes. Evaluate a pure typed constant-expression subset with dependency-cycle errors. |
-| D8 — linking and completion | Relocatable imports, fixed-address imports, and void register wrappers are described in §4.5 and §6. External return-value marshaling and the runtime Panic mechanism remain open (Q22–Q24). Function fallthrough is resolved in §7. | — |
+| D8 — linking and completion | Relocatable imports, fixed-address imports, and register wrappers are described in §4.5 and §6. Register wrappers support `void`, `uint8` from A, and `uint16` from HL. The runtime Panic mechanism remains open. Function fallthrough is resolved in §7. | — |
 
 Already settled and not awaiting clarification: exact numeric matching and
 explicit conversions; bool-only conditions/logical operators; before-declaration

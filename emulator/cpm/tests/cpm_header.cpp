@@ -67,6 +67,11 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
         subroutine empty
         endsub
 
+        @inline uint16:HL((uint16 address : HL))
+        subroutine next_address
+            INX HL
+        endsub
+
         @inline void((uint8 index : A), (uint8 red : B), (uint8 green : C), (uint8 blue : D), (uint8 x : H), (uint8 y : L))
         subroutine palette
             VPAL
@@ -82,12 +87,13 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             STAX DE
         endsub
 
-        @void((uint16 source : HL), (uint8 value : A), (uint16 dest : DE))
+        @uint16:HL((uint16 source : HL), (uint8 value : A), (uint16 dest : DE))
         subroutine ordinary
             STAX DE
             INX DE
             LDAX HL
             STAX DE
+            LXI HL, 0xA7D3
         endsub
     )" << (fixed ? "\nmain library_start\n    HLT\n" : "");
     std::ostringstream log;
@@ -122,16 +128,19 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
         include "inline_lib.cpm";
         using inline_lib;
         static <uint8 array 3> output imports 0x0100;
+        static <uint16 array 2> addresses imports 0x010B;
         void main()
         (
             uint8 value 7;
+            uint16 address 0x34FF;
             store value;
             empty;
             = (at output, 0), (count 3);
             = (at output, 1), (count 4);
             = (at output, 2), (count 2);
             palette 1, value, 8, 9, 0x12, 0x34;
-            ordinary 0x0103, 0x5A, 0x0104;
+            = (at addresses, 0), (ordinary 0x0103, 0x5A, 0x0104);
+            = (at addresses, 1), (next_address address);
         );
     )");
     CPMCompiler compiler(root, "input.cpm", "", {}, CPMCompileMode::Assembly, {0x0800, CPMMainReturn::Halt});
@@ -150,7 +159,7 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
     std::copy_n(program.getObjectCode(), program.getProgramSize(), cpu->ram + cpu->PC);
     const size_t base = fixed ? 0 : program.getOffset() + program.getProgramSize() - library.getProgramSize();
     // The inline wrappers must work even when the original routines cannot run.
-    for (const auto& name : {"store", "count", "empty", "palette"})
+    for (const auto& name : {"store", "count", "empty", "next_address", "palette"})
         cpu->ram[base + library.getSubroutines().at(name)] = HLT;
     FRIDGE_SYSTEM system{};
     system.cpu = cpu.get();
@@ -179,6 +188,9 @@ static void runInlineLibrary(Fixture& fixture, bool fixed)
             FRIDGE_gpu_active_frame(gpu.get())[0] == 0x12 && FRIDGE_gpu_active_frame(gpu.get())[1] == 0x34 &&
             gpu->sprite_mem[2] == 'A' && gpu->sprite_mem[3] == 'B',
             "Inline instructions, parameters, return values, or relocated addresses were incorrect");
+    require(cpu->ram[0x010B] == 0xA7 && cpu->ram[0x010C] == 0xD3 &&
+            cpu->ram[0x010D] == 0x35 && cpu->ram[0x010E] == 0x00,
+            "CPM wrappers did not return both bytes of HL in big-endian order");
 }
 
 static void rejectInvalidExports(Fixture& fixture)
@@ -197,19 +209,28 @@ static void rejectInvalidExports(Fixture& fixture)
         "@inline void((string text : L))\nsubroutine invalid\nendsub\n",
         "@static uint16\nstatic invalid TEXT\nalias TEXT \"x\"\n"
     };
-    for (const auto& source : sources)
-    {
+    auto reject = [&](const string& source, const string& expectedDiagnostic = "") {
         std::ofstream(fixture.directory / "invalid.falc") << source;
         std::ostringstream log;
         FridgeAssemblyLanguageCompiler library(root, "invalid.falc", root + "invalid.bin", {}, &log,
             false, false, true);
         require(!library.succeeded() && !fs::exists(fixture.directory / "invalid.cpm"),
                 "An invalid export was accepted:\n" + source + log.str());
-    }
+        require(log.str().find(expectedDiagnostic) != string::npos,
+                "Unexpected CPM export diagnostic:\n" + log.str());
+    };
+    for (const auto& source : sources) reject(source);
+    reject("@uint16:DE ( (uint16 size : HL) )\nsubroutine alloc\nendsub\n",
+           "[invalid.falc : 1] Unsupported CPM return specification 'uint16:DE' for 'alloc'. "
+           "Supported returns are 'void', 'uint8:A' (8-bit), and 'uint16:HL' (16-bit).");
+    reject("@void\nsubroutine invalid\nendsub\n",
+           "Malformed CPM subroutine decorator '@void' for 'invalid'.");
     fixture.check("void main() (uint8 n 1; __adi n;);", false);
     fixture.check("void main() (__vpal 1;);", false);
     fixture.check("void main() (__sta 1;);", false);
     fixture.check("void __vpal(); void main() (__vpal;);", true);
+    fixture.check("uint16 __read_hl(); void main() (uint16 value (__read_hl););", true);
+    fixture.check("uint8 __read_hl();", false);
 }
 
 static void runRomLibrary(Fixture& fixture)
