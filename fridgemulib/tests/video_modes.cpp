@@ -103,7 +103,41 @@ int main(void)
     for (unsigned x = 0; x < width; ++x)
         check_pixel(rgb, x, gpu, x == 10 ? 1 : 0);
     save_screen("sprite", rgb);
-    gpu->sprite_list[0].mode = FRIDGE_GPU_SPRITE_INVISIBLE;
+
+    // At x=10 the transparent-zero sprite still occupies the first slot.
+    // Descriptor 63 participates as soon as the first sprite's span ends.
+    gpu->sprite_list[0].mode = FRIDGE_GPU_SPRITE_TRANSPARENT0;
+    gpu->sprite_mem[1] = 0;
+    for (unsigned id = 1; id <= 3; ++id)
+    {
+        gpu->sprite_list[id] = gpu->sprite_list[0];
+        gpu->sprite_list[id].mode = FRIDGE_GPU_SPRITE_OPAQUE;
+        gpu->sprite_list[id].size_x = 3;
+    }
+    FRIDGE_GPU_SPRITE* last = &gpu->sprite_list[FRIDGE_GPU_MAX_SPRITES - 1];
+    *last = gpu->sprite_list[1];
+    last->size_x = 5;
+    gpu->sprite_mem[2] = 1;
+    gpu->sprite_mem[3] = 2;
+    FRIDGE_gpu_render_ega_rgb8_area(gpu, rgb, 9, 0, 3, 1, 0);
+    check_pixel(rgb, 0, gpu, 0);
+    check_pixel(rgb, 1, gpu, 1);
+    check_pixel(rgb, 2, gpu, 2);
+
+    // Check sprite-local coordinate wrapping and viewport scrolling together.
+    FRIDGE_gpu_reset(gpu);
+    last->mode = FRIDGE_GPU_SPRITE_OPAQUE;
+    last->position_x = last->position_y = 255;
+    last->size_x = last->size_y = 2;
+    gpu->sprite_mem[3] = 2;
+    gpu->frame_hor_offset = width - 1;
+    gpu->frame_ver_offset = height - 1;
+    FRIDGE_gpu_render_ega_rgb8_area(gpu, rgb, 0, 0, 2, 2, 0);
+    check_pixel(rgb, 0, gpu, 0);
+    check_pixel(rgb, 1, gpu, 0);
+    check_pixel(rgb, 2, gpu, 0);
+    check_pixel(rgb, 3, gpu, 2);
+    gpu->frame_hor_offset = gpu->frame_ver_offset = 0;
 
     // All complete cells render; partial cells use palette zero, not next-row data.
     memset(frame, 0x11, FRIDGE_GPU_FRAME_BUFFER_SIZE);

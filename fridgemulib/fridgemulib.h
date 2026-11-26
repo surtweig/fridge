@@ -171,6 +171,7 @@ typedef struct FRIDGE_GPU
     FRIDGE_WORD sprite_mem[FRIDGE_GPU_SPRITE_MEMORY_SIZE];
     FRIDGE_GPU_SPRITE sprite_list[FRIDGE_GPU_MAX_SPRITES];
     FRIDGE_GPU_RLE_LINE rle_line_list[FRIDGE_GPU_MAX_RLE_LINES];
+    FRIDGE_SIZE_T frame_swaps; // VPRE instructions that changed the visible frame.
 
 } FRIDGE_GPU;
 

@@ -8,14 +8,34 @@ const uint8 rectangle_height 30;
 
 void main()
 (
-    InitVega VEGA_SWAP_MODE_MANUAL_00;
+    InitVega VEGA_SWAP_MODE_AUTO;
+
+    uint8 c1 5;
+    uint8 c2 1;
+    uint8 t 2;
+    uint8 min_t 2;
+    uint8 max_t (- VEGA_WIDTH, 2);
+    uint8 d 1;
 
     uint8 fg 15;
     uint8 bg 1;
     uint8 x 10;
     uint8 y 10;
+
     for (uint8 i 0; true ; ++ i)
     (
+        DrawRectangle c1, c1, 0, 0, t, VEGA_HEIGHT, 0, 0;
+        DrawRectangle c2, c2, (+ t, 1), 0, VEGA_WIDTH, VEGA_HEIGHT, 0, 0;
+        += t, d;
+        if (>= t, max_t)
+        (
+            = d, 255;
+        );
+        if (<= t, min_t)
+        (
+            = d, 1;
+        );
+
         ++ fg;
         ++ bg;
         += x, 1;
@@ -25,5 +45,7 @@ void main()
         if (> x, (- VEGA_WIDTH, rectangle_width)) (= x, 0);
         if (> y, (- VEGA_HEIGHT, rectangle_height)) (= y, 0);
         DrawRectangle fg, bg, x, y, rectangle_width, rectangle_height, 0, 2;
+
+        vega_present;
     );
 );
