@@ -57,7 +57,7 @@ namespace vega
     struct RLELine
     (
         uint8 SegmentsCount;
-        <RLESegment ptr> Segments;
+        <uint8 ptr> Segments; // packed VRS tokens, one byte per segment
     );
 
     struct RLEBitmap
@@ -65,6 +65,49 @@ namespace vega
         uint8 LinesCount;
         uint8 LineLength;
         <RLELine ptr> Lines;
+    );
+
+    RLESegment DecodeRLESegment(uint8 token)
+    (
+        RLESegment segment (Color (high token); TailLength (low token););
+        return segment;
+    );
+
+    // Load a png2fridge rle-bitmap asset. Lines uses caller-owned storage;
+    // each Segments pointer borrows read-only bytes from data.
+    // On failure the result is empty and line storage may be partially filled.
+    RLEBitmap LoadRLEBitmap(<uint8 ptr> data; uint16 size; <RLELine ptr> lineStorage; uint8 lineCapacity)
+    (
+        RLEBitmap empty (LinesCount 0; LineLength 0; Lines null;);
+        if (|| (< size, 2d), (== (cast uint16, data), 0d), (== (cast uint16, lineStorage), 0d)) return empty;
+
+        uint8 count (at data, 0);
+        uint8 length (at data, 1);
+        if (|| (== count, 0), (== length, 0), (> count, lineCapacity)) return empty;
+
+        uint16 offset 2d;
+        for (uint8 i 0; < i, count; ++ i)
+        (
+            if (== offset, size) return empty;
+            uint8 segmentsCount (at data, offset);
+            ++ offset;
+            uint16 tokenCount (convert uint16, segmentsCount);
+            if (|| (== segmentsCount, 0), (> tokenCount, (- size, offset))) return empty;
+
+            <uint8 ptr> segments (+ data, offset);
+            uint16 pixels 0d;
+            for (uint8 j 0; < j, segmentsCount; ++ j)
+                += pixels, (convert uint16, (+ (low (at segments, j)), 1));
+            if (!= pixels, (convert uint16, length)) return empty;
+
+            = (at lineStorage, i).SegmentsCount, segmentsCount;
+            = (at lineStorage, i).Segments, segments;
+            += offset, tokenCount;
+        );
+        if (!= offset, size) return empty;
+
+        RLEBitmap bitmap (LinesCount count; LineLength length; Lines lineStorage;);
+        return bitmap;
     );
 
     struct SpriteHandler
@@ -80,6 +123,8 @@ namespace vega
     void SetPaletteColor(uint8 index; uint8 r; uint8 g; uint8 b);
     void StartLine(uint8 color);
     void DrawLine(uint8 x; uint8 y; int8 dx; int8 dy; uint8 length; uint8 mode);
+    // Draws at native size. Use 0x10 for rows or 0x01 for columns.
+    void DrawRLEBitmap(RLEBitmap bitmap; uint8 x; uint8 y; uint8 stride; uint8 mode);
     // The rectangle must fit in the viewport. An outline requires w and h of at least 2.
     void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode);
 
@@ -130,6 +175,31 @@ namespace vega
     (
         uint8 stride (word (cast uint8, dx), (cast uint8, dy));
         vega_rle_line_draw 0, length, stride, mode, x, y;
+    );
+
+    void DrawRLEBitmap(RLEBitmap bitmap; uint8 x; uint8 y; uint8 stride; uint8 mode)
+    (
+        if (|| (== bitmap.LinesCount, 0), (== bitmap.LineLength, 0),
+               (>= x, VEGA_WIDTH), (>= y, VEGA_HEIGHT),
+               (&& (!= stride, 0x10), (!= stride, 0x01))) return;
+
+        // Stream one line at a time through the reserved sprite memory page.
+        // StartLine uses byte and slot zero.
+        const uint16 scratchAddress 0x0001;
+        const uint8 scratchSlot 255;
+        vega_rle_line_setup scratchSlot, bitmap.LineLength, scratchAddress;
+
+        uint8 stepX (low stride);
+        uint8 stepY (high stride);
+        for (uint8 i 0; && (< i, bitmap.LinesCount), (< x, VEGA_WIDTH), (< y, VEGA_HEIGHT); ++ i)
+        (
+            RLELine line (at bitmap.Lines, i);
+            vega_sprite_upload_batch (cast uint16, line.Segments), scratchAddress,
+                (convert uint16, line.SegmentsCount);
+            vega_rle_line_draw scratchSlot, bitmap.LineLength, stride, mode, x, y;
+            += x, stepX;
+            += y, stepY;
+        );
     );
 
     void DrawRectangle(uint8 outline; uint8 fill; uint8 x; uint8 y; uint8 w; uint8 h; uint8 outline_mode; uint8 fill_mode)

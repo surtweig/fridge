@@ -1,0 +1,28 @@
+include "splash_rows.cpm";
+include "splash_columns.cpm";
+
+using vega;
+
+void main()
+(
+    InitVega VEGA_SWAP_MODE_MANUAL_00;
+
+    uint8 splashX (>> (- VEGA_WIDTH, image_fridge_splash_cropped_width), 1);
+
+    // Both scan directions produce the same image.
+    DrawRLEBitmap image_fridge_splash_cropped_bitmap, splashX, 8,
+        image_fridge_splash_cropped_stride, VEGA_RLE_MODE_OPAQUE;
+    DrawRLEBitmap image_splash_columns_bitmap, splashX, 36,
+        image_splash_columns_stride, VEGA_RLE_MODE_OPAQUE;
+
+    // Palette index zero leaves the blue background visible.
+    DrawRectangle 9, 9, (- splashX, 4), 60,
+        (+ image_fridge_splash_cropped_width, 8), (+ image_fridge_splash_cropped_height, 8),
+        VEGA_RLE_MODE_OPAQUE, VEGA_RLE_MODE_OPAQUE;
+    DrawRLEBitmap image_fridge_splash_cropped_bitmap, splashX, 64,
+        image_fridge_splash_cropped_stride, VEGA_RLE_MODE_TRANSPARENT_ZERO;
+
+    // The part past the right edge is clipped.
+    DrawRLEBitmap image_splash_columns_bitmap, (- VEGA_WIDTH, 100), 96,
+        image_splash_columns_stride, VEGA_RLE_MODE_OPAQUE;
+);
