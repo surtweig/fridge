@@ -311,43 +311,47 @@ void ir_safe_IOUT(FRIDGE_SYSTEM* sys)
 
 void ir_VPRE(FRIDGE_SYSTEM* sys)
 {
+    FRIDGE_GPU* gpu = sys->gpu;
+    const FRIDGE_VIDEO_FRAME_INDEX previous_frame = gpu->visible_frame;
     FRIDGE_VIDEO_FRAME_SWAP_MODE swapmode = sys->cpu->rA;
-    sys->gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
-    sys->gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
+    gpu->frame_hor_offset = sys->cpu->rH % FRIDGE_GPU_FRAME_EGA_WIDTH;
+    gpu->frame_ver_offset = sys->cpu->rL % FRIDGE_GPU_FRAME_EGA_HEIGHT;
 
     switch (swapmode)
     {
         case FRIDGE_VIDEO_SWAP_NONE:
             break;
         case FRIDGE_VIDEO_SWAP_AUTO:
-            if (sys->gpu->visible_frame == FRIDGE_VIDEO_FRAME_0)
+            if (gpu->visible_frame == FRIDGE_VIDEO_FRAME_0)
             {
-                sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
-                sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+                gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+                gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
             }
             else
             {
-                sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
-                sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+                gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+                gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
             }
             break;
         case FRIDGE_VIDEO_SWAP_MANUAL_00:
-            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
-            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+            gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+            gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
             break;
         case FRIDGE_VIDEO_SWAP_MANUAL_01:
-            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
-            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+            gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
+            gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
             break;
         case FRIDGE_VIDEO_SWAP_MANUAL_10:
-            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
-            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
+            gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+            gpu->active_frame = FRIDGE_VIDEO_FRAME_0;
             break;
         case FRIDGE_VIDEO_SWAP_MANUAL_11:
-            sys->gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
-            sys->gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+            gpu->visible_frame = FRIDGE_VIDEO_FRAME_1;
+            gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
             break;
     }
+    if (gpu->visible_frame != previous_frame)
+        ++gpu->frame_swaps;
 }
 
 void ir_VMODE(FRIDGE_SYSTEM* sys)
@@ -1355,6 +1359,7 @@ void FRIDGE_gpu_reset (FRIDGE_GPU* gpu)
     gpu->vmode = FRIDGE_VIDEO_TEXT;
     gpu->visible_frame = FRIDGE_VIDEO_FRAME_0;
     gpu->active_frame = FRIDGE_VIDEO_FRAME_1;
+    gpu->frame_swaps = 0;
     for (int i = 0; i < FRIDGE_GPU_FRAME_BUFFER_SIZE; ++i)
     {
         gpu->frame_a[i] = 0;
@@ -1414,37 +1419,88 @@ void FRIDGE_gpu_render_ega_rgb8(FRIDGE_GPU* gpu, unsigned char* pixels)
     FRIDGE_gpu_render_ega_rgb8_area(gpu, pixels, 0, 0, FRIDGE_GPU_FRAME_EGA_WIDTH, FRIDGE_GPU_FRAME_EGA_HEIGHT, 0);
 }
 
+static void sprite_span_edges(uint64_t* edges, unsigned extent, unsigned start,
+                              unsigned length, uint64_t bit)
+{
+    const unsigned coordinate_period = 1u << FRIDGE_WORD_BITS;
+    const unsigned end = start + length;
+    if (start < extent)
+    {
+        edges[start] ^= bit;
+        if (end < extent)
+            edges[end] ^= bit;
+    }
+
+    // Sprite-local coordinates use unsigned byte subtraction and can wrap.
+    if (end > coordinate_period)
+    {
+        edges[0] ^= bit;
+        if (end - coordinate_period < extent)
+            edges[end - coordinate_period] ^= bit;
+    }
+}
+
+static unsigned first_sprite_id(uint64_t hits)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return (unsigned)__builtin_ctzll(hits);
+#else
+    unsigned id = 0;
+    while ((hits & 1u) == 0)
+    {
+        hits >>= 1;
+        ++id;
+    }
+    return id;
+#endif
+}
+
 void FRIDGE_gpu_render_ega_rgb8_area(FRIDGE_GPU* gpu, unsigned char* pixels,
                                      FRIDGE_WORD x, FRIDGE_WORD y, FRIDGE_WORD w, FRIDGE_WORD h, int pixelsRowOffset)
 {
+    uint64_t column_hits[FRIDGE_GPU_FRAME_EGA_WIDTH] = {0};
+    uint64_t row_hits[FRIDGE_GPU_FRAME_EGA_HEIGHT] = {0};
     FRIDGE_RAM_ADDR spritesDataSize[FRIDGE_GPU_MAX_SPRITES];
-    for (int sid = 0; sid < FRIDGE_GPU_MAX_SPRITES; ++sid)
+    int has_sprites = 0;
+    for (unsigned sid = 0; sid < FRIDGE_GPU_MAX_SPRITES; ++sid)
     {
-        FRIDGE_GPU_SPRITE* spr = &gpu->sprite_list[sid];
-        spritesDataSize[sid] = spr->size_x*spr->size_y;
-        spritesDataSize[sid] = spritesDataSize[sid] % 2 + spritesDataSize[sid] / 2;
+        const FRIDGE_GPU_SPRITE* spr = &gpu->sprite_list[sid];
+        if (spr->mode == FRIDGE_GPU_SPRITE_INVISIBLE || !spr->size_x || !spr->size_y)
+            continue;
+
+        const uint64_t bit = UINT64_C(1) << sid;
+        const unsigned pixels_count = spr->size_x * spr->size_y;
+        spritesDataSize[sid] = (pixels_count + 1) / 2;
+        sprite_span_edges(column_hits, FRIDGE_GPU_FRAME_EGA_WIDTH, spr->position_x, spr->size_x, bit);
+        sprite_span_edges(row_hits, FRIDGE_GPU_FRAME_EGA_HEIGHT, spr->position_y, spr->size_y, bit);
+        has_sprites = 1;
+    }
+
+    // Sweep each axis once. The intersection gives the exact sprites at a pixel.
+    if (has_sprites)
+    {
+        for (unsigned ix = 1; ix < FRIDGE_GPU_FRAME_EGA_WIDTH; ++ix)
+            column_hits[ix] ^= column_hits[ix - 1];
+        for (unsigned iy = 1; iy < FRIDGE_GPU_FRAME_EGA_HEIGHT; ++iy)
+            row_hits[iy] ^= row_hits[iy - 1];
     }
 
     FRIDGE_WORD* frame = FRIDGE_gpu_visible_frame(gpu);
     unsigned int output_addr = 0;
+    unsigned end_x = (unsigned)x + w;
+    unsigned end_y = (unsigned)y + h;
+    if (end_x > FRIDGE_GPU_FRAME_EGA_WIDTH)
+        end_x = FRIDGE_GPU_FRAME_EGA_WIDTH;
+    if (end_y > FRIDGE_GPU_FRAME_EGA_HEIGHT)
+        end_y = FRIDGE_GPU_FRAME_EGA_HEIGHT;
 
-    if (w > FRIDGE_GPU_FRAME_EGA_WIDTH)
-        w = FRIDGE_GPU_FRAME_EGA_WIDTH;
-    if (h > FRIDGE_GPU_FRAME_EGA_HEIGHT)
-        h = FRIDGE_GPU_FRAME_EGA_HEIGHT;
-
-    for (FRIDGE_WORD iy = y; iy < y + h; ++iy)
+    for (unsigned iy = y; iy < end_y; ++iy)
     {
-        for (FRIDGE_WORD ix = x; ix < x + w; ++ix)
+        const unsigned py = (iy + gpu->frame_ver_offset) % FRIDGE_GPU_FRAME_EGA_HEIGHT;
+        const uint64_t row = row_hits[py];
+        unsigned px = (x + gpu->frame_hor_offset) % FRIDGE_GPU_FRAME_EGA_WIDTH;
+        for (unsigned ix = x; ix < end_x; ++ix)
         {
-            if (ix >= FRIDGE_GPU_FRAME_EGA_WIDTH)
-                continue;
-            if (iy >= FRIDGE_GPU_FRAME_EGA_HEIGHT)
-                continue;
-
-            FRIDGE_WORD px = (ix + gpu->frame_hor_offset) % FRIDGE_GPU_FRAME_EGA_WIDTH;
-            FRIDGE_WORD py = (iy + gpu->frame_ver_offset) % FRIDGE_GPU_FRAME_EGA_HEIGHT;
-
             FRIDGE_RAM_ADDR addr = (px + py*FRIDGE_GPU_FRAME_EGA_WIDTH)/2;
             FRIDGE_WORD color;
             if (px % 2 == 0)
@@ -1453,84 +1509,77 @@ void FRIDGE_gpu_render_ega_rgb8_area(FRIDGE_GPU* gpu, unsigned char* pixels,
                 color = FRIDGE_GPU_RIGHT_PIXEL(frame[addr]);
             FRIDGE_WORD rgb[3] = {gpu->palette[color*3], gpu->palette[color*3+1], gpu->palette[color*3+2]};
 
-            int sprCounter = 0;
-            for (int sid = 0; sid < FRIDGE_GPU_MAX_SPRITES; ++sid)
+            uint64_t hits = row ? row & column_hits[px] : 0;
+            for (unsigned count = 0; hits && count < FRIDGE_GPU_MAX_SPRITES_PER_PIXEL; ++count)
             {
-                FRIDGE_GPU_SPRITE* spr = &gpu->sprite_list[sid];
-                if (spr->mode == FRIDGE_GPU_SPRITE_INVISIBLE)
-                    continue;
-
-                if (sprCounter >= FRIDGE_GPU_MAX_SPRITES_PER_PIXEL)
-                    break;
-
+                const unsigned sid = first_sprite_id(hits);
+                hits &= hits - 1;
+                const FRIDGE_GPU_SPRITE* spr = &gpu->sprite_list[sid];
                 FRIDGE_WORD sx = px - spr->position_x;
                 FRIDGE_WORD sy = py - spr->position_y;
+                FRIDGE_RAM_ADDR pixelAddr = spritesDataSize[sid] + (sx + sy*spr->size_x)/2;
+                FRIDGE_WORD sprcolor = 0;
+                if (pixelAddr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
+                    sprcolor = gpu->sprite_mem[pixelAddr];
+                FRIDGE_WORD srgb[3] = {gpu->palette[sprcolor*3], gpu->palette[sprcolor*3+1], gpu->palette[sprcolor*3+2]};
 
-                if (sx < spr->size_x && sy < spr->size_y)
+                if (spr->mode == FRIDGE_GPU_SPRITE_OPAQUE)
                 {
-                    ++sprCounter;
-                    FRIDGE_RAM_ADDR pixelAddr = spritesDataSize[sid] + (sx + sy*spr->size_x)/2;
-                    FRIDGE_WORD sprcolor = 0;
-                    if (pixelAddr < FRIDGE_GPU_SPRITE_MEMORY_SIZE)
-                        sprcolor = gpu->sprite_mem[pixelAddr];
-                    FRIDGE_WORD srgb[3] = {gpu->palette[sprcolor*3], gpu->palette[sprcolor*3+1], gpu->palette[sprcolor*3+2]};
-
-                    if (spr->mode == FRIDGE_GPU_SPRITE_OPAQUE)
+                    rgb[0] = srgb[0];
+                    rgb[1] = srgb[1];
+                    rgb[2] = srgb[2];
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_TRANSPARENT0)
+                {
+                    if (sprcolor != 0)
                     {
                         rgb[0] = srgb[0];
                         rgb[1] = srgb[1];
                         rgb[2] = srgb[2];
                     }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_TRANSPARENT0)
-                    {
-                        if (sprcolor != 0)
-                        {
-                            rgb[0] = srgb[0];
-                            rgb[1] = srgb[1];
-                            rgb[2] = srgb[2];
-                        }
-                    }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_ADDITIVE)
-                    {
-                        int rgb0 = rgb[0] + srgb[0];
-                        int rgb1 = rgb[1] + srgb[1];
-                        int rgb2 = rgb[2] + srgb[2];
-                        rgb[0] = rgb0 < 0xff ? rgb0 : 0xff;
-                        rgb[1] = rgb1 < 0xff ? rgb1 : 0xff;
-                        rgb[2] = rgb2 < 0xff ? rgb2 : 0xff;
-                    }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_SUBTRACTIVE)
-                    {
-                        int rgb0 = rgb[0] - srgb[0];
-                        int rgb1 = rgb[1] - srgb[1];
-                        int rgb2 = rgb[2] - srgb[2];
-                        rgb[0] = rgb0 > 0 ? rgb0 : 0;
-                        rgb[1] = rgb1 > 0 ? rgb1 : 0;
-                        rgb[2] = rgb2 > 0 ? rgb2 : 0;
-                    }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_AND)
-                    {
-                        rgb[0] = rgb[0] & srgb[0];
-                        rgb[1] = rgb[1] & srgb[1];
-                        rgb[2] = rgb[2] & srgb[2];
-                    }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_OR)
-                    {
-                        rgb[0] = rgb[0] | srgb[0];
-                        rgb[1] = rgb[1] | srgb[1];
-                        rgb[2] = rgb[2] | srgb[2];
-                    }
-                    else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_XOR)
-                    {
-                        rgb[0] = rgb[0] ^ srgb[0];
-                        rgb[1] = rgb[1] ^ srgb[1];
-                        rgb[2] = rgb[2] ^ srgb[2];
-                    }
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_ADDITIVE)
+                {
+                    int rgb0 = rgb[0] + srgb[0];
+                    int rgb1 = rgb[1] + srgb[1];
+                    int rgb2 = rgb[2] + srgb[2];
+                    rgb[0] = rgb0 < 0xff ? rgb0 : 0xff;
+                    rgb[1] = rgb1 < 0xff ? rgb1 : 0xff;
+                    rgb[2] = rgb2 < 0xff ? rgb2 : 0xff;
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_SUBTRACTIVE)
+                {
+                    int rgb0 = rgb[0] - srgb[0];
+                    int rgb1 = rgb[1] - srgb[1];
+                    int rgb2 = rgb[2] - srgb[2];
+                    rgb[0] = rgb0 > 0 ? rgb0 : 0;
+                    rgb[1] = rgb1 > 0 ? rgb1 : 0;
+                    rgb[2] = rgb2 > 0 ? rgb2 : 0;
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_AND)
+                {
+                    rgb[0] = rgb[0] & srgb[0];
+                    rgb[1] = rgb[1] & srgb[1];
+                    rgb[2] = rgb[2] & srgb[2];
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_OR)
+                {
+                    rgb[0] = rgb[0] | srgb[0];
+                    rgb[1] = rgb[1] | srgb[1];
+                    rgb[2] = rgb[2] | srgb[2];
+                }
+                else if (spr->mode == FRIDGE_GPU_SPRITE_BITWISE_XOR)
+                {
+                    rgb[0] = rgb[0] ^ srgb[0];
+                    rgb[1] = rgb[1] ^ srgb[1];
+                    rgb[2] = rgb[2] ^ srgb[2];
                 }
             }
             pixels[output_addr++] = rgb[0];
             pixels[output_addr++] = rgb[1];
             pixels[output_addr++] = rgb[2];
+            if (++px == FRIDGE_GPU_FRAME_EGA_WIDTH)
+                px = 0;
         }
         output_addr += pixelsRowOffset*3;
     }
